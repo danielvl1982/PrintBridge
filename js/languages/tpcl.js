@@ -342,6 +342,49 @@
     return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
   }
 
+  // Coordinate fields of each command, as capture groups: [value group, D suffix group | null, axis]. Newlines are
+  // stripped before matching (like commands()), so the groups are mapped back to the original text.
+  const COORDINATES = [
+    { pattern: /^\{(?:PC|PV|XB)\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
+    { pattern: /^\{LC;(\d+),(\d+),(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y'], [3, null, 'x'], [4, null, 'y']] },
+    { pattern: /^\{SG;(\d+)(D?),(\d+)(D?),/d, fields: [[1, 2, 'x'], [3, 4, 'y']] },
+  ];
+  const MOVABLE = ['text', 'barcode', 'qr', 'line', 'image'];
+
+  /**
+   * Moves an item by (dx, dy) in 0.1 mm: only the coordinate digits of its command are rewritten (same width, clamped
+   * to 0..9999, SG with the D suffix in dots). Items without a source or of an unknown kind leave the text unchanged.
+   */
+  function moveItem(text, item, dx, dy, { dpi }) {
+    const span = item && MOVABLE.includes(item.kind) && item.source && item.source.spans && item.source.spans[0];
+    if (!span) return text;
+    const original = text.slice(span.start, span.end);
+    let stripped = '';
+    const map = []; // index in stripped -> index in original
+    for (let i = 0; i < original.length; i++) {
+      if (original[i] === '\r' || original[i] === '\n') continue;
+      map.push(i);
+      stripped += original[i];
+    }
+    for (const { pattern, fields } of COORDINATES) {
+      const m = pattern.exec(stripped);
+      if (!m) continue;
+      const delta = { x: dx, y: dy };
+      const dot = units.dotSize(dpi);
+      let out = original;
+      // Right to left so the earlier indices stay valid
+      for (const [valueGroup, suffixGroup, axis] of [...fields].reverse()) {
+        const [s, e] = m.indices[valueGroup];
+        const dots = suffixGroup != null && m[suffixGroup] === 'D';
+        const value = Math.round(+m[valueGroup] + delta[axis] / (dots ? dot : 1));
+        const digits = String(Math.min(9999, Math.max(0, value))).padStart(e - s, '0');
+        out = out.slice(0, map[s]) + digits + out.slice(map[e - 1] + 1);
+      }
+      return text.slice(0, span.start) + out + text.slice(span.end);
+    }
+    return text;
+  }
+
   PB.languages.register({
     id: 'tpcl',
     name: 'TPCL (Toshiba TEC)',
@@ -352,5 +395,6 @@
     matchesSize,
     applySize,
     insertCommand,
+    moveItem,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

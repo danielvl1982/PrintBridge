@@ -307,9 +307,12 @@
  * Printer language registry. Each language provides:
  *   { id, name, detect(text) -> boolean, parse(text, { dpi }) -> model, validate?(model) -> diagnostics,
  *     sizeCommands?(resolvedSize) -> string[], matchesSize?(model, resolvedSize) -> diagnostics,
- *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text }
+ *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text,
+ *     moveItem?(text, item, dx, dy, { dpi }) -> text }
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
+ * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
+ *   if the item has no source.
  * Optional size fields (used by PB.sizes; without them the language neither checks nor writes the size):
  *   - sizeCommands: source text lines the language needs to declare that size.
  *   - matchesSize: diagnostics (error if the size is required) for the differences between the label and the size.
