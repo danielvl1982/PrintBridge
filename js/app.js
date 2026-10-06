@@ -163,6 +163,8 @@
     readImage(file).then(
       image => {
         state.image = image;
+        // Drop any conversion still running for the previous picture: its stale result would leave previewKey set
+        cancelPreview();
         imagePanel.setActive(true);
         refresh();
         updatePreview();

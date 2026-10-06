@@ -190,6 +190,13 @@ test('tpcl SG: data with ";" ":" "<" "=" ">" "?" is kept raw (not split on ; or 
   assert.deepEqual(model.diagnostics, []);
 });
 
+test('tpcl SG: a size above the 9999-dot limit is reported and not drawn (nothing is allocated)', () => {
+  const model = tpcl.parse(sg('00', { w: 99999, h: 99999 }));
+  assert.equal(model.items.filter(i => i.kind === 'image').length, 0);
+  assert.equal(model.diagnostics.length, 1);
+  assert.match(model.diagnostics[0].text, /9999/);
+});
+
 test('tpcl SG: a D suffix makes x/y dots, converted with the dpi', () => {
   const model = tpcl.parse(sg('?0<00000', { x: '0100D', y: '0020D' }), { dpi: 203 });
   const item = model.items.find(i => i.kind === 'image');

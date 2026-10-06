@@ -218,6 +218,11 @@
           ctx.report(diag.warning(`${ref}: tamaño ${w}×${h} puntos no válido, no se dibuja`));
           return;
         }
+        // The command's size fields have 4 digits; a larger value would allocate and draw w*h dots on every edit
+        if (w > 9999 || h > 9999) {
+          ctx.report(diag.warning(`${ref}: tamaño ${w}×${h} puntos supera el máximo de 9999, no se dibuja`));
+          return;
+        }
         const expected = ((w + 7) >> 3) * h * 2;
         if (data.length !== expected) {
           ctx.report(diag.warning(`${ref}: ${data.length} caracteres de datos y se esperaban ${expected} para ${w}×${h} puntos`));
