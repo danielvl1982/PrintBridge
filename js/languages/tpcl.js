@@ -429,13 +429,7 @@
     const span = item && MOVABLE.includes(item.kind) && item.source && item.source.spans && item.source.spans[0];
     if (!span) return text;
     const original = text.slice(span.start, span.end);
-    let stripped = '';
-    const map = []; // index in stripped -> index in original
-    for (let i = 0; i < original.length; i++) {
-      if (original[i] === '\r' || original[i] === '\n') continue;
-      map.push(i);
-      stripped += original[i];
-    }
+    const { stripped, map } = stripNewlines(original);
     for (const { pattern, fields } of COORDINATES) {
       const m = pattern.exec(stripped);
       if (!m) continue;
@@ -455,6 +449,162 @@
     return text;
   }
 
+  /** Text of a command without its newlines (as commands() matches it) and the index of each kept char in the original. */
+  function stripNewlines(original) {
+    let stripped = '';
+    const map = []; // index in stripped -> index in original
+    for (let i = 0; i < original.length; i++) {
+      if (original[i] === '\r' || original[i] === '\n') continue;
+      map.push(i);
+      stripped += original[i];
+    }
+    return { stripped, map };
+  }
+
+  const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
+
+  // Editable field kinds. read(raw digits) -> value (undefined if not recognised); write(value, width) -> new digits or
+  // null to ignore the change; model(item) -> value from the parsed item (used when the command text is not given).
+  const numberField = (key, label, group, min, max, model) => ({
+    key, label, type: 'number', min, max, step: 1, group, model,
+    read: raw => (DIGITS.test(raw) ? +raw : undefined),
+    write: v => (typeof v === 'number' && Number.isFinite(v) ? String(clampInt(v, min, max)) : null),
+  });
+  // Rotation: texts always use the 2-digit codes (00/11/22/33), barcodes the digit 0..3 (2-digit codes if the field has 2)
+  const rotationField = group => ({
+    key: 'rotation', label: 'Rotación', type: 'select', group, model: item => item.rotation,
+    options: ROTATION_STEPS.map(d => ({ value: d, label: `${d}°` })),
+    read: raw => ROTATIONS[raw],
+    write: (v, width) => (ROTATION_STEPS.includes(v) ? (width === 2 ? ROTATION_CODES[v] : String(ROTATION_STEPS.indexOf(v))) : null),
+  });
+  const humanReadableField = group => ({
+    key: 'humanReadable', label: 'Texto legible', type: 'checkbox', group, model: item => item.humanReadable,
+    read: raw => (raw === '1' ? true : raw === '0' ? false : undefined),
+    write: v => (typeof v === 'boolean' ? (v ? '1' : '0') : null),
+  });
+  const barcodeHeight = group => numberField('height', 'Alto (0,1 mm)', group, 1, MAX_COORD, item => item.height);
+  const ECC_OPTIONS = Object.freeze([['L', 'L - Baja'], ['M', 'M - Media'], ['Q', 'Q - Alta'], ['H', 'H - Máxima']]
+    .map(([value, label]) => ({ value, label })));
+
+  // Editable shapes of the commands, in the order of the parser's patterns. pattern: match indices (d flag) over the
+  // command without newlines; group of each field: capture group with its digits.
+  const EDITABLE = [
+    { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
+      applies: item => item.kind === 'text' && /^PV/.test(item.ref),
+      pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),[A-Za-z0-9],(?:[+-]\d+,)?(\d{2}),[BWF]/d,
+      fields: [
+        numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
+        numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
+        rotationField(3),
+      ],
+    },
+    { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
+      applies: item => item.kind === 'text' && /^PC/.test(item.ref),
+      pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),[A-Za-z0-9],(?:[+-]\d+,)?(\d{2}),[BWF]/d,
+      fields: [
+        numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
+        numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
+        rotationField(3),
+      ],
+    },
+    { // QR: XBnn;x,y,T,<correction>,<module size>,… (the field after the module size is deliberately not exposed)
+      applies: item => item.kind === 'qr',
+      pattern: /^\{XB\d+;\d+,\d+,T,(\w),(\d+)/d,
+      fields: [
+        numberField('cell', 'Tamaño de módulo (puntos)', 2, 1, 99, item => item.native.cell),
+        {
+          key: 'ecc', label: 'Corrección de errores', type: 'select', group: 1, options: ECC_OPTIONS, model: item => item.ecc,
+          read: raw => (raw in ECC_LEVELS ? raw : undefined),
+          write: v => (typeof v === 'string' && v in ECC_LEVELS ? v : null),
+        },
+      ],
+    },
+    { // Code 39 / ITF: …,<type>,e,ff,gg,hh,ii,jj,<rotation>,<height>,<human readable> (module widths not editable)
+      applies: item => item.kind === 'barcode' && ['2', '3', 'B'].includes(item.native && item.native.type),
+      pattern: /^\{XB\d+;\d+,\d+,[23B],(?:[^,]*,){6}(\d+),(\d+),([^,|]*)/d,
+      fields: [barcodeHeight(2), rotationField(1), humanReadableField(3)],
+    },
+    { // Other 1D barcodes: …,<type>,<check>,<module>,<rotation>,<height>,<increment>,<000>,<human readable>
+      applies: item => item.kind === 'barcode',
+      pattern: /^\{XB\d+;\d+,\d+,[^,],[^,]*,(\d+),(\d+),(\d+),[^,]*,[^,]*,([^,|]*)/d,
+      fields: [
+        numberField('module', 'Módulo (puntos)', 1, 1, 99, item => item.native.module),
+        barcodeHeight(3), rotationField(2), humanReadableField(4),
+      ],
+    },
+    { // Line / box: LC;x1,y1,<x2>,<y2>,<0 line | 1 box>,<thickness in dots>
+      applies: item => item.kind === 'line',
+      pattern: /^\{LC;\d+,\d+,(\d+),(\d+),(\d),(\d+)/d,
+      fields: [
+        numberField('x2', 'Final X (0,1 mm)', 1, 0, MAX_COORD, item => item.x2),
+        numberField('y2', 'Final Y (0,1 mm)', 2, 0, MAX_COORD, item => item.y2),
+        numberField('width', 'Grosor (puntos)', 4, 1, 99, item => item.native.width),
+        {
+          key: 'rect', label: 'Tipo', type: 'select', group: 3, model: item => (item.rect ? 'box' : 'line'),
+          options: [{ value: 'line', label: 'Línea' }, { value: 'box', label: 'Caja' }],
+          read: raw => (raw === '0' ? 'line' : 'box'),
+          write: v => (v === 'line' ? '0' : v === 'box' ? '1' : null),
+        },
+      ],
+    },
+  ];
+
+  /** Editable shape of an item (null: not editable) and, with a text and a source, its match over the command. */
+  function editableOf(item, text) {
+    const shape = item && EDITABLE.find(s => s.applies(item));
+    if (!shape) return null;
+    const span = item.source && item.source.spans && item.source.spans[0];
+    if (typeof text !== 'string' || !span) return { shape, match: null };
+    const original = text.slice(span.start, span.end);
+    const { stripped, map } = stripNewlines(original);
+    return { shape, original, map, span, match: shape.pattern.exec(stripped) };
+  }
+
+  /**
+   * Fields the panel can edit for an item: { kind, fields: [{ key, label, type, value, min, max, step?, options? }] }
+   * (type number | select | checkbox). Values are read from the command in text when given (needed for the PC
+   * magnifications), else from the item model; a field whose value is unknown is left out. Image and unknown kinds: none.
+   */
+  function describeItem(item, text) {
+    const found = editableOf(item, text);
+    const kind = (item && item.kind) || null;
+    if (!found) return { kind, fields: [] };
+    const { shape, match } = found;
+    const fields = [];
+    for (const f of shape.fields) {
+      const value = match ? f.read(match[f.group]) : f.model && f.model(item);
+      if (value === undefined || value === null) continue;
+      const { key, label, type, min, max, step, options } = f;
+      fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
+    }
+    return { kind, fields };
+  }
+
+  /**
+   * Rewrites only the fields in changes ({ key: value }, see describeItem) of an item's command, keeping each field's
+   * digit width and clamping numbers to their range (rounded). Unknown keys, invalid values, items without source or
+   * of a kind without editable fields are ignored: the text is returned unchanged if nothing changes.
+   */
+  function updateItem(text, item, changes) {
+    const found = changes && editableOf(item, text);
+    if (!found || !found.match) return text;
+    const { shape, match, original, map, span } = found;
+    const edits = [];
+    for (const f of shape.fields) {
+      if (!Object.hasOwn(changes, f.key)) continue;
+      const [s, e] = match.indices[f.group];
+      const digits = f.write(changes[f.key], e - s);
+      if (digits !== null) edits.push({ s, e, digits: digits.padStart(e - s, '0') });
+    }
+    if (!edits.length) return text;
+    let out = original;
+    // Right to left so the earlier indices stay valid (fields are in group order, not necessarily command order)
+    for (const { s, e, digits } of edits.sort((a, b) => b.s - a.s)) {
+      out = out.slice(0, map[s]) + digits + out.slice(map[e - 1] + 1);
+    }
+    return text.slice(0, span.start) + out + text.slice(span.end);
+  }
+
   PB.languages.register({
     id: 'tpcl',
     name: 'TPCL (Toshiba TEC)',
@@ -466,6 +616,8 @@
     applySize,
     insertCommand,
     moveItem,
+    updateItem,
+    describeItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })),
     buildComponent,
   });

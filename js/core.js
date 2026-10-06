@@ -309,11 +309,18 @@
  *     sizeCommands?(resolvedSize) -> string[], matchesSize?(model, resolvedSize) -> diagnostics,
  *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text,
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
+ *     updateItem?(text, item, changes, { dpi }) -> text, describeItem?(item, text?) -> { kind, fields },
  *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text }
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
  * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
  *   if the item has no source.
+ * updateItem (optional): the text with only the fields in changes ({ key: value }) rewritten in that item's command, with
+ *   each field's width kept and numbers clamped to their range; unknown keys, invalid values, items without source or
+ *   without editable fields are ignored (unchanged text if nothing changes).
+ * describeItem (optional): the fields updateItem accepts for an item, language-agnostic, so the UI can build a panel:
+ *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox', value, min, max, step?, options?: [{ value, label }] }] }
+ *   with the current values (read from the command in text if given, else from the item) and an empty list if none.
  * componentTemplates (optional): the neutral component kinds the palette offers, in order (text, barcode, qr, line, box).
  * buildComponent (optional): the text with a new component of that kind whose top-left corner is at x/y (0.1 mm,
  *   clamped); unchanged for an unknown kind or an invalid point. viewRotation (0/90/180/270 degrees clockwise, default 0)
