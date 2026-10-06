@@ -16,7 +16,7 @@ New palette items must be inserted upright in the orientation the user is design
 
 ## Tasks
 - [x] T1 Orientation-aware `buildComponent` + tests (RED first) + `insertComponent` passes the current view rotation.
-- [ ] T2 "Imagen" palette entry (file picker flow) + glyph + README note.
+- [x] T2 "Imagen" palette entry (file picker flow) + glyph + README note.
 
 ## Acceptance
 - With view 0 a dropped text/barcode reads left-to-right; with 90/180/270 it also looks upright; all tests pass.
@@ -27,3 +27,4 @@ New palette items must be inserted upright in the orientation the user is design
 
 ## Progress / Evidence
 - T1 (delegated writer): RED 5 failing, GREEN; all 11 test files pass (parent spot check). Not verified in browser.
+- T2 (delegated writer): all 11 test files pass, node --check ok (parent spot check). NOT verified in a browser: palette entry/glyph, click+Enter flow, overlay positioned at default point, whether click() after a drop is blocked (Chrome may fail silently), cancel event on the file input.

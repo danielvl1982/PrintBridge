@@ -177,14 +177,51 @@
   function updatePalette(language) {
     if (language === paletteLanguage) return;
     paletteLanguage = language;
-    palette.render(language && language.componentTemplates ? language.componentTemplates() : []);
+    const entries = language && language.componentTemplates ? [...language.componentTemplates()] : [];
+    // The image is an app-level entry (a preview overlay, not a language component); it needs insertCommand to be written later
+    if (language && language.insertCommand) entries.push({ kind: IMAGE_KIND, label: 'Imagen' });
+    palette.render(entries);
+  }
+
+  /** Palette kind of the image entry: handled by the app, never passed to the language. */
+  const IMAGE_KIND = 'image';
+
+  /** Position (mm) the next loaded image takes, set when the picker is opened from the palette; null = keep the fields. */
+  let pendingImagePosition = null;
+  $('imageFile').addEventListener('cancel', () => { pendingImagePosition = null; });
+  // The toolbar button keeps its own behaviour: it never inherits a position left by the palette
+  $('btnImage').addEventListener('click', () => { pendingImagePosition = null; });
+
+  /**
+   * Opens the file picker for the image entry; the loaded picture is placed at x, y (label units, 0.1 mm).
+   * A drop is not a reliable user gesture for file pickers: if the browser reports no active gesture, or click() throws,
+   * the user is told to click the entry instead.
+   */
+  function pickImage(x, y, { dropped = false } = {}) {
+    const hint = diag.warning('El navegador no permite abrir el selector de archivos al soltar: haz clic en "Imagen" de la paleta');
+    if (dropped && navigator.userActivation && !navigator.userActivation.isActive) {
+      refresh({ notices: [hint] });
+      return;
+    }
+    const toMm = value => Math.min(999.9, Math.max(0, Math.round(value) / 10));
+    pendingImagePosition = [toMm(x), toMm(y)];
+    try {
+      $('imageFile').click();
+    } catch (error) {
+      pendingImagePosition = null;
+      refresh({ notices: [hint] });
+    }
   }
 
   /**
    * A palette component was dropped at x, y (label units): the language writes the new item, through a path that keeps
    * Ctrl+Z working in the editor, and the first command it added is selected.
    */
-  function insertComponent(kind, x, y) {
+  function insertComponent(kind, x, y, { dropped = false } = {}) {
+    if (kind === IMAGE_KIND) {
+      pickImage(x, y, { dropped });
+      return;
+    }
     const language = languages.detect(editor.text()) || languages.get('tpcl');
     if (!language || !language.buildComponent) return;
     const text = editor.text();
@@ -236,13 +273,20 @@
     readImage(file).then(
       image => {
         state.image = image;
+        if (pendingImagePosition) {
+          imagePanel.setPosition(...pendingImagePosition);
+          pendingImagePosition = null;
+        }
         // Drop any conversion still running for the previous picture: its stale result would leave previewKey set
         cancelPreview();
         imagePanel.setActive(true);
         refresh();
         updatePreview();
       },
-      error => refresh({ notices: [diag.error(`No se pudo añadir la imagen: ${error.message}`)] }),
+      error => {
+        pendingImagePosition = null;
+        refresh({ notices: [diag.error(`No se pudo añadir la imagen: ${error.message}`)] });
+      },
     );
   }
 

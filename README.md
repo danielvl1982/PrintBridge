@@ -79,6 +79,7 @@ The drawing updates immediately while typing in the code, so coordinates and siz
 Overlays a picture on the preview to check where it would go. Until you insert it, it is visual only: it is not written into the label code. Only one preview image exists at a time (adding another replaces it).
 
 - **Añadir imagen:** choose an image file (replaces the previous one). By default it is drawn at its natural pixel size for the selected **Resolución**.
+- **Imagen (paleta):** the component palette also has an **Imagen** entry (when the label language can insert images). Click it (or press Enter) to pick a file and place it at the default point; dragging it onto the label only works if the browser allows opening the file picker from a drop, otherwise click the entry.
 - **Posición X / Posición Y:** top left corner of the image, in mm from the label origin.
 - **Ancho:** optional width in mm (empty = natural size); the height keeps the proportion.
 - **Umbral:** slider 0-100 % (default 50 %), enabled with the image. A dot is black when its luminance is below the

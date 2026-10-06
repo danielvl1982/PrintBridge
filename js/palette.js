@@ -11,7 +11,7 @@
   const COMPONENT_MIME = 'application/x-printbridge-component';
 
   /** Short text glyph per component kind; unknown kinds get a generic one. */
-  const GLYPHS = Object.freeze({ text: 'Aa', barcode: '|||', qr: '▦', line: '─', box: '▭' });
+  const GLYPHS = Object.freeze({ text: 'Aa', barcode: '|||', qr: '▦', line: '─', box: '▭', image: '🖼' });
 
   function createPalette(container, { onInsert }) {
     return Object.freeze({

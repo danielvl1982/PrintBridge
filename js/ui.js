@@ -298,7 +298,7 @@
       const kind = e.dataTransfer.getData(PB.ui.COMPONENT_MIME);
       const point = labelPointAt(e.clientX, e.clientY);
       // Outside the label (or nothing drawn): ignored
-      if (kind && point && onInsert) onInsert(kind, point[0], point[1]);
+      if (kind && point && onInsert) onInsert(kind, point[0], point[1], { dropped: true });
     });
 
     // Drag: the pointer is captured only once it moved past the threshold, so a plain click reaches the click handler.
