@@ -232,8 +232,9 @@
    *  - onSelect(index): an item was clicked.
    *  - canMove(index): whether that item can be dragged (it gets the "movable" class and the grab cursor).
    *  - onMove(index, dx, dy): an item was dropped, moved by dx/dy in label units (0.1 mm). Called once, on drop.
+   *  - onInsert(kind, x, y): a palette component was dropped on the label at x/y (label units, not clamped).
    */
-  function createPreview({ container, cursor, dimensions }, { onSelect, onMove, canMove = () => false }) {
+  function createPreview({ container, cursor, dimensions }, { onSelect, onMove, onInsert, canMove = () => false }) {
     let selected = null;
     let shown = { area: null, rotation: 0 };
     // Press on a movable item: { id, index, group, startX, startY, startView, active, cancelled, dx, dy }
@@ -266,12 +267,38 @@
       onSelect(index);
     });
 
-    container.addEventListener('mousemove', e => {
-      const q = toView(e.clientX, e.clientY);
-      if (!q) return;
+    /** Client point -> label units (0.1 mm), not clamped, or null if no label is drawn under it. */
+    function labelPointAt(clientX, clientY) {
+      const q = toView(clientX, clientY);
       // q is in the rotated space of the view: it is mapped back to label units
-      const [x, y] = viewRotation.inverse(q, shown.rotation, shown.area.width, shown.area.height);
-      cursor.textContent = `x: ${Math.round(x)}  y: ${Math.round(y)}`;
+      return q ? viewRotation.inverse(q, shown.rotation, shown.area.width, shown.area.height) : null;
+    }
+
+    container.addEventListener('mousemove', e => {
+      const point = labelPointAt(e.clientX, e.clientY);
+      if (point) cursor.textContent = `x: ${Math.round(point[0])}  y: ${Math.round(point[1])}`;
+    });
+
+    // Palette components (HTML5 drag and drop). Only drags carrying the component type are accepted, so file drops and
+    // other drags are untouched. The handlers live on the container: show() rebuilds the SVG inside it.
+    const isComponentDrag = e => Array.from(e.dataTransfer?.types || []).includes(PB.ui.COMPONENT_MIME);
+    container.addEventListener('dragover', e => {
+      if (!isComponentDrag(e)) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = 'copy';
+      container.classList.add('drop-target');
+    });
+    container.addEventListener('dragleave', e => {
+      if (!container.contains(e.relatedTarget)) container.classList.remove('drop-target');
+    });
+    container.addEventListener('drop', e => {
+      if (!isComponentDrag(e)) return;
+      e.preventDefault();
+      container.classList.remove('drop-target');
+      const kind = e.dataTransfer.getData(PB.ui.COMPONENT_MIME);
+      const point = labelPointAt(e.clientX, e.clientY);
+      // Outside the label (or nothing drawn): ignored
+      if (kind && point && onInsert) onInsert(kind, point[0], point[1]);
     });
 
     // Drag: the pointer is captured only once it moved past the threshold, so a plain click reaches the click handler.
@@ -338,6 +365,7 @@
         return svg();
       },
       clearSelection: () => highlight(null),
+      labelPointAt,
     });
   }
 

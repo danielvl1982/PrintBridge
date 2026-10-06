@@ -117,6 +117,9 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     view too, and **Ctrl+Z** in the code box undoes the move). Pressing **Esc** while dragging cancels it. For the
     preview image, dropping it updates **Posición X / Posición Y**. Only languages that can rewrite positions
     (currently TPCL) allow dragging.
+  - **Components panel:** drag a component (text, Code128 barcode, QR, line, box) onto the label to insert it into the
+    code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
+    one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
 ## What it draws
 

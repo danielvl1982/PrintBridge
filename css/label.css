@@ -35,6 +35,13 @@
 /* Items that can be dragged (the language can rewrite their position) */
 .item.movable { cursor: grab; touch-action: none; user-select: none; }
 .dragging, .dragging .item.movable { cursor: grabbing; }
+/* Preview while a palette component is dragged over it */
+.drop-target { outline: 2px dashed #0a66c2; outline-offset: -2px; }
+/* Component palette */
+.palette { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.palette-item { display: flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid #c9ced6; border-radius: 6px; background: #fff; cursor: grab; user-select: none; font-size: 13px; }
+.palette-item:hover, .palette-item:focus-visible { border-color: #0a66c2; outline: none; }
+.palette-glyph { font-weight: 700; min-width: 1.6em; text-align: center; color: #0a66c2; }
 .hit { fill: transparent; stroke: none; }
 .item:hover .hit { stroke: #0a66c2; stroke-width: 3; fill: rgba(10, 102, 194, .06); }
 .item.sel .hit { stroke: #0a66c2; stroke-width: 4; fill: rgba(10, 102, 194, .10); }

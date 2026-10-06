@@ -22,7 +22,7 @@ A palette panel with design components the user drags onto the label preview; dr
 
 ## Tasks
 - [x] T1 TPCL builder: `componentTemplates`, `buildComponent`, next-free-id and next-free-placeholder helpers in `js/languages/tpcl.js` (+ registry doc in `js/core.js`), tests RED first in `tests/component-palette.test.js` (parse back, ids with gaps/mixed widths, clamp, before `{XS`, CRLF, RV after PV no error, unknown kind unchanged).
-- [ ] T2 UI: palette panel (`index.html`, `css/`), `labelPointAt` in `createPreview`, drop wiring in `js/app.js`, README note.
+- [x] T2 UI: palette panel (`index.html`, `css/`), `labelPointAt` in `createPreview`, drop wiring in `js/app.js`, README note.
 
 ## Acceptance
 - Dragging each component onto the preview inserts it at the drop point (top-left), correct with rotated views; the variable appears in the variables panel; Ctrl+Z undoes; all tests pass.
@@ -32,3 +32,4 @@ A palette panel with design components the user drags onto the label preview; dr
 
 ## Progress / Evidence
 - T1 (delegated writer): RED 17 failing, GREEN 17/17; all 11 test files pass (parent spot check).
+- T2 (delegated writer): all 11 test files pass, node --check ok (parent spot check). NOT verified in a browser: dragstart/dragover/drop, drop highlight and dragleave flicker, labelPointAt with rotated views, Ctrl+Z after insert, caret selection, panel layout, click/Enter insert at 100,100, unchanged-text notice.

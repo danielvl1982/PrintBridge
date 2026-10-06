@@ -39,8 +39,12 @@
       },
       canMove: index => isOverlay(index) || Boolean(sourceLanguage()?.moveItem && sources.rangeOf(lastModel.items[index])),
       onMove: moveItem,
+      onInsert: insertComponent,
     },
   );
+  const palette = ui.createPalette($('palette'), { onInsert: kind => insertComponent(kind, DEFAULT_COMPONENT_POINT[0], DEFAULT_COMPONENT_POINT[1]) });
+  // Language whose components the palette shows (null = none yet); the list is rebuilt only when it changes
+  let paletteLanguage;
 
   const imagePanel = ui.createImagePanel(
     {
@@ -121,6 +125,7 @@
       variablesPanel.setNames(variables.namesInModel(model));
       sizePanel.showArea(area);
       lastModel = model;
+      updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
       messages.show([
         ...notices,
@@ -163,6 +168,41 @@
     refresh();
     const range = sources.rangeOf(lastModel.items[index]);
     if (range) editor.selectRange(range.start, range.end);
+  }
+
+  /** Where a component activated without dragging (click / Enter) is placed, in label units (0.1 mm). */
+  const DEFAULT_COMPONENT_POINT = [100, 100];
+
+  /** Shows the components the language offers; a language without the hook leaves the palette hidden. */
+  function updatePalette(language) {
+    if (language === paletteLanguage) return;
+    paletteLanguage = language;
+    palette.render(language && language.componentTemplates ? language.componentTemplates() : []);
+  }
+
+  /**
+   * A palette component was dropped at x, y (label units): the language writes the new item, through a path that keeps
+   * Ctrl+Z working in the editor, and the first command it added is selected.
+   */
+  function insertComponent(kind, x, y) {
+    const language = languages.detect(editor.text()) || languages.get('tpcl');
+    if (!language || !language.buildComponent) return;
+    const text = editor.text();
+    const built = language.buildComponent(text, kind, { x, y }, { dpi: Number($('dpi').value) });
+    if (built === text) {
+      refresh({ notices: [diag.warning('No se pudo insertar el componente en el código de la etiqueta')] });
+      return;
+    }
+    if (!editor.replaceText(built)) editor.setText(built);
+    refresh();
+    // The text before the first difference is unchanged: the first command starting after it is the new one
+    let start = 0;
+    while (start < text.length && text[start] === built[start]) start++;
+    const ranges = lastModel.items.map(item => sources.rangeOf(item)).filter(range => range && range.start >= start);
+    if (ranges.length) {
+      const first = ranges.reduce((a, b) => (b.start < a.start ? b : a));
+      editor.selectRange(first.start, first.end);
+    }
   }
 
   /** Writes the chosen size in the label if its language allows it; otherwise reports it. */
