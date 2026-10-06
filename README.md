@@ -3,13 +3,19 @@
 Tool to see how a label (for now, TPCL for TEC/Toshiba printers) looks **without printing it**, while it is being created or
 modified. It warns about overlapping texts, items that go outside the label and wrong measures.
 
+**Live app: <https://danielvl1982.github.io/PrintBridge/>**
+
 (Formerly "Visor etiquetas bobinas TEC".) The code and technical docs are in English; the on-screen text is in Spanish, so the
 UI labels below are quoted exactly as they appear.
 
+Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md). The development plan and its progress live in
+[`odd/tasks/multi-printer-language-support.md`](odd/tasks/multi-printer-language-support.md).
+
 ## How to open it
 
-Double-click **`index.html`**. It opens in the browser, nothing needs to be installed and it works without
-internet. It stores nothing: every time it is opened it starts from scratch with the example label.
+Use the [live app](https://danielvl1982.github.io/PrintBridge/), or double-click **`index.html`** to run it locally. It opens in
+the browser, nothing needs to be installed and it works without internet. It stores nothing: every time it is opened it starts
+from scratch with the example label.
 
 **Always copy the whole folder**: `index.html` needs the `css` and `js` folders next to it.
 
