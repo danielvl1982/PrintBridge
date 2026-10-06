@@ -32,6 +32,9 @@
 
 /* Selectable items */
 .item { cursor: pointer; }
+/* Items that can be dragged (the language can rewrite their position) */
+.item.movable { cursor: grab; touch-action: none; user-select: none; }
+.dragging, .dragging .item.movable { cursor: grabbing; }
 .hit { fill: transparent; stroke: none; }
 .item:hover .hit { stroke: #0a66c2; stroke-width: 3; fill: rgba(10, 102, 194, .06); }
 .item.sel .hit { stroke: #0a66c2; stroke-width: 4; fill: rgba(10, 102, 194, .10); }

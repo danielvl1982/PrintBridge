@@ -191,6 +191,17 @@
     return Object.freeze({
       text: () => textarea.value,
       setText(text) { textarea.value = text; },
+      /**
+       * Replaces the whole text keeping the browser's undo stack (Ctrl+Z), unlike setText. Returns false if the browser
+       * refuses; the caller then falls back to setText. The caller refreshes: the edit notification it triggers is dropped.
+       */
+      replaceText(text) {
+        textarea.focus();
+        textarea.select();
+        const done = document.execCommand('insertText', false, text);
+        clearTimeout(timer);
+        return done;
+      },
       /** Selects a span of the text and centers it on screen. */
       selectRange(start, end) {
         textarea.focus();
@@ -206,17 +217,39 @@
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
 
 /**
- * Preview: shows the SVG, the coordinates under the mouse and notifies when an item is clicked.
+ * Preview: shows the SVG, the coordinates under the mouse, notifies when an item is clicked and lets items be dragged.
  */
 (function (PB) {
   'use strict';
 
   const { units, viewRotation } = PB;
 
-  function createPreview({ container, cursor, dimensions }, { onSelect }) {
+  /** Screen movement (px) under which a press on an item is a click, not a drag. */
+  const DRAG_THRESHOLD_PX = 3;
+
+  /**
+   * callbacks:
+   *  - onSelect(index): an item was clicked.
+   *  - canMove(index): whether that item can be dragged (it gets the "movable" class and the grab cursor).
+   *  - onMove(index, dx, dy): an item was dropped, moved by dx/dy in label units (0.1 mm). Called once, on drop.
+   */
+  function createPreview({ container, cursor, dimensions }, { onSelect, onMove, canMove = () => false }) {
     let selected = null;
     let shown = { area: null, rotation: 0 };
+    // Press on a movable item: { id, index, group, startX, startY, startView, active, cancelled, dx, dy }
+    let drag = null;
+    let suppressClick = false;
     const svg = () => container.querySelector('svg');
+
+    /** Client point -> point in the rotated space of the view (what the SVG draws), or null if nothing is drawn. */
+    function toView(clientX, clientY) {
+      const el = svg();
+      if (!el || !shown.area) return null;
+      const p = el.createSVGPoint();
+      p.x = clientX; p.y = clientY;
+      const q = p.matrixTransform(el.getScreenCTM().inverse());
+      return [q.x, q.y];
+    }
 
     function highlight(index) {
       selected = index;
@@ -225,6 +258,7 @@
     }
 
     container.addEventListener('click', e => {
+      if (suppressClick) return;
       const group = e.target.closest('.item');
       if (!group) return;
       const index = Number(group.dataset.index);
@@ -233,14 +267,64 @@
     });
 
     container.addEventListener('mousemove', e => {
-      const el = svg();
-      if (!el || !shown.area) return;
-      const p = el.createSVGPoint();
-      p.x = e.clientX; p.y = e.clientY;
-      const q = p.matrixTransform(el.getScreenCTM().inverse());
+      const q = toView(e.clientX, e.clientY);
+      if (!q) return;
       // q is in the rotated space of the view: it is mapped back to label units
-      const [x, y] = viewRotation.inverse([q.x, q.y], shown.rotation, shown.area.width, shown.area.height);
+      const [x, y] = viewRotation.inverse(q, shown.rotation, shown.area.width, shown.area.height);
       cursor.textContent = `x: ${Math.round(x)}  y: ${Math.round(y)}`;
+    });
+
+    // Drag: the pointer is captured only once it moved past the threshold, so a plain click reaches the click handler.
+    // Meanwhile only the dragged <g> is translated (in label units: it lives inside the rotated group); the code is
+    // written once, on drop, because every refresh rebuilds the SVG.
+    container.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || drag) return;
+      const group = e.target.closest('.item.movable');
+      const startView = group && toView(e.clientX, e.clientY);
+      if (!startView) return;
+      drag = { id: e.pointerId, index: Number(group.dataset.index), group, startX: e.clientX, startY: e.clientY, startView, active: false, cancelled: false, dx: 0, dy: 0 };
+    });
+
+    container.addEventListener('pointermove', e => {
+      if (!drag || e.pointerId !== drag.id || drag.cancelled) return;
+      if (!drag.active) {
+        if (Math.hypot(e.clientX - drag.startX, e.clientY - drag.startY) < DRAG_THRESHOLD_PX) return;
+        drag.active = true;
+        container.setPointerCapture(drag.id);
+        container.classList.add('dragging');
+      }
+      const view = toView(e.clientX, e.clientY);
+      if (!view) return;
+      // The screen movement is a movement in the rotated view; the item is in label space
+      [drag.dx, drag.dy] = viewRotation.delta([view[0] - drag.startView[0], view[1] - drag.startView[1]], shown.rotation).map(Math.round);
+      drag.group.style.transform = `translate(${drag.dx}px, ${drag.dy}px)`;
+    });
+
+    /** Ends the press: restores the visual and, if it was a drag that was not cancelled, reports the move. */
+    function endDrag(e) {
+      if (!drag || e.pointerId !== drag.id) return;
+      const done = drag;
+      drag = null;
+      if (!done.active) return;
+      container.classList.remove('dragging');
+      if (container.hasPointerCapture(done.id)) container.releasePointerCapture(done.id);
+      done.group.style.transform = '';
+      // The click that follows the drop must not select anything
+      suppressClick = true;
+      setTimeout(() => { suppressClick = false; }, 0);
+      if (e.type === 'pointerup' && !done.cancelled && (done.dx || done.dy)) {
+        highlight(done.index);
+        onMove(done.index, done.dx, done.dy);
+      }
+    }
+    container.addEventListener('pointerup', endDrag);
+    container.addEventListener('pointercancel', endDrag);
+
+    // Escape cancels the drag at once; the press itself ends when the button is released
+    document.addEventListener('keydown', e => {
+      if (e.key !== 'Escape' || !drag || !drag.active || drag.cancelled) return;
+      drag.cancelled = true;
+      drag.group.style.transform = '';
     });
 
     return Object.freeze({
@@ -248,6 +332,7 @@
       show(markup, area, rotation) {
         shown = { area, rotation };
         container.innerHTML = markup;
+        container.querySelectorAll('.item').forEach(g => g.classList.toggle('movable', canMove(Number(g.dataset.index))));
         dimensions.textContent = `Etiqueta ${units.formatMm(area.width)} × ${units.formatMm(area.height)} mm`;
         highlight(selected);
         return svg();
@@ -292,6 +377,11 @@
     return Object.freeze({
       /** Raw values typed in the inputs (mm; text, possibly empty). */
       placement: () => ({ xMm: els.x.value, yMm: els.y.value, widthMm: els.width.value }),
+      /** Shows a new position (mm) in the X / Y inputs; it does not notify. */
+      setPosition(xMm, yMm) {
+        els.x.value = xMm;
+        els.y.value = yMm;
+      },
       /** Raw value of the "Umbral" slider (percent, text). */
       thresholdPercent: () => els.threshold.value,
       /** Enables the placement controls only while there is an image to place. */

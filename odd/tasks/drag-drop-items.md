@@ -19,7 +19,7 @@ Let the user drag every item shown in the label preview and have the new positio
 
 ## Tasks
 - [x] T1 Pure `moveItem(text, item, dx, dy, { dpi })` in `js/languages/tpcl.js`, exposed as an optional language hook, with tests (RED first) in `tests/`. Covers PC/PV/XB/QR/LC (both points)/SG (with and without D), 4-digit width, clamping, CR/LF inside the command.
-- [ ] T2 Pointer drag in `createPreview` (`js/ui.js`) with threshold, pointer capture, rotation-aware delta (`view.js` helper if needed), visual translate during drag, `onMove` callback; wiring in `js/app.js` (language hook, overlay image to panel fields, undo-friendly text write); CSS cursor; README note.
+- [x] T2 Pointer drag in `createPreview` (`js/ui.js`) with threshold, pointer capture, rotation-aware delta (`view.js` helper if needed), visual translate during drag, `onMove` callback; wiring in `js/app.js` (language hook, overlay image to panel fields, undo-friendly text write); CSS cursor; README note.
 
 ## Acceptance
 - Dragging any item moves it and the code text changes only in that command's coordinates.
@@ -32,3 +32,4 @@ Let the user drag every item shown in the label preview and have the new positio
 
 ## Progress / Evidence
 - T1 (delegated writer): RED observed (22 failing), GREEN 22/22; all 10 test files pass (parent spot check). Commit: see git log.
+- T2 (delegated writer): RED 2 failing (viewRotation.delta), GREEN; all 10 test files pass (parent spot check). NOT verified in a browser: pointer capture/threshold, transform at 4 rotations, Ctrl+Z via execCommand (Firefox, setText fallback), cursors, caret after move. Known edge: typing then dragging within the 150 ms edit delay can use stale source spans.

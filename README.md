@@ -113,6 +113,10 @@ Overlays a picture on the preview to check where it would go. Until you insert i
   - Hovering shows the **x / y** coordinates at the top right, in the same units as the label coordinates
     (0.1 mm). Useful to decide where to place an item.
   - **Click on an item** selects its line in the code.
+  - **Drag an item** to move it: when dropped, only its coordinates change in the code (it works with the rotated
+    view too, and **Ctrl+Z** in the code box undoes the move). Pressing **Esc** while dragging cancels it. For the
+    preview image, dropping it updates **Posición X / Posición Y**. Only languages that can rewrite positions
+    (currently TPCL) allow dragging.
 
 ## What it draws
 

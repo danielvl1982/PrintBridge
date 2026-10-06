@@ -34,6 +34,11 @@
     }
   }
 
+  /** Movement [dx, dy] in the rotated view -> movement in label space (the rotation without the translation). */
+  function delta([dx, dy], angle) {
+    return inverse([dx, dy], angle, 0, 0);
+  }
+
   /** viewBox of the rotated SVG, with the pad margin around it: at 90 and 270 width and height are swapped. */
   function viewBoxFor(width, height, angle, pad) {
     const swap = normalize(angle) % 180 !== 0;
@@ -50,5 +55,5 @@
     }
   }
 
-  PB.viewRotation = Object.freeze({ ANGLES, rotate, inverse, viewBoxFor, transformFor });
+  PB.viewRotation = Object.freeze({ ANGLES, rotate, inverse, delta, viewBoxFor, transformFor });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

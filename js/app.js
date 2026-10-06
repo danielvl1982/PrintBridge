@@ -37,6 +37,8 @@
         const range = sources.rangeOf(lastModel.items[index]);
         if (range) editor.selectRange(range.start, range.end);
       },
+      canMove: index => isOverlay(index) || Boolean(sourceLanguage()?.moveItem && sources.rangeOf(lastModel.items[index])),
+      onMove: moveItem,
     },
   );
 
@@ -130,6 +132,37 @@
     } catch (error) {
       messages.show([...notices, diag.error(`Error al procesar la etiqueta: ${error.message}`)]);
     }
+  }
+
+  /** The overlay image is always the last item and has no source in the code. */
+  const isOverlay = index => Boolean(state.image) && index === lastModel.items.length - 1;
+
+  /** Language of the label being shown (null if not recognized). */
+  const sourceLanguage = () => (lastModel.language ? languages.get(lastModel.language) : null);
+
+  /**
+   * An item was dropped `dx`, `dy` (0.1 mm) away: the overlay image updates the X / Y fields; any other item has its
+   * command rewritten by the language, through a path that keeps Ctrl+Z working in the editor.
+   */
+  function moveItem(index, dx, dy) {
+    if (isOverlay(index)) {
+      const { xMm, yMm } = imagePanel.placement();
+      const moved = (value, delta) => Math.min(999.9, Math.max(0, Math.round(((parseFloat(String(value).replace(',', '.')) || 0) + delta / 10) * 10) / 10));
+      imagePanel.setPosition(moved(xMm, dx), moved(yMm, dy));
+      refresh();
+      updatePreview({ delay: PREVIEW_DELAY_MS });
+      return;
+    }
+    const language = sourceLanguage();
+    const item = lastModel.items[index];
+    if (!language || !language.moveItem || !item) return;
+    const text = editor.text();
+    const moved = language.moveItem(text, item, dx, dy, { dpi: Number($('dpi').value) });
+    if (moved === text) return;
+    if (!editor.replaceText(moved)) editor.setText(moved);
+    refresh();
+    const range = sources.rangeOf(lastModel.items[index]);
+    if (range) editor.selectRange(range.start, range.end);
   }
 
   /** Writes the chosen size in the label if its language allows it; otherwise reports it. */

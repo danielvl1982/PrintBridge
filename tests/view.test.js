@@ -73,3 +73,21 @@ test('drawing with rotation: 90 degrees swaps the viewBox and wraps the content 
   const inside = svg.slice(svg.indexOf('<g class="view-rotation"'));
   for (const marker of ['label-background', 'grid-line', 'class="item"', 'class="overlaps"', 'class="origin"']) assert.ok(inside.includes(marker), marker);
 });
+
+// --- Drag delta (view space -> label space) ---
+test('rotation: delta maps a view-space movement to label space for the four angles', () => {
+  assert.deepEqual(viewRotation.delta([10, 5], 0), [10, 5]);
+  assert.deepEqual(viewRotation.delta([10, 5], 90), [5, -10]);
+  assert.deepEqual(viewRotation.delta([10, 5], 180), [-10, -5]);
+  assert.deepEqual(viewRotation.delta([10, 5], 270), [-5, 10]);
+});
+
+test('rotation: delta equals the difference of two inverse-mapped points and is size independent', () => {
+  const w = 990, h = 550, a = [100, 200], d = [37, -12];
+  for (const angle of ANGLES) {
+    const p0 = viewRotation.inverse(a, angle, w, h);
+    const p1 = viewRotation.inverse([a[0] + d[0], a[1] + d[1]], angle, w, h);
+    assert.deepEqual(viewRotation.delta(d, angle), [p1[0] - p0[0], p1[1] - p0[1]], `${angle}°`);
+  }
+  assert.throws(() => viewRotation.delta([1, 1], 45), RangeError);
+});
