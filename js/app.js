@@ -188,7 +188,7 @@
     const language = languages.detect(editor.text()) || languages.get('tpcl');
     if (!language || !language.buildComponent) return;
     const text = editor.text();
-    const built = language.buildComponent(text, kind, { x, y }, { dpi: Number($('dpi').value) });
+    const built = language.buildComponent(text, kind, { x, y }, { dpi: Number($('dpi').value), viewRotation: Number($('rotation').value) });
     if (built === text) {
       refresh({ notices: [diag.warning('No se pudo insertar el componente en el código de la etiqueta')] });
       return;

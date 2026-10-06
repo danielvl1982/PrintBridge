@@ -11,8 +11,8 @@ const BASE = `{D0500,0800,0400|}\n{C|}\n${XS}\n`;
 const at = (x, y) => ({ x, y });
 
 /** Builds a component and parses the result; returns { out, model, problems } (parse + validate diagnostics). */
-function build(text, kind, point = at(100, 200)) {
-  const out = tpcl.buildComponent(text, kind, point, { dpi: 203 });
+function build(text, kind, point = at(100, 200), viewRotation) {
+  const out = tpcl.buildComponent(text, kind, point, { dpi: 203, viewRotation });
   const model = tpcl.parse(out, { dpi: 203 });
   return { out, model, problems: [...model.diagnostics, ...tpcl.validate(model)] };
 }
@@ -29,7 +29,7 @@ test('componentTemplates lists the five kinds in order with Spanish labels', () 
 
 test('text: PV + RV parse without diagnostics at the drop point and create the variable', () => {
   const { out, model, problems } = build(BASE, 'text');
-  assert.ok(out.includes('{PV01;0100,0200,0060,0080,B,11,B|}\n{RV01;<#TEXTO1#>|}\n'));
+  assert.ok(out.includes('{PV01;0100,0200,0060,0080,B,00,B|}\n{RV01;<#TEXTO1#>|}\n'));
   assert.deepEqual(problems, []);
   const item = model.items.find(i => i.kind === 'text');
   assert.deepEqual([item.x, item.y, item.data], [100, 200, '<#TEXTO1#>']);
@@ -85,7 +85,7 @@ test('line and box shift the start left/up so the end point stays <= 9999', () =
 
 test('ids: next number after the max of the namespace, gaps ignored', () => {
   const text = `{PV01;0000,0000,0060,0080,B,11,B|}\n{PV05;0000,0000,0060,0080,B,11,B|}\n${XS}\n`;
-  assert.ok(build(text, 'text').out.includes('{PV06;0100,0200,0060,0080,B,11,B|}\n{RV06;'));
+  assert.ok(build(text, 'text').out.includes('{PV06;0100,0200,0060,0080,B,00,B|}\n{RV06;'));
 });
 
 test('ids: a number used only by a data command counts, and the width of the namespace is kept', () => {
@@ -132,7 +132,7 @@ test('CRLF line endings are preserved', () => {
 
 test('without {XS the commands are appended at the end', () => {
   const out = tpcl.buildComponent('{D0500,0800,0400|}\n', 'text', at(1, 2), { dpi: 203 });
-  assert.equal(out, '{D0500,0800,0400|}\n{PV01;0001,0002,0060,0080,B,11,B|}\n{RV01;<#TEXTO1#>|}\n');
+  assert.equal(out, '{D0500,0800,0400|}\n{PV01;0001,0002,0060,0080,B,00,B|}\n{RV01;<#TEXTO1#>|}\n');
 });
 
 test('unknown kind or invalid point leaves the text unchanged', () => {
@@ -140,4 +140,49 @@ test('unknown kind or invalid point leaves the text unchanged', () => {
   assert.equal(tpcl.buildComponent(BASE, 'text', at(NaN, 2), { dpi: 203 }), BASE);
   assert.equal(tpcl.buildComponent(BASE, 'text', at(1, Infinity), { dpi: 203 }), BASE);
   assert.equal(tpcl.buildComponent(BASE, 'text', null, { dpi: 203 }), BASE);
+});
+
+// View rotation: the new item is rotated (360 - view) % 360 so it looks upright in that view.
+const VIEWS = [0, 90, 180, 270];
+const TEXT_CODE = { 0: '00', 90: '33', 180: '22', 270: '11' };
+const BARCODE_DIGIT = { 0: '0', 90: '3', 180: '2', 270: '1' };
+
+test('text: rotation code follows the view rotation and the item looks upright', () => {
+  for (const view of VIEWS) {
+    const { out, model, problems } = build(BASE, 'text', at(100, 200), view);
+    assert.ok(out.includes(`{PV01;0100,0200,0060,0080,B,${TEXT_CODE[view]},B|}`), `view ${view}`);
+    assert.deepEqual(problems, [], `view ${view}`);
+    const item = model.items.find(i => i.kind === 'text');
+    assert.equal(item.rotation, (360 - view) % 360, `view ${view}`);
+    assert.equal((item.rotation + view) % 360, 0, `view ${view}`);
+  }
+});
+
+test('barcode: rotation digit follows the view rotation and the item looks upright', () => {
+  for (const view of VIEWS) {
+    const { out, model, problems } = build(BASE, 'barcode', at(30, 40), view);
+    assert.ok(out.includes(`{XB01;0030,0040,9,1,02,${BARCODE_DIGIT[view]},0080,+0000000000,000,0,00|}`), `view ${view}`);
+    assert.deepEqual(problems, [], `view ${view}`);
+    const item = model.items.find(i => i.kind === 'barcode');
+    assert.equal(item.rotation, (360 - view) % 360, `view ${view}`);
+    assert.equal((item.rotation + view) % 360, 0, `view ${view}`);
+  }
+});
+
+test('missing or invalid viewRotation behaves as 0', () => {
+  for (const kind of ['text', 'barcode']) {
+    const reference = build(BASE, kind, at(10, 20), 0).out;
+    for (const view of [undefined, null, NaN, 'abc', 45, -90, Infinity]) {
+      assert.equal(build(BASE, kind, at(10, 20), view).out, reference, `${kind} ${String(view)}`);
+    }
+    assert.equal(tpcl.buildComponent(BASE, kind, at(10, 20), { dpi: 203 }), reference);
+    assert.equal(tpcl.buildComponent(BASE, kind, at(10, 20)), reference);
+  }
+});
+
+test('qr, line and box are identical for every view rotation', () => {
+  for (const kind of ['qr', 'line', 'box']) {
+    const reference = build(BASE, kind, at(100, 200), 0).out;
+    for (const view of VIEWS) assert.equal(build(BASE, kind, at(100, 200), view).out, reference, `${kind} ${view}`);
+  }
 });

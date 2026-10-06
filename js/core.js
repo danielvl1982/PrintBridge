@@ -309,14 +309,15 @@
  *     sizeCommands?(resolvedSize) -> string[], matchesSize?(model, resolvedSize) -> diagnostics,
  *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text,
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
- *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi }) -> text }
+ *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text }
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
  * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
  *   if the item has no source.
  * componentTemplates (optional): the neutral component kinds the palette offers, in order (text, barcode, qr, line, box).
  * buildComponent (optional): the text with a new component of that kind whose top-left corner is at x/y (0.1 mm,
- *   clamped); unchanged for an unknown kind or an invalid point.
+ *   clamped); unchanged for an unknown kind or an invalid point. viewRotation (0/90/180/270 degrees clockwise, default 0)
+ *   is the current view rotation: the item is written rotated (360 - viewRotation) % 360 so it looks upright in that view.
  * Optional size fields (used by PB.sizes; without them the language neither checks nor writes the size):
  *   - sizeCommands: source text lines the language needs to declare that size.
  *   - matchesSize: diagnostics (error if the size is required) for the differences between the label and the size.

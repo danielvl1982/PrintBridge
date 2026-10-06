@@ -374,19 +374,24 @@
     return `<#${name}${k}#>`;
   }
 
-  /** Kinds that carry a variable: format/data command names, placeholder name and format options. */
+  // Item rotation in degrees clockwise -> 2-digit text code; the position in ROTATION_STEPS is the barcode digit.
+  const ROTATION_STEPS = Object.freeze([0, 90, 180, 270]);
+  const ROTATION_CODES = Object.freeze({ 0: '00', 90: '11', 180: '22', 270: '33' });
+
+  /** Kinds that carry a variable: format/data command names, placeholder name and format options ({rot2}/{rot1}: rotation). */
   const VARIABLE_COMPONENTS = Object.freeze({
-    text: { format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,11,B' },
-    barcode: { format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,0,0080,+0000000000,000,0,00' },
+    text: { format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,{rot2},B' },
+    barcode: { format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,{rot1},0080,+0000000000,000,0,00' },
     qr: { format: 'XB', data: 'RB', name: 'QR', tail: 'T,H,04,A,0,M2' },
   });
 
   /**
    * Adds a palette component with its top-left corner at (x, y) in 0.1 mm (rounded, clamped to 0..9999). Text and
-   * barcodes get a format command plus a data command with a unique <#NAME{k}#> variable. Unknown kind or invalid
+   * barcodes get a format command plus a data command with a unique <#NAME{k}#> variable, rotated
+   * (360 - options.viewRotation) % 360 to look upright in the view (missing/invalid = 0). Unknown kind or invalid
    * point: the text unchanged.
    */
-  function buildComponent(text, kind, point) {
+  function buildComponent(text, kind, point, options) {
     if (!COMPONENTS.some(c => c.kind === kind) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
     if (kind in LINE_SIZE) {
       const [w, h] = LINE_SIZE[kind];
@@ -394,7 +399,13 @@
       const y = Math.min(clampCoord(point.y), MAX_COORD - h);
       return insertCommand(text, `{LC;${pad4(x)},${pad4(y)},${pad4(x + w)},${pad4(y + h)},${kind === 'box' ? 1 : 0},03|}`);
     }
-    const { format, data, name, tail } = VARIABLE_COMPONENTS[kind];
+    const { format, data, name } = VARIABLE_COMPONENTS[kind];
+    // Rotated items extend from the anchor in the rotated direction, so near the label edges they can leave the label:
+    // only the coordinate clamp above applies, the item is not shifted to fit.
+    const view = options && ROTATION_STEPS.includes(options.viewRotation) ? options.viewRotation : 0;
+    const itemRotation = (360 - view) % 360; // clockwise, so that item + view = 0 (upright)
+    const tail = VARIABLE_COMPONENTS[kind].tail
+      .replace('{rot2}', ROTATION_CODES[itemRotation]).replace('{rot1}', String(ROTATION_STEPS.indexOf(itemRotation)));
     const id = nextId(text, format, data);
     const placeholder = freePlaceholder(text, name);
     const withFormat = insertCommand(text, `{${format}${id};${pad4(clampCoord(point.x))},${pad4(clampCoord(point.y))},${tail}|}`);
