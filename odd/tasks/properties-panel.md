@@ -21,7 +21,7 @@ Replace the image toolbar with a contextual properties panel driven by the selec
 
 ## Tasks
 - [x] T1 `updateItem` hook in `js/languages/tpcl.js` (+ registry doc in `js/core.js`) with tests RED first in `tests/update-item.test.js`.
-- [ ] T2 Properties panel UI: selection-change event in `js/ui.js`, panel module, move the overlay image controls into it, `js/app.js` wiring, `index.html`/CSS, README.
+- [x] T2 Properties panel UI: selection-change event in `js/ui.js`, panel module, move the overlay image controls into it, `js/app.js` wiring, `index.html`/CSS, README.
 
 ## Acceptance
 - Selecting an item shows its fields; editing one rewrites only that field, preview updates, Ctrl+Z undoes, selection stays on the item; overlay controls work as before; all tests pass.
@@ -31,3 +31,4 @@ Replace the image toolbar with a contextual properties panel driven by the selec
 
 ## Progress / Evidence
 - T1 (delegated writer): RED 38 failing, GREEN 38/38; all 12 test files pass (parent spot check). Ranges guessed (not in parser/README): PC magnification 1-99, QR cell 1-99, barcode module 1-99, line width 1-99. Not verified on a printer.
+- T2 (delegated writer): RED (module missing) then 4/4; all 13 test files pass, node --check ok (parent spot check). NOT verified in a browser: change event/focus restore, panel updates on click/drag/deselect, overlay controls inside the panel, layout <=900px, palette image flow without the toolbar button. Known: after a panel edit the editor range is not re-selected (focus); selecting a normal item hides overlay controls until empty-space click.

@@ -230,11 +230,12 @@
   /**
    * callbacks:
    *  - onSelect(index): an item was clicked.
+   *  - onSelectionChange(index | null): the selection changed (an item was clicked or dropped, empty space was clicked, or it was cleared).
    *  - canMove(index): whether that item can be dragged (it gets the "movable" class and the grab cursor).
    *  - onMove(index, dx, dy): an item was dropped, moved by dx/dy in label units (0.1 mm). Called once, on drop.
    *  - onInsert(kind, x, y): a palette component was dropped on the label at x/y (label units, not clamped).
    */
-  function createPreview({ container, cursor, dimensions }, { onSelect, onMove, onInsert, canMove = () => false }) {
+  function createPreview({ container, cursor, dimensions }, { onSelect, onSelectionChange = () => {}, onMove, onInsert, canMove = () => false }) {
     let selected = null;
     let shown = { area: null, rotation: 0 };
     // Press on a movable item: { id, index, group, startX, startY, startView, active, cancelled, dx, dy }
@@ -261,10 +262,15 @@
     container.addEventListener('click', e => {
       if (suppressClick) return;
       const group = e.target.closest('.item');
-      if (!group) return;
+      if (!group) {
+        highlight(null);
+        onSelectionChange(null);
+        return;
+      }
       const index = Number(group.dataset.index);
       highlight(index);
       onSelect(index);
+      onSelectionChange(index);
     });
 
     /** Client point -> label units (0.1 mm), not clamped, or null if no label is drawn under it. */
@@ -341,6 +347,7 @@
       setTimeout(() => { suppressClick = false; }, 0);
       if (e.type === 'pointerup' && !done.cancelled && (done.dx || done.dy)) {
         highlight(done.index);
+        onSelectionChange(done.index);
         onMove(done.index, done.dx, done.dy);
       }
     }
@@ -364,7 +371,12 @@
         highlight(selected);
         return svg();
       },
-      clearSelection: () => highlight(null),
+      clearSelection() {
+        highlight(null);
+        onSelectionChange(null);
+      },
+      /** Index of the selected item, or null. */
+      selected: () => selected,
       labelPointAt,
     });
   }
@@ -374,9 +386,9 @@
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
 
 /**
- * "Imagen" bar: choose a picture file and place it on the label (position and optional width in mm).
+ * "Imagen" controls: place a picture on the label (position and optional width in mm); the file itself is chosen from the palette.
  * It does not read the file or draw anything: it notifies and whoever uses it does the work.
- *  - onFile(file): the user chose a picture file.
+ *  - onFile(file): the user chose a picture file (the hidden file input is opened by the palette entry).
  *  - onChange(): x, y or width changed.
  *  - onThreshold(): the "Umbral" slider moved (its value is already shown next to it).
  *  - onRemove(): "Quitar imagen" was pressed.
@@ -385,12 +397,11 @@
 (function (PB) {
   'use strict';
 
-  /** els: { addButton, fileInput, x, y, width, threshold, thresholdValue, insert, remove } */
+  /** els: { fileInput, x, y, width, threshold, thresholdValue, insert, remove } */
   function createImagePanel(els, { onFile, onChange, onThreshold, onRemove, onInsert }) {
     const inputs = [els.x, els.y, els.width, els.threshold];
     const showThreshold = () => { els.thresholdValue.textContent = `${els.threshold.value} %`; };
 
-    els.addButton.addEventListener('click', () => els.fileInput.click());
     els.fileInput.addEventListener('change', () => {
       const file = els.fileInput.files[0];
       if (file) onFile(file);

@@ -76,10 +76,9 @@ The drawing updates immediately while typing in the code, so coordinates and siz
 
 ### Imagen
 
-Overlays a picture on the preview to check where it would go. Until you insert it, it is visual only: it is not written into the label code. Only one preview image exists at a time (adding another replaces it).
+Overlays a picture on the preview to check where it would go. Until you insert it, it is visual only: it is not written into the label code. Only one preview image exists at a time (adding another replaces it). Its controls live in the **Propiedades** panel (shown when the image is selected, or when nothing is selected and an image exists).
 
-- **Añadir imagen:** choose an image file (replaces the previous one). By default it is drawn at its natural pixel size for the selected **Resolución**.
-- **Imagen (paleta):** the component palette also has an **Imagen** entry (when the label language can insert images). Click it (or press Enter) to pick a file and place it at the default point; dragging it onto the label only works if the browser allows opening the file picker from a drop, otherwise click the entry.
+- **Imagen (paleta):** the component palette has an **Imagen** entry (when the label language can insert images); the chosen file replaces the previous image and is drawn at its natural pixel size for the selected **Resolución**. Click it (or press Enter) to pick a file and place it at the default point; dragging it onto the label only works if the browser allows opening the file picker from a drop, otherwise click the entry.
 - **Posición X / Posición Y:** top left corner of the image, in mm from the label origin.
 - **Ancho:** optional width in mm (empty = natural size); the height keeps the proportion.
 - **Umbral:** slider 0-100 % (default 50 %), enabled with the image. A dot is black when its luminance is below the
@@ -118,6 +117,10 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     view too, and **Ctrl+Z** in the code box undoes the move). Pressing **Esc** while dragging cancels it. For the
     preview image, dropping it updates **Posición X / Posición Y**. Only languages that can rewrite positions
     (currently TPCL) allow dragging.
+  - **Propiedades panel:** selecting an item shows its editable fields (size, magnification, rotation, module width,
+    human-readable text, error-correction level, end point, thickness...; only the values TPCL accepts). Changing a field
+    (on leaving it or pressing Intro) rewrites only that field in the code, and **Ctrl+Z** in the code box undoes it. With
+    nothing selected it shows "Selecciona un objeto". Clicking empty space deselects.
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.

@@ -37,6 +37,7 @@
         const range = sources.rangeOf(lastModel.items[index]);
         if (range) editor.selectRange(range.start, range.end);
       },
+      onSelectionChange: () => updateProperties(),
       canMove: index => isOverlay(index) || Boolean(sourceLanguage()?.moveItem && sources.rangeOf(lastModel.items[index])),
       onMove: moveItem,
       onInsert: insertComponent,
@@ -48,7 +49,7 @@
 
   const imagePanel = ui.createImagePanel(
     {
-      addButton: $('btnImage'), fileInput: $('imageFile'), x: $('imgX'), y: $('imgY'), width: $('imgW'),
+      fileInput: $('imageFile'), x: $('imgX'), y: $('imgY'), width: $('imgW'),
       threshold: $('imgThreshold'), thresholdValue: $('imgThresholdValue'), insert: $('btnImageInsert'), remove: $('btnImageRemove'),
     },
     {
@@ -58,6 +59,11 @@
       onRemove: removeImage,
       onInsert: insertImage,
     },
+  );
+
+  const propertiesPanel = ui.createPropertiesPanel(
+    { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay') },
+    { onChange: changeProperty },
   );
 
   let lastModel = null;
@@ -127,6 +133,7 @@
       lastModel = model;
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
+      updateProperties();
       messages.show([
         ...notices,
         ...diagnostics,
@@ -144,6 +151,46 @@
 
   /** Language of the label being shown (null if not recognized). */
   const sourceLanguage = () => (lastModel.language ? languages.get(lastModel.language) : null);
+
+  /**
+   * Shows what the properties panel offers for the selection: the form of the selected item, the overlay image controls
+   * (the selected overlay, or no selection while an overlay exists) or the empty message. A selection that no longer
+   * exists (the code changed) is dropped.
+   */
+  function updateProperties() {
+    if (!lastModel) return;
+    let index = preview.selected();
+    if (index != null && !lastModel.items[index]) {
+      preview.clearSelection();
+      return;
+    }
+    if (index == null && state.image) index = lastModel.items.length - 1;
+    if (index == null) {
+      propertiesPanel.show(null);
+    } else if (isOverlay(index)) {
+      propertiesPanel.showOverlay();
+    } else {
+      const language = sourceLanguage();
+      propertiesPanel.show(language && language.describeItem ? language.describeItem(lastModel.items[index], editor.text()) : null);
+    }
+  }
+
+  /** A properties form field was edited: the language rewrites only that field, through a path that keeps Ctrl+Z working. */
+  function changeProperty(key, value) {
+    const index = preview.selected();
+    const language = sourceLanguage();
+    const item = index != null && lastModel.items[index];
+    if (!language || !language.updateItem || !item) return;
+    const text = editor.text();
+    const updated = language.updateItem(text, item, { [key]: value }, { dpi: Number($('dpi').value) });
+    if (updated !== text) {
+      if (!editor.replaceText(updated)) editor.setText(updated);
+      // The selection is kept by index in the preview; the code box is not re-selected so the form keeps the focus
+      refresh();
+    }
+    // Also when nothing changed (value out of range or equal): the form goes back to what the code says
+    updateProperties();
+  }
 
   /**
    * An item was dropped `dx`, `dy` (0.1 mm) away: the overlay image updates the X / Y fields; any other item has its
@@ -189,8 +236,6 @@
   /** Position (mm) the next loaded image takes, set when the picker is opened from the palette; null = keep the fields. */
   let pendingImagePosition = null;
   $('imageFile').addEventListener('cancel', () => { pendingImagePosition = null; });
-  // The toolbar button keeps its own behaviour: it never inherits a position left by the palette
-  $('btnImage').addEventListener('click', () => { pendingImagePosition = null; });
 
   /**
    * Opens the file picker for the image entry; the loaded picture is placed at x, y (label units, 0.1 mm).
@@ -280,6 +325,7 @@
         // Drop any conversion still running for the previous picture: its stale result would leave previewKey set
         cancelPreview();
         imagePanel.setActive(true);
+        preview.clearSelection();
         refresh();
         updatePreview();
       },
@@ -291,6 +337,7 @@
   }
 
   function removeImage() {
+    if (preview.selected() != null && isOverlay(preview.selected())) preview.clearSelection();
     state.image = null;
     cancelPreview();
     imagePanel.setActive(false);
