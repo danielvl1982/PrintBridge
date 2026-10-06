@@ -342,6 +342,65 @@
     return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
   }
 
+  /** Component kinds of the palette (neutral), in display order. */
+  const COMPONENTS = Object.freeze([
+    { kind: 'text', label: 'Texto' },
+    { kind: 'barcode', label: 'Código de barras' },
+    { kind: 'qr', label: 'QR' },
+    { kind: 'line', label: 'Línea' },
+    { kind: 'box', label: 'Caja' },
+  ]);
+
+  const MAX_COORD = 9999;
+  const clampCoord = n => Math.min(MAX_COORD, Math.max(0, Math.round(n)));
+
+  /** Line and box sizes in 0.1 mm: [width, height]. */
+  const LINE_SIZE = Object.freeze({ line: [400, 0], box: [300, 200] });
+
+  /**
+   * Next free number of a format command (PV, XB) and its data command (RV, RB): the max of both plus one, with the
+   * digits already used by that namespace (2 if none). PC/PV/XB are independent namespaces.
+   */
+  function nextId(text, format, data) {
+    const used = [...text.matchAll(new RegExp(String.raw`\{(?:${format}|${data})(\d+);`, 'g'))].map(m => m[1]);
+    const width = Math.max(2, ...used.map(d => d.length));
+    return String(Math.max(0, ...used.map(Number)) + 1).padStart(width, '0');
+  }
+
+  /** <#NAME{k}#> with the smallest k >= 1 that does not appear in the text (as #NAME{k}# or <#NAME{k}#>). */
+  function freePlaceholder(text, name) {
+    let k = 1;
+    while (text.includes(`#${name}${k}#`)) k++;
+    return `<#${name}${k}#>`;
+  }
+
+  /** Kinds that carry a variable: format/data command names, placeholder name and format options. */
+  const VARIABLE_COMPONENTS = Object.freeze({
+    text: { format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,11,B' },
+    barcode: { format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,0,0080,+0000000000,000,0,00' },
+    qr: { format: 'XB', data: 'RB', name: 'QR', tail: 'T,H,04,A,0,M2' },
+  });
+
+  /**
+   * Adds a palette component with its top-left corner at (x, y) in 0.1 mm (rounded, clamped to 0..9999). Text and
+   * barcodes get a format command plus a data command with a unique <#NAME{k}#> variable. Unknown kind or invalid
+   * point: the text unchanged.
+   */
+  function buildComponent(text, kind, point) {
+    if (!COMPONENTS.some(c => c.kind === kind) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
+    if (kind in LINE_SIZE) {
+      const [w, h] = LINE_SIZE[kind];
+      const x = Math.min(clampCoord(point.x), MAX_COORD - w);
+      const y = Math.min(clampCoord(point.y), MAX_COORD - h);
+      return insertCommand(text, `{LC;${pad4(x)},${pad4(y)},${pad4(x + w)},${pad4(y + h)},${kind === 'box' ? 1 : 0},03|}`);
+    }
+    const { format, data, name, tail } = VARIABLE_COMPONENTS[kind];
+    const id = nextId(text, format, data);
+    const placeholder = freePlaceholder(text, name);
+    const withFormat = insertCommand(text, `{${format}${id};${pad4(clampCoord(point.x))},${pad4(clampCoord(point.y))},${tail}|}`);
+    return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
+  }
+
   // Coordinate fields of each command, as capture groups: [value group, D suffix group | null, axis]. Newlines are
   // stripped before matching (like commands()), so the groups are mapped back to the original text.
   const COORDINATES = [
@@ -396,5 +455,7 @@
     applySize,
     insertCommand,
     moveItem,
+    componentTemplates: () => COMPONENTS.map(c => ({ ...c })),
+    buildComponent,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
