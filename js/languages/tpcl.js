@@ -202,6 +202,39 @@
       },
     },
     {
+      // Graphic: SG;<x>[D],<y>[D],<width dots>,<height dots>,<e data mode>,<data>. x/y in 0.1 mm (dots with the D suffix).
+      // Everything after the 5th comma is raw data up to the closing |}: nibble chars include ";" and ":" so it is never split.
+      // Modes: e=0 overwrite, e=4 OR (both nibble data). Verified only against the B-SX4T manual: the {SG…|} framing is
+      // inferred and NOT verified for B-EX4 or on a real printer (test the first print).
+      pattern: /^SG;(\d+)(D?),(\d+)(D?),(\d+),(\d+),(\d+),([\s\S]*)$/,
+      handle(m, cmd, ctx) {
+        const ref = 'SG' + (ctx.model.items.filter(i => i.kind === 'image').length + 1);
+        const [w, h, mode, data] = [+m[5], +m[6], +m[7], m[8]];
+        if (mode !== 0 && mode !== 4) {
+          ctx.report(diag.warning(`${ref}: Modo de datos SG no soportado por el visor (e=${mode}), no se dibuja`));
+          return;
+        }
+        if (w < 1 || h < 1) {
+          ctx.report(diag.warning(`${ref}: tamaño ${w}×${h} puntos no válido, no se dibuja`));
+          return;
+        }
+        const expected = ((w + 7) >> 3) * h * 2;
+        if (data.length !== expected) {
+          ctx.report(diag.warning(`${ref}: ${data.length} caracteres de datos y se esperaban ${expected} para ${w}×${h} puntos`));
+        }
+        const position = (digits, dots) => (dots ? Math.round(+digits * ctx.dot) : +digits);
+        ctx.model.items.push({
+          kind: 'image', ref,
+          source: { spans: [{ start: cmd.start, end: cmd.end }], label: `{SG;${m[1]}${m[2]},${m[3]}${m[4]},${m[5]},${m[6]},${m[7]},…|}` },
+          x: position(m[1], m[2]), y: position(m[3], m[4]), raw: { x: m[1], y: m[3] },
+          width: Math.round(w * ctx.dot), height: Math.round(h * ctx.dot),
+          bitmap: { w, h, data: PB.images.nibbleToBitmap(data, w, h) },
+          native: { mode },
+          data: null,
+        });
+      },
+    },
+    {
       // Control commands: they draw nothing
       pattern: new RegExp(`^(${CONTROL_COMMANDS.join('|')})(;|$)`),
       handle() {},
@@ -288,6 +321,22 @@
     return out;
   }
 
+  /**
+   * Adds a command to the text: right before the print command {XS…|} (so after {C|}) or, without one, at the end.
+   * Uses the line ending of the file and keeps its trailing newline (or lack of it).
+   */
+  function insertCommand(text, command) {
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const print = /\{XS[;|]/.exec(text);
+    if (print) {
+      const before = text.slice(0, print.index);
+      const lead = before === '' || before.endsWith('\n') ? '' : eol;
+      return `${before}${lead}${command}${eol}${text.slice(print.index)}`;
+    }
+    if (text === '') return `${command}${eol}`;
+    return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
+  }
+
   PB.languages.register({
     id: 'tpcl',
     name: 'TPCL (Toshiba TEC)',
@@ -297,5 +346,6 @@
     sizeCommands,
     matchesSize,
     applySize,
+    insertCommand,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

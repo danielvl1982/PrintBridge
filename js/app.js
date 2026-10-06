@@ -5,7 +5,7 @@
 (function (PB) {
   'use strict';
 
-  const { config, examples, languages, validator, sizes, variables, svgRenderer, layout, sources, ui, diagnostics: diag } = PB;
+  const { config, examples, languages, validator, sizes, variables, svgRenderer, layout, sources, images, ui, diagnostics: diag } = PB;
   const $ = id => document.getElementById(id);
 
   /** Model of an empty label or of an unrecognized text: it draws nothing. */
@@ -17,7 +17,10 @@
   });
 
   const catalog = sizes.createCatalog(config.sizes);
-  const state = { values: { ...examples[0].values } };
+  // image: picture overlaid on the label, { href (data URL), naturalW, naturalH } or null. Preview only, never written to the code.
+  // image also holds `converted` once the 1-bit conversion that the preview shows is ready:
+  // { key: 'WxH@threshold', bitmap: { w, h, data } | null (null = conversion failed, plain picture shown) }.
+  const state = { values: { ...examples[0].values }, image: null };
 
   const messages = ui.createMessagesPanel($('msgs'));
   const variablesPanel = ui.createVariablesPanel($('vars'), { values: state.values, onChange: () => refresh() });
@@ -37,7 +40,36 @@
     },
   );
 
+  const imagePanel = ui.createImagePanel(
+    {
+      addButton: $('btnImage'), fileInput: $('imageFile'), x: $('imgX'), y: $('imgY'), width: $('imgW'),
+      threshold: $('imgThreshold'), thresholdValue: $('imgThresholdValue'), insert: $('btnImageInsert'), remove: $('btnImageRemove'),
+    },
+    {
+      onFile: loadImage,
+      onChange: () => { refresh(); updatePreview({ delay: PREVIEW_DELAY_MS }); },
+      onThreshold: () => updatePreview({ delay: PREVIEW_DELAY_MS }),
+      onRemove: removeImage,
+      onInsert: insertImage,
+    },
+  );
+
   let lastModel = null;
+
+  /**
+   * Model with the overlay image (if any) appended to its items; the parsed model is not modified.
+   * The item shows the converted 1-bit dots when they are ready for the current controls (what "Insertar en el código"
+   * writes); otherwise (conversion pending or failed) the plain picture.
+   */
+  function withImage(model) {
+    if (!state.image) return model;
+    const placement = { ...state.image, ...imagePanel.placement(), dpi: Number($('dpi').value) };
+    const { converted } = state.image;
+    const item = converted && converted.bitmap && converted.key === conversionParams().key
+      ? images.makeBitmapItem(placement, converted.bitmap)
+      : images.makeItem(placement);
+    return { ...model, items: [...model.items, item] };
+  }
 
   function options() {
     return {
@@ -58,15 +90,18 @@
   function analyze(text, { language, fresh }) {
     const detected = language || (text.trim() ? languages.detect(text) : null);
     if (!detected) {
+      const model = withImage(EMPTY_MODEL);
       return {
         language: null,
-        model: EMPTY_MODEL,
-        area: { ...sizes.view(EMPTY_MODEL, sizePanel.current()), diagnostics: [] },
+        model,
+        area: { ...sizes.view(model, sizePanel.current()), diagnostics: [] },
         diagnostics: text.trim() ? [diag.error('No se reconoce el lenguaje de la etiqueta')] : [],
       };
     }
-    const model = detected.parse(text, { dpi: Number($('dpi').value) });
-    if (fresh) sizePanel.selectFor(model.size);
+    const parsed = detected.parse(text, { dpi: Number($('dpi').value) });
+    if (fresh) sizePanel.selectFor(parsed.size);
+    // The overlay image joins the items after parsing and before validation, drawing and layout analysis
+    const model = withImage(parsed);
     return { language: detected, model, area: sizes.view(model, sizePanel.current()), diagnostics: [...model.diagnostics, ...validator.validate(model, detected)] };
   }
 
@@ -105,6 +140,159 @@
     refresh({ notices: result.supported ? [] : [diag.warning('No se puede escribir el tamaño: el lenguaje de la etiqueta no lo admite o no se reconoce')] });
   }
 
+  /** Reads a picture file as a data URL and measures its natural size in pixels. */
+  function readImage(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onerror = () => reject(new Error('no se pudo leer el archivo'));
+      reader.onload = () => {
+        const href = reader.result;
+        const probe = new Image();
+        probe.onerror = () => reject(new Error('el archivo no es una imagen válida'));
+        probe.onload = () => (probe.naturalWidth > 0 && probe.naturalHeight > 0
+          ? resolve({ href, naturalW: probe.naturalWidth, naturalH: probe.naturalHeight })
+          : reject(new Error('la imagen no tiene un tamaño en píxeles')));
+        probe.src = href;
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  /** Sets the overlay image from a chosen file (replacing the previous one) and redraws. */
+  function loadImage(file) {
+    readImage(file).then(
+      image => {
+        state.image = image;
+        imagePanel.setActive(true);
+        refresh();
+        updatePreview();
+      },
+      error => refresh({ notices: [diag.error(`No se pudo añadir la imagen: ${error.message}`)] }),
+    );
+  }
+
+  function removeImage() {
+    state.image = null;
+    cancelPreview();
+    imagePanel.setActive(false);
+    refresh();
+  }
+
+  /** Largest width or height (dots) of an SG command: its fields have 4 digits. */
+  const MAX_SG_DOTS = 9999;
+
+  /** Pause after the last change of a control before the preview is converted again. */
+  const PREVIEW_DELAY_MS = 150;
+
+  /** Draws the picture on a white canvas of w x h dots, shrinking by halves (see images.downscaleSteps), and returns its black/white dots (see images.thresholdRGBA). */
+  function rasterize(href, w, h, threshold) {
+    return new Promise((resolve, reject) => {
+      const picture = new Image();
+      picture.onerror = () => reject(new Error('no se pudo cargar la imagen'));
+      picture.onload = () => {
+        if (!(picture.naturalWidth > 0 && picture.naturalHeight > 0)) {
+          reject(new Error('la imagen no tiene un tamaño en píxeles'));
+          return;
+        }
+        // Each step is drawn over white from the previous canvas: one big downscale would skip most pixels of line art
+        let source = picture;
+        let g;
+        for (const step of images.downscaleSteps(picture.naturalWidth, picture.naturalHeight, w, h)) {
+          const canvas = Object.assign(document.createElement('canvas'), { width: step.w, height: step.h });
+          g = canvas.getContext('2d', { willReadFrequently: true });
+          g.imageSmoothingQuality = 'high';
+          g.fillStyle = '#fff';
+          g.fillRect(0, 0, step.w, step.h);
+          g.drawImage(source, 0, 0, step.w, step.h);
+          source = canvas;
+        }
+        resolve(images.thresholdRGBA(g.getImageData(0, 0, w, h).data, w, h, threshold));
+      };
+      picture.src = href;
+    });
+  }
+
+  /**
+   * What the current controls convert the picture to: size in dots, luminance threshold (0-255) and a key that
+   * identifies that combination (a conversion is still valid while its key equals the current one).
+   */
+  function conversionParams() {
+    const { w, h } = images.targetDots({ ...state.image, ...imagePanel.placement(), dpi: Number($('dpi').value) });
+    const threshold = images.thresholdFromPercent(imagePanel.thresholdPercent());
+    return { w, h, threshold, key: `${w}x${h}@${threshold}` };
+  }
+
+  /** Black/white bitmap { w, h, data } of the current picture for the current controls: the ready one if still valid, else a new one. */
+  function convertImage() {
+    const { converted, href } = state.image;
+    const { w, h, threshold, key } = conversionParams();
+    if (converted && converted.bitmap && converted.key === key) return Promise.resolve(converted.bitmap);
+    if (w > MAX_SG_DOTS || h > MAX_SG_DOTS) return Promise.reject(new Error(`${w}×${h} puntos supera el máximo de ${MAX_SG_DOTS}`));
+    return rasterize(href, w, h, threshold).then(data => ({ w, h, data }));
+  }
+
+  // Latest wins: every new conversion or cancel bumps the token, and an older result that arrives later is dropped.
+  let previewTimer = null;
+  let previewToken = 0;
+  let previewKey = null;
+
+  function cancelPreview() {
+    clearTimeout(previewTimer);
+    previewToken++;
+    previewKey = null;
+  }
+
+  /**
+   * Converts the picture for the current controls (after `delay` ms without further calls) and redraws the preview
+   * with the 1-bit result, the same dots "Insertar en el código" writes. If the conversion fails, the plain picture
+   * stays and the error is shown.
+   */
+  function updatePreview({ delay = 0 } = {}) {
+    clearTimeout(previewTimer);
+    if (!state.image) return;
+    previewTimer = setTimeout(() => {
+      const image = state.image;
+      if (!image) return;
+      const { key } = conversionParams();
+      if ((image.converted && image.converted.key === key) || previewKey === key) return;
+      const token = ++previewToken;
+      previewKey = key;
+      const finish = (bitmap, notices) => {
+        if (token !== previewToken || image !== state.image) return;
+        previewKey = null;
+        image.converted = { key, bitmap };
+        refresh({ notices });
+      };
+      convertImage().then(
+        bitmap => finish(bitmap, []),
+        error => finish(null, [diag.error(`No se pudo convertir la imagen para la vista previa: ${error.message}`)]),
+      );
+    }, delay);
+  }
+
+  /**
+   * Writes the preview image into the label code as a graphic command (TPCL SG, nibble data), then drops the preview
+   * overlay: the image is now drawn from the code. The command format is NOT verified on a real printer.
+   */
+  function insertImage() {
+    const image = state.image;
+    if (!image) return;
+    const language = languages.detect(editor.text()) || languages.get('tpcl');
+    if (!language.insertCommand) {
+      refresh({ notices: [diag.warning('El lenguaje de la etiqueta no admite insertar imágenes en el código')] });
+      return;
+    }
+    const placement = imagePanel.placement();
+    convertImage()
+      .then(({ w, h, data }) => {
+        if (image !== state.image) return;
+        const command = images.buildSG({ ...placement, w, h, data: images.bitmapToNibble(data, w, h) });
+        editor.setText(language.insertCommand(editor.text(), command));
+        removeImage();
+      })
+      .catch(error => refresh({ notices: [diag.error(`No se pudo insertar la imagen: ${error.message}`)] }));
+  }
+
   /** Loads a whole label and draws it. Without sizeId, the known size matching the one it declares is chosen. */
   function open(text, { sizeId, language } = {}) {
     if (sizeId) sizePanel.select(sizeId);
@@ -124,6 +312,8 @@
   $('example').replaceChildren(...examples.map(e => Object.assign(document.createElement('option'), { value: e.id, textContent: e.name })));
   $('btnExample').addEventListener('click', () => loadExample(examples.find(e => e.id === $('example').value)));
   ['dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap'].forEach(id => $(id).addEventListener('input', () => refresh()));
+  // The resolution changes the size in dots, so the 1-bit preview has to be converted again
+  $('dpi').addEventListener('input', () => updatePreview({ delay: PREVIEW_DELAY_MS }));
 
   sizePanel.init(examples[0].sizeId);
   loadExample(examples[0]);

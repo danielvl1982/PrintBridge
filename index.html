@@ -36,6 +36,20 @@
   <button id="btnApply" title="Escribe este tamaño en el código de la etiqueta">Aplicar a la etiqueta</button>
 </div>
 
+<div class="toolbar toolbar--secondary">
+  <button id="btnImage" title="Superpone una imagen a la vista previa (no se escribe en el código de la etiqueta)">Añadir imagen</button>
+  <input id="imageFile" type="file" accept="image/*" hidden>
+  <label>Posición X <input id="imgX" type="number" step="0.1" value="0" disabled> mm</label>
+  <label>Posición Y <input id="imgY" type="number" step="0.1" value="0" disabled> mm</label>
+  <label title="Vacío = tamaño natural de la imagen según la resolución; el alto mantiene la proporción">Ancho <input id="imgW" type="number" step="0.1" min="0.1" placeholder="auto" disabled> mm</label>
+  <label title="Luminosidad por debajo de la cual un punto sale negro. La vista previa muestra el resultado en blanco y negro que se inserta">Umbral
+    <input id="imgThreshold" type="range" min="0" max="100" step="1" value="50" disabled>
+    <output id="imgThresholdValue" for="imgThreshold">50 %</output>
+  </label>
+  <button id="btnImageInsert" title="Convierte la imagen a blanco y negro (con el umbral elegido) y escribe un comando {SG…|} en el código, antes de {XS. Formato no verificado en impresora: prueba la primera impresión" disabled>Insertar en el código</button>
+  <button id="btnImageRemove" disabled>Quitar imagen</button>
+</div>
+
 <main>
   <div class="column">
     <section class="panel">

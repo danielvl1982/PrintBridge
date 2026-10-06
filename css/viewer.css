@@ -23,6 +23,8 @@ body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14p
 .toolbar label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .toolbar select, .toolbar input { font: inherit; padding: 2px 4px; }
 .toolbar input[type=number] { width: 72px; }
+.toolbar input[type=range] { width: 110px; padding: 0; }
+.toolbar output { min-width: 3.2em; color: var(--text); }
 .toolbar input:disabled { background: #eef0f3; color: var(--muted); }
 
 button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); background: var(--panel-alt); border-radius: 4px; cursor: pointer; }
