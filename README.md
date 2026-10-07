@@ -145,7 +145,7 @@ is used to convert between dots and mm, so set it to the printer's before conver
 - **Copiar:** copies the output to the clipboard. A TSPL label with images holds raw binary data that the clipboard can
   alter, so in that case the panel says so and **Descargar** is the reliable way.
 - **Descargar:** saves the output as a file. TSPL is saved as **`.prn`, one byte per character (latin1)**, because the
-  `BITMAP` data is raw binary and UTF-8 would corrupt it; TPCL is saved as `.txt` (UTF-8). The file name is `etiqueta` plus the extension.
+  `BITMAP` data is raw binary and UTF-8 would corrupt it; TPCL is saved as `.txt` (UTF-8). The file name is the name of the opened (or dropped) file, or the example id, without its extension, plus the target extension; for pasted text with no file it is `etiqueta`.
 
 What is lost or approximated (each case is reported in the warnings list):
 
