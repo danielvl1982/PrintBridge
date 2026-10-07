@@ -18,7 +18,7 @@
 
 <main>
   <div class="column">
-    <section class="panel">
+    <section class="panel" data-collapsible="code">
       <div class="panel-head">
         <h2>Código de etiqueta</h2>
         <div class="panel-actions">
@@ -35,14 +35,14 @@
         </div>
       </div>
     </section>
-    <section class="panel">
+    <section class="panel" data-collapsible="variables">
       <h2>Variables (#NOMBRE# / &lt;#NOMBRE#&gt;)</h2>
       <div id="vars" class="vars"></div>
     </section>
-    <section class="panel convert" id="convert"></section>
+    <section class="panel convert" id="convert" data-collapsible="convert"></section>
   </div>
   <div class="stage">
-    <div class="size-row">
+    <div class="size-row" data-collapsible="format">
     <span class="strip-title">Formato</span>
     <label title="Tamaño de la etiqueta en la impresora. 'Según la etiqueta' usa el tamaño que declara el archivo">Tamaño etiqueta
       <select id="size"></select>
@@ -52,7 +52,7 @@
     <label title="Distancia entre el inicio de una etiqueta y la siguiente (alto + separación)">Paso <input id="szP" type="number" step="0.1" min="5"> mm</label>
     <button id="btnApply" title="Escribe este tamaño en el código de la etiqueta">Aplicar a la etiqueta</button>
     </div>
-    <div class="view-row">
+    <div class="view-row" data-collapsible="view">
     <span class="strip-title">Vista</span>
     <label>Resolución <select id="dpi"></select></label>
     <label title="Ajusta el tamaño de las fuentes si en la impresión real salen más grandes o más pequeñas">Escala texto
@@ -65,11 +65,11 @@
     <label><input id="optAnchor" type="checkbox" checked> Puntos origen</label>
     <label><input id="optOverlap" type="checkbox" checked> Marcar solapas</label>
     </div>
-    <div class="strip" hidden>
+    <div class="strip" data-collapsible="components" hidden>
       <span class="strip-title">Componentes</span>
       <ul id="palette" class="palette"></ul>
     </div>
-    <section class="panel props-bar" id="propsPanel">
+    <section class="panel props-bar" id="propsPanel" data-collapsible="properties">
       <h2>Propiedades <span id="propsKind" class="props-kind"></span></h2>
       <p id="propsEmpty" class="empty">Selecciona un objeto</p>
       <div id="propsForm" class="props" hidden></div>
@@ -158,6 +158,7 @@
 <script src="js/properties.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/convert-panel.js"></script>
+<script src="js/collapse.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

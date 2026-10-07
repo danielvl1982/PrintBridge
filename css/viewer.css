@@ -131,3 +131,13 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .props-input output { min-width: 3.2em; color: var(--text); }
 .props-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .props-kind { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* Collapsible sections (js/collapse.js): the title is the toggle, with a chevron; collapsed keeps only the head (title row) */
+.collapse-toggle { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px; }
+.collapse-toggle::before { content: "\25BE"; display: inline-block; font-size: 12px; transition: transform .15s; }
+.is-collapsed .collapse-toggle::before { transform: rotate(-90deg); }
+.collapse-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.is-collapsed > :not(.collapse-head) { display: none !important; }
+.is-collapsed .panel-actions { display: none; }
+.is-collapsed .panel-head, .is-collapsed h2 { margin-bottom: 0; }
+.props-bar.is-collapsed, .is-collapsed.panel { min-height: 0; }

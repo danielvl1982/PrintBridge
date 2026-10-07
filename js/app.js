@@ -66,6 +66,9 @@
   // "Convertir a...": converts what the editor holds at the resolution the app parses with; no file name is tracked yet
   ui.createConvertPanel({ root: $('convert'), getText: () => editor.text(), getDpi: () => Number($('dpi').value), getSourceName: () => undefined });
 
+  // Collapsible sections: after every title is rendered (the Convertir panel builds its own)
+  ui.initCollapsible(document);
+
   const propertiesPanel = ui.createPropertiesPanel(
     { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay') },
     { onChange: changeProperty },

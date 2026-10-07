@@ -91,8 +91,8 @@ const SIZE_IDS = ['size', 'szW', 'szH', 'szP', 'btnApply'];
 
 test('the five label-size controls sit in the stage size row, before the view row', () => {
   const stage = at('<div class="stage">');
-  const sizeRow = at('<div class="size-row">');
-  const viewRow = at('<div class="view-row">');
+  const sizeRow = at('<div class="size-row"');
+  const viewRow = at('<div class="view-row"');
   assert.ok(stage < sizeRow && sizeRow < viewRow, 'size row must be the first row of .stage');
   for (const id of SIZE_IDS) {
     assert.equal(countId(id), 1, id);
@@ -103,7 +103,7 @@ test('the five label-size controls sit in the stage size row, before the view ro
 });
 
 test('stage DOM order: size row, view row, strip, properties bar, preview', () => {
-  const marks = ['<div class="size-row">', '<div class="view-row">', '<div class="strip"', 'id="propsPanel"', '<section class="panel preview">'].map(at);
+  const marks = ['<div class="size-row"', '<div class="view-row"', '<div class="strip"', 'id="propsPanel"', '<section class="panel preview">'].map(at);
   for (let i = 1; i < marks.length; i++) assert.ok(marks[i - 1] < marks[i], 'order broken at index ' + i);
 });
 
@@ -141,12 +141,12 @@ const FILE_IDS = ['btnOpen', 'file', 'example', 'btnExample'];
 
 // P1f replaced the P1d test (file controls in the size row) with the two tests below.
 const columnHtml = () => html.slice(at('<div class="column">'), at('<div class="stage">'));
-const sizeRowHtml = () => html.slice(at('<div class="size-row">'), at('<div class="view-row">'));
+const sizeRowHtml = () => html.slice(at('<div class="size-row"'), at('<div class="view-row"'));
 
 // P1g changed the premise: the file controls no longer lead the column in their own row; they live in the Código panel header.
 const codePanelHtml = () => {
   const column = columnHtml();
-  const start = column.indexOf('<section class="panel">');
+  const start = column.indexOf('<section class="panel"');
   return column.slice(start, column.indexOf('</section>', start));
 };
 
@@ -267,7 +267,7 @@ test('the Componentes title has the same typography as the Propiedades heading (
 
 test('the size row and the view row have a title with the same style as Componentes (Formato, Vista)', () => {
   for (const [row, title, firstControl] of [['size-row', 'Formato', 'id="size"'], ['view-row', 'Vista', 'id="dpi"']]) {
-    const start = html.indexOf('<div class="' + row + '">');
+    const start = html.indexOf('<div class="' + row + '"');
     assert.ok(start >= 0, row + ' exists');
     const tag = '<span class="strip-title">' + title + '</span>';
     const at = html.indexOf(tag, start);
