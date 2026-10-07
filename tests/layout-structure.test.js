@@ -83,7 +83,6 @@ test('the toolbars no longer hold the view controls', () => {
   for (const id of VIEW_IDS) {
     assert.ok(!header.includes('id="' + id + '"'), id + ' still in the header');
   }
-  for (const id of ['btnOpen', 'file', 'example', 'btnExample']) assert.ok(header.includes('id="' + id + '"'), id + ' missing from the header');
 });
 
 const SIZE_IDS = ['size', 'szW', 'szH', 'szP', 'btnApply'];
@@ -134,4 +133,44 @@ test('the logo is used in the header and as favicon, and the file is a safe SVG'
   assert.doesNotMatch(svg, /<script/i);
   assert.doesNotMatch(svg, /\b(?:xlink:)?href\s*=/i);
   assert.doesNotMatch(svg, /url\(\s*['"]?https?:/i);
+});
+
+const FILE_IDS = ['btnOpen', 'file', 'example', 'btnExample'];
+
+test('the four file controls sit in the size row, in a leading group before the size controls', () => {
+  const sizeRow = at('<div class="size-row">');
+  const viewRow = at('<div class="view-row">');
+  const sizeSelect = at('id="size"');
+  const fileGroup = at('row-group--file');
+  const sizeGroup = at('row-group--size');
+  assert.ok(sizeRow < fileGroup && fileGroup < sizeGroup && sizeGroup < viewRow, 'groups inside .size-row, file group first');
+  for (const id of FILE_IDS) {
+    assert.equal(countId(id), 1, id);
+    const i = at('id="' + id + '"');
+    assert.ok(fileGroup < i && i < sizeGroup && i < sizeSelect, id + ' must be in the file group before #size');
+  }
+  assert.ok(sizeGroup < sizeSelect, '#size lives in the size group');
+});
+
+test('the header holds only the logo and the title', () => {
+  const header = html.slice(at('<header class="toolbar">'), at('</header>'));
+  assert.doesNotMatch(header, /<(?:button|select|input|label|textarea)\b/);
+  for (const id of FILE_IDS) assert.ok(!header.includes('id="' + id + '"'), id + ' still in the header');
+  assert.match(header, /<img class="logo"/);
+  assert.match(header, /<h1>Print Bridge<\/h1>/);
+});
+
+test('the hidden image input stays outside the header and the rows, exactly once', () => {
+  assert.equal(countId('imageFile'), 1);
+  const i = at('id="imageFile"');
+  assert.ok(i > at('</header>') && i < at('<main>'));
+});
+
+test('the file input keeps its attributes and the file controls keep their text', () => {
+  for (const piece of [
+    '<input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>',
+    '<button id="btnOpen">Abrir archivo…</button>',
+    '<label>Ejemplo <select id="example"></select></label>',
+    '<button id="btnExample">Cargar ejemplo</button>',
+  ]) assert.ok(html.includes(piece), piece);
 });

@@ -12,10 +12,6 @@
 <header class="toolbar">
   <img class="logo" src="img/logo.svg" alt="" width="28" height="28">
   <h1>Print Bridge</h1>
-  <button id="btnOpen">Abrir archivo…</button>
-  <input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>
-  <label>Ejemplo <select id="example"></select></label>
-  <button id="btnExample">Cargar ejemplo</button>
 </header>
 
 <input id="imageFile" type="file" accept="image/*" hidden>
@@ -39,6 +35,13 @@
   </div>
   <div class="stage">
     <div class="size-row">
+    <div class="row-group row-group--file">
+      <button id="btnOpen">Abrir archivo…</button>
+      <input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>
+      <label>Ejemplo <select id="example"></select></label>
+      <button id="btnExample">Cargar ejemplo</button>
+    </div>
+    <div class="row-group row-group--size">
     <label title="Tamaño de la etiqueta en la impresora. 'Según la etiqueta' usa el tamaño que declara el archivo">Tamaño etiqueta
       <select id="size"></select>
     </label>
@@ -46,6 +49,7 @@
     <label>Alto <input id="szH" type="number" step="0.1" min="5"> mm</label>
     <label title="Distancia entre el inicio de una etiqueta y la siguiente (alto + separación)">Paso <input id="szP" type="number" step="0.1" min="5"> mm</label>
     <button id="btnApply" title="Escribe este tamaño en el código de la etiqueta">Aplicar a la etiqueta</button>
+    </div>
     </div>
     <div class="view-row">
     <label>Resolución <select id="dpi"></select></label>

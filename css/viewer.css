@@ -43,6 +43,10 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 .stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* Label-size row (first row of the stage) and view options row below it: same panel row, same controls look as the toolbar */
 .size-row, .view-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 38px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+/* Groups inside the size row: real flex containers (not display: contents) so each group wraps on its own on narrow widths.
+   The file actions lead, a thin divider separates them from the label-size controls. */
+.row-group { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.row-group--file { padding-right: 14px; border-right: 1px solid var(--line); }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 small { color: var(--muted); }
 
@@ -85,7 +89,10 @@ textarea.drag { outline: 2px dashed var(--accent); }
    360px = 49 (header, now the only bar: 10+10 padding + 28 logo + 1 border) + 32 (main padding top and bottom) + 16 (preview header)
    + 172 (stage rows: size row 38 + view row 38 + action strip 48 + properties bar 48) + 48 (four 12px stage gaps)
    + ~40 (preview caption, padding and borders) = 357, rounded up to 360. Previous 350px had ~92 for two bars; the second bar is gone
-   (-43), plus the size row 38 and one more gap 12 (+50), net +7 -> 357. */
+   (-43), plus the size row 38 and one more gap 12 (+50), net +7 -> 357.
+   P1d re-check: the file actions moved from the header into the size row, but the header stays one bar of the same height
+   (logo 28 still sets it: 49) and the row count is unchanged (the groups share the existing size row, whose 38px min-height
+   already fits the buttons), so the arithmetic is unchanged: 360px. If the groups wrap on narrow widths the row grows, as before. */
 #svgwrap svg { width: 100%; height: auto; max-height: calc(100vh - 360px); display: block; background: #f4f5f7; }
 
 /* Properties bar: ONE compact row (title + fields inline), wrapping on narrow widths.
