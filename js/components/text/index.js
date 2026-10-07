@@ -5,7 +5,7 @@
 (function (PB) {
   'use strict';
 
-  const { render, tpcl } = PB.slices.text;
+  const { render, layout, tpcl } = PB.slices.text;
 
   PB.components.register({
     kind: 'text',
@@ -14,6 +14,7 @@
     label: 'Texto',
     glyph: 'Aa',
     render,
+    layout,
     languages: { tpcl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

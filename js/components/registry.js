@@ -18,6 +18,12 @@
  *     label, glyph,              palette entry (name and short text glyph)
  *     carriesData,               false when the component has no data command (skipped by the "no content" rule)
  *     render(item, ctx),         SVG: returns { markup, info?, warnings?, anchor? } (ctx: see drawing.js)
+ *     layout(group, item),       measures the painted item for PB.layout.analyze (browser only): returns { full, ink }
+ *                                boxes in label coordinates (full: label-overflow check, ink: overlap check), or null
+ *                                to leave the item out of both checks (line, box, blank text). Without a hook the
+ *                                analysis uses the group's getBBox() for both. The text hook also fits its .hit area
+ *     validate(item),            neutral (language-independent) validation: returns diagnostics for that item, run by
+ *                                PB.validator after the rules every kind shares (barcode: approximate symbologies)
  *     languages: {
  *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable?, rules? })
  *     }

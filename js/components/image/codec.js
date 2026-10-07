@@ -1,6 +1,6 @@
 /**
  * Image slice: bitmap codec and preview overlay. Images the viewer overlays on the label (not part of any printer
- * language's code). Published as PB.images (public name kept). Loads after js/core.js (PB.units).
+ * language's code). Published as PB.images (public name kept). Loads after js/core/units.js (PB.units).
  */
 (function (PB) {
   'use strict';

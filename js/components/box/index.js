@@ -14,6 +14,8 @@
     glyph: '▭',
     carriesData: false,
     render: PB.slices.line.render,
+    // Like lines, boxes take no part in the label-overflow and overlap checks
+    layout: () => null,
     languages: { tpcl: PB.slices.box.tpcl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

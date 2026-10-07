@@ -9,7 +9,7 @@
  * js/components/registry.js) bring their own TPCL handlers, build template, move coordinates and editable fields in
  * `languages.tpcl`; this file composes them with its tables (ALL_*) and shares its helpers with them (SLICE_HELPERS).
  *
- * The model is the neutral one described in js/core.js. The items also carry kind and raw
+ * The model is the neutral one described in js/core/model.js. The items also carry kind and raw
  * (values as they were written, only for the TPCL format rules); size.native = { dRaw, axRaw }.
  * The FNC1 of the barcode data (">8" in TPCL) is translated to PB.barcodeData.FNC1.
  */

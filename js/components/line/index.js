@@ -18,6 +18,8 @@
     // A line carries no data command by design (the neutral "no content" validation rule skips it)
     carriesData: false,
     render,
+    // Lines are thin strokes: they take no part in the label-overflow and overlap checks
+    layout: () => null,
     languages: { tpcl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

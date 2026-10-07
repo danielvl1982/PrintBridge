@@ -85,7 +85,7 @@
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
 
 /**
- * Checks that need the SVG already painted in the browser (real text measures):
+ * Checks that need the SVG already painted in the browser (real measures, taken by each slice's `layout` hook):
  * items that go outside the label and items that overlap.
  * The view rotation does not affect them: every measure is relative to the item's group (getBBox, or the
  * group->element matrix, where the transform of the "view-rotation" ancestor cancels out), that is, in label coordinates.
@@ -93,37 +93,10 @@
 (function (PB) {
   'use strict';
 
-  const { config, diagnostics: diag } = PB;
+  const { diagnostics: diag } = PB;
 
   /** Margin (0.1 mm) to avoid warning about mere contact between boxes. */
   const OVERLAP_TOLERANCE = 2;
-
-  /** Rectangle in element coordinates -> box in its group's coordinates (applies rotation and scale). */
-  function boxInGroup(el, rect) {
-    const matrix = el.parentNode.getCTM().inverse().multiply(el.getCTM());
-    const corners = [[rect.x, rect.y], [rect.x + rect.width, rect.y], [rect.x, rect.y + rect.height], [rect.x + rect.width, rect.y + rect.height]]
-      .map(([x, y]) => { const p = el.ownerSVGElement.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(matrix); });
-    const xs = corners.map(p => p.x), ys = corners.map(p => p.y);
-    const x = Math.min(...xs), y = Math.min(...ys);
-    return { x, y, width: Math.max(...xs) - x, height: Math.max(...ys) - y };
-  }
-
-  /**
-   * Boxes of a text: "full" (font box, for label overflow and for the click area)
-   * and "ink" (only capital letter height and without spaces at the ends, for overlaps).
-   */
-  function textBoxes(textEl) {
-    const content = textEl.textContent;
-    if (!content.trim()) return null;
-    const full = boxInGroup(textEl, textEl.getBBox());
-    const lead = content.length - content.trimStart().length;
-    const end = content.trimEnd().length;
-    const size = Number(textEl.getAttribute('font-size'));
-    const x = lead ? textEl.getSubStringLength(0, lead) : 0;
-    const width = textEl.getSubStringLength(lead, end - lead);
-    const ink = boxInGroup(textEl, { x, y: -size * config.capHeightRatio, width, height: size * config.capHeightRatio });
-    return { full, ink };
-  }
 
   function intersection(a, b) {
     const x1 = Math.max(a.x, b.x), y1 = Math.max(a.y, b.y);
@@ -132,7 +105,8 @@
   }
 
   /**
-   * Analyzes the painted SVG. Adjusts the click areas of the texts and, if markOverlaps, marks the overlaps.
+   * Analyzes the painted SVG, generic over the item kinds: each painted item is measured by its slice's `layout` hook
+   * (the text one also adjusts its click area) and, if markOverlaps, the overlaps are marked.
    * Returns the list of diagnostics.
    */
   function analyze(svgEl, model, area, { markOverlaps }) {
@@ -140,17 +114,11 @@
     const boxes = [];
     svgEl.querySelectorAll('.item').forEach(group => {
       const item = model.items[Number(group.dataset.index)];
-      if (item.kind === 'line') return;
-      let full, ink;
-      if (item.kind === 'text') {
-        const measured = textBoxes(group.querySelector('text'));
-        if (!measured) return;
-        ({ full, ink } = measured);
-        const hit = group.querySelector('.hit');
-        for (const k of ['x', 'y', 'width', 'height']) hit.setAttribute(k, full[k]);
-      } else {
-        full = ink = group.getBBox();
-      }
+      const slice = PB.components.forItem(item);
+      // Slice hook: { full, ink } boxes, or null to leave the item out of the checks. Without a hook: the group box.
+      const measured = slice && slice.layout ? slice.layout(group, item) : { full: group.getBBox(), ink: group.getBBox() };
+      if (!measured) return;
+      const { full, ink } = measured;
       boxes.push({ item, box: ink });
       if (full.x < -0.5 || full.y < -0.5 || full.x + full.width > area.width + 0.5 || full.y + full.height > area.height + 0.5) {
         out.push(diag.error(`${item.ref} se sale de la etiqueta (${Math.round(full.x)},${Math.round(full.y)} → ${Math.round(full.x + full.width)},${Math.round(full.y + full.height)})`));
