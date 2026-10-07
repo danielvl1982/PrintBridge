@@ -64,3 +64,48 @@ test('the properties elements are all inside the properties bar', () => {
     assert.ok(bar.includes('id="' + id + '"'), id);
   }
 });
+
+const VIEW_IDS = ['dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap'];
+
+test('the six view controls sit in the stage, before the component strip', () => {
+  const stage = at('<div class="stage">');
+  const strip = at('<div class="strip"');
+  for (const id of VIEW_IDS) {
+    assert.equal(countId(id), 1, id);
+    const i = at('id="' + id + '"');
+    assert.ok(stage < i && i < strip, id + ' must be inside .stage before .strip');
+  }
+});
+
+test('the toolbars no longer hold the view controls', () => {
+  const header = html.slice(at('<header class="toolbar">'), at('</header>'));
+  const secondary = html.slice(at('<div class="toolbar toolbar--secondary">'), at('<input id="imageFile"'));
+  for (const id of VIEW_IDS) {
+    assert.ok(!header.includes('id="' + id + '"'), id + ' still in the header');
+    assert.ok(!secondary.includes('id="' + id + '"'), id + ' still in the secondary toolbar');
+  }
+  for (const id of ['btnOpen', 'file', 'example', 'btnExample']) assert.ok(header.includes('id="' + id + '"'), id + ' missing from the header');
+});
+
+test('the app is called "Print Bridge" in the title and the header', () => {
+  assert.match(html, /<title>Print Bridge<\/title>/);
+  assert.match(html, /<h1>Print Bridge<\/h1>/);
+});
+
+test('the logo is used in the header and as favicon, and the file is a safe SVG', () => {
+  const img = html.match(/<img class="logo" src="([^"]+)" alt="" width="28" height="28">/);
+  assert.ok(img, 'header logo img');
+  const link = html.match(/<link rel="icon" type="image\/svg\+xml" href="([^"]+)">/);
+  assert.ok(link, 'favicon link');
+  assert.equal(img[1], 'img/logo.svg');
+  assert.equal(link[1], 'img/logo.svg');
+  assert.ok(at('class="logo"') > at('<header class="toolbar">') && at('class="logo"') < at('<h1>'));
+  const file = path.join(ROOT, img[1]);
+  assert.ok(fs.existsSync(file), 'logo file exists');
+  const svg = fs.readFileSync(file, 'utf8');
+  assert.match(svg, /^\s*<svg[\s>]/);
+  assert.match(svg, /viewBox="/);
+  assert.doesNotMatch(svg, /<script/i);
+  assert.doesNotMatch(svg, /\b(?:xlink:)?href\s*=/i);
+  assert.doesNotMatch(svg, /url\(\s*['"]?https?:/i);
+});

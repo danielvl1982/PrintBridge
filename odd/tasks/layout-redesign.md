@@ -21,6 +21,7 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
 
 ## Tasks
 - [x] P1 (structure verified by tests/layout-structure.test.js; visual check pending in the browser) Action strip above the preview: palette horizontal + properties inline bar (CSS + HTML move, minimal JS only if panel visibility toggling needs it). User checks in the browser before P2.
+- [x] P1b (structure verified by tests; visual check pending in the browser) Header with logo + "Print Bridge" name, and the view options row (dpi, text scale, rotation, grid, origins, overlaps) above the component strip.
 - [ ] P2 Left column tabs: Código / Variables / Avisos (+ badge count), viewport-height column.
 - [ ] P3 "Convertir…" dialog from the top bar (reuse js/convert-panel.js unchanged where possible).
 - [ ] P4 Top bar merge and grouping, sticky preview, final polish and README screenshots/notes.
@@ -42,3 +43,11 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
   - css/viewer.css:87-101: properties bar as one flex row (`.props-bar`, `min-height: 48px` reserved), `.props` grid -> wrapping flex, `label` text and control side by side, compact number inputs (72px); removed the grid-only `checkbox justify-self` rule.
   - tests/layout-structure.test.js: ids exactly once, DOM order palette < propsPanel < preview inside the stage, left column free of palette/props, palette hidden-wrapper contract matches js/palette.js and js/app.js.
   - Browser checklist: palette buttons visible and clickable (TPCL); palette strip hidden for TSPL; drag from palette onto the label still works; select an item -> bar fills and edits; deselect -> empty state "Selecciona un objeto" without the preview moving; image overlay controls appear in the bar (X, Y, Ancho, Umbral, buttons) and only for an image; narrow window wraps without breakage; no unexpected page scroll with the TPCL spool example; the 300px SVG max-height fits at your usual window height (tell me if too small/large).
+- P1b written (not committed): node --test 583/583 (579 + 4 new tests in tests/layout-structure.test.js); RED observed first (4 of 9 failed). No JS change. No existing assertion changed (the P1 order test still holds).
+  - Logo concept: blue rounded tile with a white label card crossed by a dark bridge arch (deck + two pillars) over barcode bars.
+  - img/logo.svg (new): flat SVG, viewBox 0 0 64 64, no fonts, no external references.
+  - index.html:6-7: title "Print Bridge" and `rel="icon"` link; index.html:13-14: logo `img` (alt="") and h1 "Print Bridge"; header keeps only Abrir archivo, Ejemplo select and Cargar ejemplo.
+  - index.html:51-: new `div.view-row` as first child of `.stage` (before `.strip`) holding the six moved controls unchanged.
+  - css/viewer.css:26-29: `.toolbar .logo` and the toolbar label/select/input rules extended with `.view-row` selectors (toolbar look unchanged); :46 `.view-row` panel row (min-height 38px, wrapping); :89 SVG max-height `calc(100vh - 350px)` (was 300px; +38 row +12 gap), arithmetic in the comment above it.
+  - Tests: six controls once and inside `.stage` before `.strip`; header and secondary toolbar free of them; title and h1 "Print Bridge"; logo img and favicon point to `img/logo.svg`, which exists and is a safe SVG (`<svg`, viewBox, no script, no href, no remote url()).
+  - Browser checklist: logo readable at 28px in the header; favicon shows in the tab; the view row appears above the component strip; Resolución changes the render; Escala texto changes fonts; Giro rotates; Rejilla, Puntos origen and Marcar solapas toggle; narrow window wraps the row without breakage; no unexpected page scroll (tell me if the 350px max-height is too small or large).
