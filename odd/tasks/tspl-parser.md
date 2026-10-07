@@ -37,7 +37,7 @@ The user's TEC SV4T is TPCL (already supported). TSC TTP uses TSPL and is the ne
 ## Tasks
 - [x] T1 Generic slice composition helper (`composeSlices(langId, helpers)`) used by tpcl.js; no behavior change.
 - [x] T2 `js/languages/tspl.js` skeleton: detect, tokenizer (quotes, CRLF, BITMAP binary by length), ctx, SIZE/GAP/DIRECTION/REFERENCE/SHIFT, ignored commands, unknown-command warnings, source spans, dpi; registration + tests.
-- [ ] T3 text slice `tspl.js`: TEXT and BLOCK (fonts, multipliers, rotation, alignment).
+- [x] T3 text slice `tspl.js`: TEXT and BLOCK (fonts, multipliers, rotation, alignment).
 - [ ] T4 barcode slice `tspl.js`: BARCODE (type map, human readable, rotation, module).
 - [ ] T5 qr slice `tspl.js`: QRCODE (tolerant optional params, manual-mode prefixes).
 - [ ] T6 line/box slice `tspl.js`: BAR, BOX (+ REVERSE/ERASE decision).
@@ -54,4 +54,5 @@ The user's TEC SV4T is TPCL (already supported). TSC TTP uses TSPL and is the ne
 - Research done: manual v3.0 read directly (agent report), sample real TSPL files requested from the user.
 - T1 done: RED observed (compose.js missing from manifest, test file failed to load), then GREEN; `node --test`: 248/248 pass (243 + 5 new), fail 0. Added `js/components/compose.js` (`PB.composeSlices`, on PB because `PB.components` is frozen), registered in manifest.json and index.html after registry.js; tpcl.js now composes through it with its legacy tables as `base`. Not yet committed.
 - T2 done: RED observed (js/languages/tspl.js not in manifest, tests/tspl.test.js failed to load), then GREEN; node --test: 268/268 pass (248 + 20 new), fail 0. Added js/languages/tspl.js (tokenizer with quote-aware args and BITMAP by length, ctx with pos/len/sourceOf/direction/reference/shift, SLICE_HELPERS, setup handlers, ignore list, detect, PB.tspl = { commands, run, createContext, SLICE_HELPERS } for slice tests); registered after tpcl.js in manifest.json and index.html. Decision: DIRECTION 0 is NOT flipped in T2: it stores size.native.direction/mirror and emits an info diagnostic (drawn as DIRECTION 1). Not yet committed.
-- Next: T3.
+- T3 done: RED observed (text/tspl.js not in manifest, 18 of 20 new tests failed), then GREEN; node --test: 288/288 pass (268 + 20 new in tests/text-tspl.test.js), fail 0. Added js/components/text/tspl.js (TEXT and BLOCK -> neutral text item; PB.slices.text.tspl), registered in text/index.js as languages { tpcl, tspl }, manifest.json and index.html (after text/tpcl.js). Bitmap fonts 1-8: size = cell height * ymul dots; scaleX = (cellW*xmul)/(cellH*ymul*0.6) (0.6 em = mono glyph advance, so the cell width is matched; deviates from the plain cell ratio, which would draw glyphs too narrow). Font "0"/ROMAN.TTF/unknown: points = multipliers (size = ymul*UNITS_PER_POINT, scaleX = xmul/ymul), unknown fonts add an info once per font. Alignment 2/3: info, drawn left (model unchanged). Counters (@n) kept literal, info once per label. BLOCK limitation: drawn as one text item at x,y (no word wrap in the model); [R]/[L] become spaces; optional fields are positional (space, align, fit) and kept in item.native; one info per label. Not yet committed.
+- Next: T4.

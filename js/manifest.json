@@ -14,6 +14,7 @@
   "js/core/sizes.js",
   "js/components/text/render.js",
   "js/components/text/tpcl.js",
+  "js/components/text/tspl.js",
   "js/components/text/layout.js",
   "js/components/text/index.js",
   "js/components/barcode/constants.js",
