@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
-const PB = load(['js/lib/qrcode-generator.min.js', 'js/config.js', 'js/core.js', 'js/languages/tpcl.js', 'js/barcodes.js', 'js/view.js', 'js/drawing.js']);
+const PB = loadUpTo('js/drawing.js');
 const { code39, itf } = PB;
 const tpcl = PB.languages.get('tpcl');
 

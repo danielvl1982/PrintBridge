@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
 // drawing.js: render does not touch the DOM, so it can be tested in Node (the layout.analyze part cannot)
-const PB = load(['js/lib/qrcode-generator.min.js', 'js/config.js', 'js/core.js', 'js/languages/tpcl.js', 'js/barcodes.js', 'js/view.js', 'js/drawing.js']);
+const PB = loadUpTo('js/drawing.js');
 const example = PB.examples[0];
 const tpcl = PB.languages.get('tpcl');
 

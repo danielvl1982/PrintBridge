@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
 // TPCL moveItem (tpcl.js): rewrites only the coordinate fields of one item's command.
-const PB = load(['js/lib/qrcode-generator.min.js', 'js/config.js', 'js/core.js', 'js/languages/tpcl.js', 'js/barcodes.js']);
+const PB = loadUpTo('js/barcodes.js');
 const tpcl = PB.languages.get('tpcl');
 
 /** Parses the text, moves its first item and returns { out, before, after } (items before and after the move). */

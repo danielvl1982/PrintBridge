@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
 // images.makeItem (core.js) is DOM-free; the image renderer (drawing.js) only builds markup, so both run in Node.
-const PB = load(['js/lib/qrcode-generator.min.js', 'js/config.js', 'js/core.js', 'js/languages/tpcl.js', 'js/barcodes.js', 'js/view.js', 'js/drawing.js']);
+const PB = loadUpTo('js/drawing.js');
 
 const base = { href: 'data:image/png;base64,AAAA', naturalW: 200, naturalH: 100, xMm: 0, yMm: 0, dpi: 203 };
 

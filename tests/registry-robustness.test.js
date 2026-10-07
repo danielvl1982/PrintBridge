@@ -1,8 +1,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
-const PB = load(['js/config.js', 'js/core.js', 'js/languages/tpcl.js', 'js/barcodes.js']);
+const PB = loadUpTo('js/barcodes.js');
 const tpcl = PB.languages.get('tpcl');
 const valid = id => ({ id, name: `Language ${id}`, detect: () => false, parse: () => ({ language: id, items: [], diagnostics: [] }) });
 

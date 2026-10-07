@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
 // Properties panel (properties.js): only the pure coercion of form input is testable without a DOM.
-const PB = load(['js/properties.js']);
+const PB = loadUpTo('js/properties.js');
 const { coerceFieldValue } = PB.ui;
 
 test('number fields: dot and comma decimals become numbers', () => {

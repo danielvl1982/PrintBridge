@@ -1,0 +1,14 @@
+[
+  "js/lib/qrcode-generator.min.js",
+  "js/config.js",
+  "js/components/registry.js",
+  "js/core.js",
+  "js/languages/tpcl.js",
+  "js/barcodes.js",
+  "js/view.js",
+  "js/drawing.js",
+  "js/palette.js",
+  "js/properties.js",
+  "js/ui.js",
+  "js/app.js"
+]

@@ -1,9 +1,9 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { load } = require('./helpers/load');
+const { loadUpTo } = require('./helpers/load');
 
 // TPCL SG graphic command: nibble encoding (core.js), parser + insertCommand (tpcl.js), bitmap renderer (drawing.js).
-const PB = load(['js/lib/qrcode-generator.min.js', 'js/config.js', 'js/core.js', 'js/languages/tpcl.js', 'js/barcodes.js', 'js/view.js', 'js/drawing.js']);
+const PB = loadUpTo('js/drawing.js');
 const tpcl = PB.languages.get('tpcl');
 const { images } = PB;
 
