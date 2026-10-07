@@ -39,11 +39,69 @@
   /** Format options of a freshly inserted PV command; {rot2} is the 2-digit rotation code. */
   const VARIABLE = Object.freeze({ format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,{rot2},B' });
 
+  /** How far (in 0.1 magnification steps) a model font may be from an exact PC font + magnifications to still be a PC. */
+  const MAGNIFICATION_TOLERANCE = 0.05;
+
+  /** Fallback outline size (0.1 mm) for a text whose font has no usable size. */
+  const DEFAULT_OUTLINE_SIZE = 80;
+
+  /**
+   * PC font that draws a model font exactly: the entry of BITMAP_FONTS with the same family, weight and style whose
+   * magnifications (steps of 0.1, 1..99) reproduce its size and scaleX within MAGNIFICATION_TOLERANCE. Several fit:
+   * the one with the vertical magnification closest to 1. Null when none (the text becomes an outline PV).
+   */
+  function bitmapChoice(font) {
+    let best = null;
+    for (const [letter, [points, family, weight, style = 'normal']] of Object.entries(BITMAP_FONTS)) {
+      if (family !== font.family || weight !== font.weight || style !== (font.style || 'normal')) continue;
+      const v = (font.size / (points * units.UNITS_PER_POINT)) * 10;
+      const h = v * font.scaleX;
+      const [vi, hi] = [Math.round(v), Math.round(h)];
+      if (vi < 1 || vi > 99 || hi < 1 || hi > 99) continue;
+      if (Math.abs(v - vi) > MAGNIFICATION_TOLERANCE || Math.abs(h - hi) > MAGNIFICATION_TOLERANCE) continue;
+      const distance = Math.abs(vi - 10);
+      if (!best || distance < best.distance) best = { letter, h: hi, v: vi, distance };
+    }
+    return best;
+  }
+
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
-      ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD,
+      ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, wrap, safeData, coordText, allocId,
     } = helpers;
+
+    /** Text rotation code (00/11/22/33): the nearest quarter turn, with a warning once if the item was not on one. */
+    function rotationCode(ctx, rotation) {
+      const turns = Number.isFinite(rotation) ? Math.round(rotation / 90) : 0;
+      const degrees = (((turns * 90) % 360) + 360) % 360;
+      if (degrees !== rotation && !(rotation == null && degrees === 0)) {
+        ctx.once('tpcl-rotation', () => diag.warning('Hay textos con una rotación que no es múltiplo de 90°: se ajustan al giro más cercano'));
+      }
+      return ROTATION_CODES[degrees];
+    }
+
+    /**
+     * PC (bitmap font) when the model font matches BITMAP_FONTS, else PV (outline font: width = size * scaleX, height =
+     * size, font letter B like the palette template), each followed by its RC / RV data command (empty without data).
+     */
+    function emit(item, ctx) {
+      const font = item.font || {};
+      const size = Number.isFinite(font.size) && font.size > 0 ? font.size : DEFAULT_OUTLINE_SIZE;
+      const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
+      const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
+      const rot = rotationCode(ctx, item.rotation);
+      const data = safeData(ctx, item.data);
+      const choice = bitmapChoice({ ...font, size, scaleX });
+      if (choice) {
+        const id = allocId(ctx, 'PC');
+        const mag = n => String(n).padStart(2, '0');
+        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${rot},B`), wrap(`RC${id};${data}`)];
+      }
+      const id = allocId(ctx, 'PV');
+      const dim = n => pad4(Math.max(1, clampCoord(n)));
+      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${rot},B`), wrap(`RV${id};${data}`)];
+    }
 
     function textAttributes(ctx, ref, rotationCode, attribute) {
       if (!(rotationCode in ROTATIONS)) ctx.report(diag.warning(`${ref}: rotación "${rotationCode}" desconocida, se dibuja sin rotar`));
@@ -112,6 +170,8 @@
       ],
       // build(text, point, options) -> text with the new component
       build,
+      // emit(item, ctx) -> the PC/PV command and its RC/RV data command
+      emit,
       // Coordinate fields moved by moveItem (see COORDINATES in js/languages/tpcl.js)
       coordinates: [
         { pattern: /^\{(?:PC|PV)\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },

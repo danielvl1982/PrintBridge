@@ -260,6 +260,71 @@
   // pattern: match indices (d flag) over the command without newlines; group of each field: capture group with its digits.
   const EDITABLE = [];
 
+  // --- Emit: neutral model -> TPCL text ---
+
+  /** A command with its {…|} framing. */
+  const wrap = body => `{${body}|}`;
+
+  /** What would break the framing of a command: the parser has no escape for { } | and strips line breaks. */
+  const UNSAFE_DATA = /[|{}\r\n]/;
+
+  /** Field data safe to write inside a command: unsafe characters become spaces (one warning per emit). */
+  function safeData(ctx, data) {
+    const value = data == null ? '' : String(data);
+    if (!UNSAFE_DATA.test(value)) return value;
+    ctx.once('tpcl-framing', () => diag.warning('Hay datos con caracteres que rompen el formato TPCL ({ } | o saltos de línea): se sustituyen por espacios'));
+    return value.replace(new RegExp(UNSAFE_DATA, 'g'), ' ');
+  }
+
+  /** Coordinate (0.1 mm) as the 4 digits TPCL requires, clamped to 0..9999 (one warning per emit if it had to be). */
+  function coordText(ctx, n) {
+    const value = Number.isFinite(n) ? Math.round(n) : 0;
+    const clamped = clampCoord(value);
+    if (clamped !== value) ctx.once('tpcl-clamp', () => diag.warning(`Hay coordenadas fuera de 0..${MAX_COORD} (0,1 mm): se ajustan al límite de TPCL`));
+    return pad4(clamped);
+  }
+
+  /** Next id (2 digits) of a format command namespace (PC, PV, XB); beyond 99 it grows to 3 digits and warns once. */
+  function allocId(ctx, namespace) {
+    const id = ctx.ids.next(namespace);
+    if (id.length > 2) ctx.once('tpcl-ids', () => diag.warning('Hay más de 100 campos del mismo tipo: los números de campo superan los 2 dígitos de TPCL'));
+    return id;
+  }
+
+  /** Print command written when the source does not provide one (parameters of the reference spool example). */
+  const DEFAULT_XS = 'XS;I,0001,0002C4100';
+
+  /** {D…|}, {AX…|} and {C|}: D/AX are reused from the source while the size is unchanged, else built (AX from the catalog). */
+  function headerLines(model, ctx) {
+    const size = (model && model.size) || {};
+    const native = size.native || {};
+    const out = [];
+    if (size.width == null || size.height == null) {
+      ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe {D…|}, indique el tamaño antes de exportar'));
+    } else {
+      const pitch = size.pitch ?? size.height;
+      const m = native.dRaw && /^D(\d+),(\d+),(\d+)/.exec(native.dRaw);
+      const unchanged = !!m && +m[1] === pitch && +m[2] === size.width && +m[3] === size.height;
+      out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w: size.width, h: size.height })));
+      const known = PB.sizes.createCatalog(PB.config.sizes).findBySize({ pitch, width: size.width, height: size.height });
+      const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : axOf(known || {});
+      if (ax) out.push(wrap(ax));
+      else ctx.report(diag.info('No se escribe {AX…|}: el tamaño no está en el catálogo, compruebe el ajuste en su impresora'));
+    }
+    out.push(wrap('C'));
+    return out;
+  }
+
+  /** Neutral model -> { text, diagnostics }: header, the items (slices' emit hooks), then the print command. */
+  function emit(model, { dpi = PB.config.resolutions[0] } = {}) {
+    const ctx = PB.emit.createContext({ dpi, language: 'tpcl' });
+    const header = headerLines(model, ctx);
+    const { lines } = PB.emit.run(model, COMPOSED, ctx);
+    // The parser does not keep the source's {XS|}, so the reference default is always written
+    ctx.report(diag.info('Parámetros de {XS} por defecto, verifíquelos en su impresora'));
+    return { text: [...header, ...lines, wrap(DEFAULT_XS)].join('\n'), diagnostics: ctx.diagnostics };
+  }
+
   /**
    * Helpers the slices' TPCL hooks share with this file (they stay here because other kinds use them too).
    * Passed once to each slice's `languages.tpcl` factory.
@@ -267,6 +332,7 @@
   const SLICE_HELPERS = Object.freeze({
     sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
+    wrap, safeData, coordText, allocId,
   });
 
   // The tables above hold the kinds not migrated to a slice yet; the generic composition (js/components/compose.js)
@@ -352,5 +418,6 @@
     describeItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })),
     buildComponent,
+    emit,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

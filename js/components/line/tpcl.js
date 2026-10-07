@@ -28,6 +28,23 @@
     return insertCommand(text, `{LC;${pad4(x)},${pad4(y)},${pad4(x + w)},${pad4(y + h)},${rect ? 1 : 0},${DEFAULT_THICKNESS}|}`);
   }
 
+  /** Thickness of an LC command in dots: at least 1, at most the 2 digits the editor allows. */
+  const MAX_THICKNESS = 99;
+
+  /** Emits an LC command for a line or a box item (shared with the box slice): thickness from item.width (0.1 mm). */
+  function emitLC(helpers) {
+    const { wrap, coordText } = helpers;
+    return (item, ctx) => {
+      const dots = Number.isFinite(item.width) ? Math.max(1, ctx.dot(item.width)) : 1;
+      if (dots > MAX_THICKNESS) {
+        ctx.once('tpcl-thickness', () => PB.diagnostics.warning(`Hay grosores de línea de más de ${MAX_THICKNESS} puntos: se ajustan al máximo de TPCL`));
+      }
+      const thickness = String(Math.min(dots, MAX_THICKNESS)).padStart(2, '0');
+      const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(n => coordText(ctx, n));
+      return wrap(`LC;${x1},${y1},${x2},${y2},${item.rect ? 1 : 0},${thickness}`);
+    };
+  }
+
   function tpcl(helpers) {
     const { sourceOf, numberField, MAX_COORD } = helpers;
     return {
@@ -43,6 +60,8 @@
       }],
       // build(text, point, options) -> text with the new component
       build: (text, point) => buildLC(helpers, text, point, SIZE, false),
+      // emit(item, ctx) -> the LC command of a line item
+      emit: emitLC(helpers),
       // Coordinate fields moved by moveItem (see COORDINATES in js/languages/tpcl.js)
       coordinates: [
         { pattern: /^\{LC;(\d+),(\d+),(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y'], [3, null, 'x'], [4, null, 'y']] },
@@ -70,4 +89,5 @@
 
   PB.slices.line.tpcl = tpcl;
   PB.slices.line.buildLC = buildLC;
+  PB.slices.line.emitLC = emitLC;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
