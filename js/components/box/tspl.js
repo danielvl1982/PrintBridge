@@ -17,8 +17,11 @@
 
   const { diagnostics: diag } = PB;
 
+  /** Largest thickness / radius offered in the properties panel, in dots. */
+  const MAX_DOTS = 9999;
+
   function tspl(helpers) {
-    const { sourceOf, num, exactDots, roundDots } = helpers;
+    const { sourceOf, num, exactDots, roundDots, numberField } = helpers;
 
     /** BOX x1,y1,x2,y2,thickness of a box item (corners normalized, thickness at least 1 dot). */
     function emit(item, ctx) {
@@ -35,6 +38,14 @@
       coordinates: [{
         applies: (item, cmd) => !cmd || cmd.name === 'BOX',
         fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }, { arg: 2, axis: 'x' }, { arg: 3, axis: 'y' }],
+      }],
+      // Properties: thickness and (when present) corner radius; the end corner is a coordinate, so it is moved, not edited
+      editable: [{
+        applies: (item, cmd) => (cmd ? cmd.name === 'BOX' : item.ref === 'BOX'),
+        fields: [
+          numberField('thickness', 'Grosor (puntos)', 4, 1, MAX_DOTS, item => item.native && item.native.width),
+          numberField('radius', 'Radio de esquina (puntos)', 5, 0, MAX_DOTS, item => item.native && item.native.radius),
+        ],
       }],
       handlers: [
         {

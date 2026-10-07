@@ -20,8 +20,11 @@
 
   const { diagnostics: diag } = PB;
 
+  /** Largest width / height offered in the properties panel, in dots. */
+  const MAX_DOTS = 9999;
+
   function tspl(helpers) {
-    const { sourceOf, num, exactDots, roundDots } = helpers;
+    const { sourceOf, num, exactDots, roundDots, numberField } = helpers;
 
     /** BAR x,y,width,height for an axis-aligned line item; diagonal lines are skipped with a warning. */
     function emit(item, ctx) {
@@ -44,6 +47,14 @@
       emit,
       // Move: BAR x,y are arguments 0 and 1 (dots); width and height (arguments 2 and 3) are measures, not coordinates
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BAR', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
+      // Properties: width and height in dots (the item's x2/y2 are derived from them)
+      editable: [{
+        applies: (item, cmd) => (cmd ? cmd.name === 'BAR' : item.ref === 'BAR'),
+        fields: [
+          numberField('width', 'Ancho (puntos)', 2, 1, MAX_DOTS, item => item.native && item.native.width),
+          numberField('height', 'Alto (puntos)', 3, 1, MAX_DOTS, item => item.native && item.native.height),
+        ],
+      }],
       handlers: [
         {
           // BAR x,y,width,height

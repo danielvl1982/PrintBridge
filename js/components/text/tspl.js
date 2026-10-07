@@ -44,6 +44,8 @@
   /** How far (in multiplier units) a model font may be from an exact bitmap font + integer multipliers, and the TSPL maximum. */
   const MULTIPLIER_TOLERANCE = 0.05;
   const MAX_MULTIPLIER = 10;
+  /** Largest point size of a scalable font offered in the properties panel. */
+  const MAX_POINTS = 200;
 
   /** Fallback size (0.1 mm) for a text whose font has no usable size. */
   const DEFAULT_SIZE = 80;
@@ -71,7 +73,7 @@
   }
 
   function tspl(helpers) {
-    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData } = helpers;
+    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField } = helpers;
 
     /** Rotation in degrees: the nearest quarter turn, with a warning once if the item was not on one. */
     function rotationDegrees(ctx, rotation) {
@@ -182,6 +184,26 @@
       };
     }
 
+    /**
+     * Properties of a TEXT command (BLOCK is not editable: its layout and content stay as written). The multipliers are
+     * 1..10 for a bitmap font and POINT sizes (up to MAX_POINTS) for a scalable one, so there is one definition for each.
+     */
+    const textShape = bitmap => {
+      const max = bitmap ? MAX_MULTIPLIER : MAX_POINTS;
+      return {
+        applies: (item, cmd) => {
+          const isText = cmd ? cmd.name === 'TEXT' : item.ref === 'TEXT';
+          const font = cmd ? cmd.args[2] && cmd.args[2].value : item.native && item.native.font;
+          return isText && (String(font).toUpperCase() in BITMAP_FONTS) === bitmap;
+        },
+        fields: [
+          selectField('rotation', 'Rotación', 3, [0, 90, 180, 270], item => item.rotation),
+          numberField('xmul', bitmap ? 'Multiplicador X' : 'Tamaño X (pt)', 4, 1, max, item => item.native && item.native.xmul),
+          numberField('ymul', bitmap ? 'Multiplicador Y' : 'Tamaño Y (pt)', 5, 1, max, item => item.native && item.native.ymul),
+        ],
+      };
+    };
+
     const point = (cmd, i) => ({ x: num(cmd.args[i]), y: num(cmd.args[i + 1]) });
     const validPoint = p => p.x !== null && p.y !== null;
 
@@ -190,6 +212,8 @@
       emit,
       // Move: TEXT and BLOCK both start with x,y (arguments 0 and 1, dots); everything else of the command is left alone
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'TEXT' || cmd.name === 'BLOCK', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
+      // Properties: rotation and multipliers of TEXT (font name and content are never touched)
+      editable: [textShape(true), textShape(false)],
       handlers: [
         {
           // TEXT x,y,"font",rotation,x-mul,y-mul,[alignment,]"content": 8 arguments when the alignment is present

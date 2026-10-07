@@ -65,11 +65,11 @@ test('the TSPL language registers the editing hooks (no palette yet)', () => {
   for (const hook of ['componentTemplates', 'buildComponent']) assert.equal(tspl[hook], undefined, hook);
 });
 
-test('without editable definitions the registered engines leave the text alone and describe no fields (moving is in tspl-move.test.js)', () => {
+test('the registered engines ignore keys that are not editable fields (coordinates move through moveItem; fields are in tspl-properties.test.js)', () => {
   const text = 'SIZE 100 mm,60 mm\r\nTEXT 10,20,"3",0,1,1,"Hi"\r\nPRINT 1\r\n';
   const item = tspl.parse(text, { dpi: 203 }).items[0];
-  assert.equal(tspl.updateItem(text, item, { x: 1 }, { dpi: 203 }), text);
-  assert.deepEqual(tspl.describeItem(item, text), { kind: 'text', fields: [] });
+  assert.equal(tspl.updateItem(text, item, { x: 1, y: 1, data: 'x' }, { dpi: 203 }), text);
+  assert.deepEqual(tspl.describeItem(item, text).fields.map(f => f.key), ['rotation', 'xmul', 'ymul']);
 });
 
 // ---- engines with injected definitions
