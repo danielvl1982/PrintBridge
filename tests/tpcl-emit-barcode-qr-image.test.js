@@ -12,7 +12,7 @@ const emit = (model, dpi = 203) => PB.languages.emit('tpcl', model, { dpi });
 const lines = model => emit(model).text.split('\n');
 const model = (items = [], size = {}) => ({
   language: 'tpcl',
-  size: { width: 990, height: 550, pitch: 610, gap: null, native: {}, ...size },
+  size: { width: 990, height: 550, pitch: 610, gap: null, native: { axRaw: 'AX;+010,+000,+00' }, ...size },
   items,
   diagnostics: [],
 });

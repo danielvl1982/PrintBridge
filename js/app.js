@@ -25,9 +25,9 @@
   const messages = ui.createMessagesPanel($('msgs'));
   const variablesPanel = ui.createVariablesPanel($('vars'), { values: state.values, onChange: () => refresh() });
   const sizePanel = ui.createSizePanel(
-    { select: $('size'), width: $('szW'), height: $('szH'), pitch: $('szP'), apply: $('btnApply') },
+    { select: $('size'), width: $('szW'), height: $('szH'), pitch: $('szP') },
     catalog,
-    { onChange: () => refresh(), onApply: applySize },
+    { onApply: applySize },
   );
   const editor = ui.createEditor($('src'), { openButton: $('btnOpen'), fileInput: $('file') }, { onEdit: () => refresh(), onOpen: text => open(text) });
   const preview = ui.createPreview(
@@ -108,39 +108,37 @@
    * Analyzes the label once and prepares everything to be shown, without touching the drawing or the messages:
    * if something fails here it throws and the screen stays as it was.
    * language: already known language (e.g. that of an example); if not, it is detected from the text.
-   * fresh: new label, the known size matching the one it declares is chosen first.
    */
-  function analyze(text, { language, fresh }) {
+  function analyze(text, { language }) {
     const detected = language || (text.trim() ? languages.detect(text) : null);
     if (!detected) {
       const model = withImage(EMPTY_MODEL);
       return {
         language: null,
         model,
-        area: { ...sizes.view(model, sizePanel.current()), diagnostics: [] },
+        area: { ...sizes.view(model), diagnostics: [] },
         diagnostics: text.trim() ? [diag.error('No se reconoce el lenguaje de la etiqueta')] : [],
       };
     }
     const parsed = detected.parse(text, { dpi: Number($('dpi').value) });
-    if (fresh) sizePanel.selectFor(parsed.size);
     // The overlay image joins the items after parsing and before validation, drawing and layout analysis
     const model = withImage(parsed);
-    return { language: detected, model, area: sizes.view(model, sizePanel.current()), diagnostics: [...model.diagnostics, ...validator.validate(model, detected)] };
+    return { language: detected, model, area: sizes.view(model), diagnostics: [...model.diagnostics, ...validator.validate(model, detected)] };
   }
 
   /**
    * Analyzes the label again and redraws it. Options:
-   *  - fresh: it is a new label (see analyze).
    *  - language: already known language of the label (if not, it is detected).
    *  - notices: extra messages to show along with those of the label.
    */
-  function refresh({ fresh = false, language = null, notices = [] } = {}) {
+  function refresh({ language = null, notices = [] } = {}) {
     try {
-      const { model, area, diagnostics, language: used } = analyze(editor.text(), { language, fresh });
+      const { model, area, diagnostics, language: used } = analyze(editor.text(), { language });
       const opts = options();
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));
       sizePanel.showArea(area);
+      sizePanel.selectFor(model.size);
       lastModel = model;
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
@@ -275,7 +273,7 @@
     }
   }
 
-  /** Writes the chosen size in the label if its language allows it; otherwise reports it. */
+  /** Writes the size typed or picked in the Formato row in the label if its language allows it; otherwise reports it. */
   function applySize(size) {
     const text = editor.text();
     const result = sizes.apply(languages.detect(text), text, size);
@@ -446,18 +444,17 @@
       .catch(error => refresh({ notices: [diag.error(`No se pudo insertar la imagen: ${error.message}`)] }));
   }
 
-  /** Loads a whole label and draws it. Without sizeId, the known size matching the one it declares is chosen. */
-  function open(text, { sizeId, language } = {}) {
-    if (sizeId) sizePanel.select(sizeId);
+  /** Loads a whole label and draws it; the Formato row shows the size it declares. */
+  function open(text, { language } = {}) {
     editor.setText(text);
     preview.clearSelection();
-    refresh({ fresh: !sizeId, language });
+    refresh({ language });
   }
 
   function loadExample(example) {
     Object.assign(state.values, example.values);
     variablesPanel.invalidate();
-    open(example.source, { sizeId: example.sizeId, language: languages.get(example.language) });
+    open(example.source, { language: languages.get(example.language) });
   }
 
   // --- Startup ---
@@ -468,6 +465,6 @@
   // The resolution changes the size in dots, so the 1-bit preview has to be converted again
   $('dpi').addEventListener('input', () => updatePreview({ delay: PREVIEW_DELAY_MS }));
 
-  sizePanel.init(examples[0].sizeId);
+  sizePanel.init();
   loadExample(examples[0]);
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

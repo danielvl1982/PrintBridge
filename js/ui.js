@@ -63,90 +63,74 @@
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
 
 /**
- * "Tamaño etiqueta" bar: choose a known size, "según la etiqueta" or a custom one.
- * It does not modify the label: when "Aplicar a la etiqueta" is pressed it calls onApply(size) and whoever uses it does the work.
+ * "Formato" row: a view of the size the label declares. The fields (mm) always show it; editing a field and leaving it
+ * (change), or picking a standard size, calls onApply(resolvedSize) and whoever uses the panel writes it to the label.
+ * Picking "Personalizado…" only marks the combo. The panel itself never modifies the label.
  */
 (function (PB) {
   'use strict';
 
   const { sizes, units } = PB;
-  const FROM_LABEL = 'label', CUSTOM = 'custom';
+  const CUSTOM = 'custom';
 
   /**
-   * els: { select, width, height, pitch, apply }
-   * callbacks: { onChange(), onApply(resolvedSize) }
+   * els: { select, width, height, pitch }
+   * callbacks: { onApply(resolvedSize) } (0.1 mm)
    */
-  function createSizePanel(els, catalog, { onChange, onApply }) {
+  function createSizePanel(els, catalog, { onApply }) {
     const inputs = [els.width, els.height, els.pitch];
+    /** Last size shown (what the label declares): invalid input goes back to it. */
+    let shown = null;
+    /** Field the user is typing in: showArea leaves it alone until it is left (change). */
+    let editing = null;
+
     /** Values of the inputs in mm: [width, height, pitch] (NaN if empty). */
     const readInputs = () => inputs.map(i => parseFloat(String(i.value).replace(',', '.')));
 
-    function fillOptions(selectedId) {
+    function init() {
       const option = (value, text) => Object.assign(document.createElement('option'), { value, textContent: text });
       els.select.replaceChildren(
-        option(FROM_LABEL, 'Según la etiqueta'),
-        ...catalog.all().map(s => option(s.id, s.name + (s.required ? ' — obligatorio' : ''))),
+        ...catalog.all().map(s => option(s.id, s.name)),
         option(CUSTOM, 'Personalizado…'),
       );
-      select(selectedId);
+      els.select.value = CUSTOM;
     }
 
-    function select(id) {
-      els.select.value = [...els.select.options].some(o => o.value === id) ? id : FROM_LABEL;
-      refreshControls();
-    }
-
-    function refreshControls() {
-      const custom = els.select.value === CUSTOM;
-      inputs.forEach(i => { i.disabled = !custom; });
-    }
-
-    /** Chosen size already resolved (0.1 mm), or null if the label's own size is used. */
-    function current() {
-      const id = els.select.value;
-      if (id === FROM_LABEL) return null;
-      if (id === CUSTOM) {
-        const [w, h, p] = readInputs();
-        return w > 0 && h > 0 ? sizes.resolve({ name: 'Personalizado', w, h, p: p > 0 ? p : h }) : null;
-      }
-      const s = catalog.get(id);
-      return s ? sizes.resolve(s) : null;
-    }
-
-    /** Shows in the inputs the size being drawn (except in "Personalizado", which the user types). */
+    /** Shows in the fields the size the label declares (or the fallback it is drawn with), except the field being edited. */
     function showArea(area) {
-      if (els.select.value === CUSTOM) return;
-      els.width.value = units.toMm(area.width);
-      els.height.value = units.toMm(area.height);
-      els.pitch.value = area.pitch ? units.toMm(area.pitch) : '';
+      shown = area;
+      const values = [units.toMm(area.width), units.toMm(area.height), area.pitch ? units.toMm(area.pitch) : ''];
+      inputs.forEach((input, i) => { if (input !== editing) input.value = values[i]; });
     }
 
-    /**
-     * When opening a label: choose the known size equal to the one it declares (model.size), or "Según la etiqueta" if there is none.
-     * If the label does not declare a size, the chosen size is kept.
-     */
+    /** Marks the standard size equal to the declared one, or "Personalizado" (also if the label declares none). */
     function selectFor(declared) {
-      if (declared.width == null) return;
-      const match = catalog.findBySize(declared);
-      select(match ? match.id : FROM_LABEL);
+      const match = declared.width != null ? catalog.findBySize(declared) : null;
+      els.select.value = match ? match.id : CUSTOM;
     }
 
-    els.select.addEventListener('change', () => { refreshControls(); onChange(); });
-    inputs.forEach(i => i.addEventListener('input', onChange));
+    /** A field was left: write the typed size to the label, or go back to the label's values if it is not valid. */
+    function commit() {
+      editing = null;
+      const [w, h, p] = readInputs();
+      const pitchEmpty = String(els.pitch.value).trim() === '';
+      if (w > 0 && h > 0 && (pitchEmpty || p > 0)) {
+        onApply(sizes.resolve({ name: 'Personalizado', w, h, p: pitchEmpty ? h : p }));
+      } else if (shown) {
+        showArea(shown);
+      }
+    }
 
-    els.apply.addEventListener('click', () => {
-      const chosen = current();
-      if (chosen) onApply(chosen);
-      else alert('Elige un tamaño o "Personalizado" e indica ancho y alto.');
+    els.select.addEventListener('change', () => {
+      const standard = catalog.get(els.select.value);
+      if (standard) onApply(sizes.resolve(standard));
+    });
+    inputs.forEach(input => {
+      input.addEventListener('input', () => { editing = input; });
+      input.addEventListener('change', commit);
     });
 
-    return Object.freeze({
-      init: fillOptions,
-      current,
-      showArea,
-      selectFor,
-      select,
-    });
+    return Object.freeze({ init, showArea, selectFor });
   }
 
   PB.ui = PB.ui || {};

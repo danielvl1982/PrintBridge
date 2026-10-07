@@ -13,7 +13,7 @@ const REQUIRED_IDS = [
   'imgX', 'imgY', 'imgW', 'imgThreshold', 'imgThresholdValue', 'btnImageInsert', 'btnImageRemove', 'imageFile',
   'svgwrap', 'dims', 'cursor', 'src', 'vars', 'msgs', 'convert',
   'dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap', 'btnOpen', 'file', 'example', 'btnExample',
-  'size', 'szW', 'szH', 'szP', 'btnApply',
+  'size', 'szW', 'szH', 'szP',
 ];
 
 const countId = id => (html.match(new RegExp('\\sid="' + id + '"', 'g')) || []).length;
@@ -87,9 +87,9 @@ test('the toolbars no longer hold the view controls', () => {
   }
 });
 
-const SIZE_IDS = ['size', 'szW', 'szH', 'szP', 'btnApply'];
+const SIZE_IDS = ['size', 'szW', 'szH', 'szP'];
 
-test('the five label-size controls sit in the stage size row, before the view row', () => {
+test('the four label-size controls sit in the stage size row, before the view row', () => {
   const stage = at('<div class="stage">');
   const sizeRow = at('<div class="size-row"');
   const viewRow = at('<div class="view-row"');
@@ -198,10 +198,13 @@ test('Avisos grows freely: no max-height or overflow rule on .msgs-panel / .msgs
   }
 });
 
-test('the size row holds only the five size controls, in order', () => {
+test('the size row holds only the size select and the three size fields, in order, with no Apply button', () => {
   const row = sizeRowHtml();
   const ids = [...row.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(ids, SIZE_IDS);
+  assert.ok(!row.includes('<button'), 'no button in the size row');
+  assert.equal(countId('btnApply'), 0);
+  assert.ok(!html.includes('Aplicar a la etiqueta'));
 });
 
 test('Avisos (#msgs) is the last element of the stage, right after the preview section, and not in the column', () => {

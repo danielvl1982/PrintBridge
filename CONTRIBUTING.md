@@ -30,6 +30,9 @@ Open `index.html` in a browser to try the app. There is nothing to install.
   with `PB.composeSlices('<lang>', helpers, { handlers })`, which collects the slices registered for that language (list the slice files before the language file in the manifest).
   Hooks for editing (`moveItem`, `updateItem`, `describeItem`, `componentTemplates`, `buildComponent`, `insertCommand`, `applySize`) are optional: the app
   disables moving, the properties panel, the palette and size writing for a language that lacks them (TSPL is read only).
+- Label sizes: `config.sizes` is a language-agnostic catalog of standard sizes (`{ id, name, w, h, p }` in mm, pitch = height + 3), with no
+  printer data. The drawing always follows the size the label declares (`PB.sizes.view`); the Formato row shows it and writes edits back through the
+  language's `applySize`, which must only write what declares the size (TPCL: `{D…|}`, never `{AX…|}`).
 - Emitters (neutral model to printer text, used by "Convertir a…"): a language becomes a conversion target by adding the optional hook
   `emit(model, { dpi }) -> { text, diagnostics }` (contract in `js/core/languages.js`). It owns the header, trailer, id numbering and order of
   the output; each item is written by its slice, which returns `emit` next to `handlers` from its `languages.<id>` factory:

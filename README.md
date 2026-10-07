@@ -69,18 +69,17 @@ The drawing updates immediately while typing in the code, so coordinates and siz
 | **Puntos origen** | Blue dot at the x,y coordinate of each item (for texts it is the bottom left corner). |
 | **Marcar solapas** | Paints in red the areas where two items overlap. |
 
-### Tamaño etiqueta
+### Formato
 
-| Option | What it does |
+The row is a view of the label: **Ancho**, **Alto** and **Paso** (mm) always show the size the label declares, and the drawing always
+follows it. If the label declares no size, the fields show 99×55 mm and a warning says so.
+
+| Control | What it does |
 |---|---|
-| **Según la etiqueta** | Draws with the size the label declares (in TPCL, the `{D…|}` command). |
-| **Bobina 99×55 (TEC) — obligatorio** | Draws at 99×55 mm. If the label does not carry exactly `{D0610,0990,0550|}` and `{AX;+010,+000,+00|}`, it shows an **error**. |
-| **Personalizado…** | Type **Ancho**, **Alto** and **Paso** in mm to try the size of another printer. |
+| **Tamaño etiqueta** | Standard sizes (mm, **Paso** = height + 3): 100×150, 100×100, 100×60, 80×50, 60×40, 50×30 and 40×30. Picking one writes it to the label. It marks the standard equal to the declared size, or **Personalizado…** if there is none. |
+| **Ancho / Alto / Paso** | Edit one and leave the field to write the size to the label (in TPCL, the `{D…|}` command; an existing `{AX…|}` is left untouched). An empty **Paso** means the height. A zero, negative or invalid value goes back to the label's value. |
 
 - **Paso:** distance between the start of one label and the next (height + gap between labels).
-- **Aplicar a la etiqueta:** writes the chosen size in the `{D…|}` command of the code (in TPCL) (and the `{AX…|}` in the reference 99×55 spool case).
-- When loading a label that carries `{D0610,0990,0550|}` the 99×55 spool size is chosen automatically. With any other,
-  "Según la etiqueta" is chosen.
 
 ### Imagen
 
@@ -197,7 +196,7 @@ Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DM
 (images stored in the printer). Also not supported:
 
 - **Editing:** moving items, the **Propiedades** panel, the component palette (it stays hidden), writing the size
-  (**Aplicar a la etiqueta**) and **Insertar en el código** for the preview image. A preview image can still be overlaid to check positions.
+  (the **Formato** row) and **Insertar en el código** for the preview image. A preview image can still be overlaid to check positions.
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), the `BOX` radius and the
   text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.
