@@ -205,8 +205,9 @@ Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DM
   text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.
 - **Resolución:** the dots-per-mm of a TSPL label are not in the file, so the **Resolución** selector (203 or 300 dpi) must match
   the printer: coordinates are in dots, so the same label is drawn smaller at 300 dpi.
-- **Files with a `BITMAP`:** files opened or dragged (`.prn`, `.tspl`...) are read as bytes, so the graphic data survives. Pasted
-  text cannot carry arbitrary bytes, and the code box converts line breaks to a single LF, so a graphic byte `0x0D` is altered; for exact graphics open the file.
+- **Files with a `BITMAP`:** files opened or dragged (`.prn`, `.tspl`...) are read as bytes, so the graphic data survives, including `0x0D`
+  bytes (the code box shows them as a private-use placeholder, U+E00D, because a text box would turn them into line breaks; conversion and
+  download write them back as `0x0D`). Pasted text cannot carry arbitrary bytes, so for exact graphics open the file.
 - The viewer imitates the printer fonts (as with TPCL): text widths are approximate.
 
 ## Limitations

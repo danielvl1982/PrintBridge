@@ -1,13 +1,13 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- Print Bridge logo: a label (white card with barcode bars) crossed by an orange bridge arch between two pillars, on a dark teal tile. -->
-  <rect x="2" y="2" width="60" height="60" rx="12" fill="#143a49"/>
-  <rect x="9" y="11" width="46" height="42" rx="5" fill="#ffffff"/>
-  <path d="M12 36 Q32 6 52 36" fill="none" stroke="#e88a23" stroke-width="4" stroke-linecap="round"/>
-  <rect x="10" y="34" width="44" height="4" rx="2" fill="#e88a23"/>
-  <rect x="12" y="36" width="5" height="17" fill="#e88a23"/>
-  <rect x="47" y="36" width="5" height="17" fill="#e88a23"/>
-  <rect x="22" y="42" width="3" height="9" fill="#143a49"/>
-  <rect x="27" y="42" width="5" height="9" fill="#143a49"/>
-  <rect x="34" y="42" width="2" height="9" fill="#143a49"/>
-  <rect x="38" y="42" width="4" height="9" fill="#143a49"/>
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
+  <rect width="64" height="64" rx="12" fill="#143a49"/>
+  <rect x="9.5" y="34" width="3" height="12" rx="0.6" fill="#fff"/>
+  <rect x="14.75" y="26.2" width="4.5" height="19.8" rx="0.6" fill="#fff"/>
+  <rect x="21.5" y="20.9" width="3" height="25.1" rx="0.6" fill="#fff"/>
+  <rect x="26.75" y="18.3" width="4.5" height="27.7" rx="0.6" fill="#fff"/>
+  <rect x="32.75" y="18.3" width="4.5" height="27.7" rx="0.6" fill="#fff"/>
+  <rect x="39.5" y="20.9" width="3" height="25.1" rx="0.6" fill="#fff"/>
+  <rect x="44.75" y="26.2" width="4.5" height="19.8" rx="0.6" fill="#fff"/>
+  <rect x="51.5" y="34" width="3" height="12" rx="0.6" fill="#fff"/>
+  <path d="M11 31 Q32 -1 53 31" fill="none" stroke="#e88a23" stroke-width="2.6" stroke-linecap="round"/>
+  <rect x="7" y="46" width="50" height="5" rx="2.5" fill="#e88a23"/>
 </svg>

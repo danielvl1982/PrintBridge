@@ -73,7 +73,12 @@
     if (language.fileEncoding !== 'latin1') return new TextEncoder().encode(value);
     const chars = Array.from(value);
     const bytes = new Uint8Array(chars.length);
-    chars.forEach((ch, i) => { const code = ch.codePointAt(0); bytes[i] = code > 0xFF ? QUESTION_MARK : code; });
+    // TSPL: the editor placeholder of a 0x0D payload byte (see PB.tspl.CR_PLACEHOLDER) is written back as that byte
+    const cr = PB.tspl && PB.tspl.CR_PLACEHOLDER;
+    chars.forEach((ch, i) => {
+      const code = ch.codePointAt(0);
+      bytes[i] = ch === cr ? 0x0D : code > 0xFF ? QUESTION_MARK : code;
+    });
     return bytes;
   }
 
