@@ -27,7 +27,7 @@ Before adding ZPL/TSPL (multi-printer-language-support T3+), each component must
 - [x] T6 `image` slice (codec from `PB.images`, overlay, SG parse, render).
 - [x] T7 Split `core.js` into `js/core/*`; `tpcl.js`/`drawing.js` become composition only; validator and `PB.layout.analyze` per component.
 - [x] T7b Image overlay leftovers: move `IMAGE_KIND`, palette append, `pickImage`/`pendingImagePosition` (js/app.js) and `createImagePanel` (js/ui.js) behind image slice hooks; no behavior change.
-- [x] T8 Docs (README/CONTRIBUTING layout) and final regression (243/243). Browser smoke test (focus, drag, overlay, layout, palette) is PENDING: run by the user, Node tests cannot cover DOM.
+- [x] T8 Docs (README/CONTRIBUTING layout) and final regression (243/243). Browser smoke test (focus, drag, overlay, layout, palette) passed, confirmed by the user.
 
 ## Acceptance
 - `node --test` passes with the same 201 tests (plus registry tests); app behaves identically in the browser; each component's behavior is found in its own folder.
@@ -50,4 +50,5 @@ Before adding ZPL/TSPL (multi-printer-language-support T3+), each component must
 - T7b done: RED observed (6/6 new tests failing before the files existed), then GREEN; `node --test`: 243/243 pass (237 + 6 in tests/image-ui-slice.test.js); `node --check` clean on js/app.js, js/ui.js and image/{panel,overlay,index}.js. Moved: `createImagePanel` from js/ui.js to `js/components/image/panel.js` (still `PB.ui.createImagePanel`, extends `PB.ui` with `PB.ui = PB.ui || {}`, loaded before ui.js; also on `PB.slices.image.createImagePanel`); `pendingImagePosition`, the `cancel` listener and `pickImage` to `js/components/image/overlay.js` (`createPicker({ fileInput, refresh })` -> `pick/takePosition/clear`, exposed as the registry field `overlay`); `IMAGE_KIND` and the hardcoded Imagen entry replaced by `PB.components.get('image')` kind/label in app.js. Manifest and index.html both gained panel.js and overlay.js. Left in js/app.js (closure state shared with refresh/preview/state.image): `state.image`, `withImage`, `readImage`/`loadImage`/`removeImage`, `rasterize`, `conversionParams`/`convertImage`, `updatePreview`/`cancelPreview` timers, `insertImage`, `isOverlay`, overlay branches of `moveItem`/`updateProperties`. Not verified in a browser (no DOM in node). Not yet committed.
 - T7: core split, layout/validate hooks (29c4953). T7b: image panel/picker in slice (e5e90b6); conversion/preview state stays in js/app.js (closure state). T8: docs updated; 243/243. Browser smoke test pending (user).
 - Native review: whole branch exceeded the reviewer budget (lens_context_budget_exceeded), so each work unit was reviewed on its own (worktrees at each commit): T1 (4 lenses), T2, T3, T4, T6, T7, T7b (1 consolidated lens each), T5 (4 lenses) — all approved and acknowledged. T8 docs-only, passive, not reviewed.
-- Next: user browser smoke test (focus, drag, overlay, layout, palette), then push/PR decision.
+- Browser smoke test passed (user, 2026-10-07).
+- Next: push/PR decision, then multi-printer-language-support T3 (ZPL) as per-component language files.
