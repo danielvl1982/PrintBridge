@@ -5,7 +5,9 @@
  * Assumption: the manual does not say toward which side the thickness grows; the viewer follows the convention it already
  * uses for TPCL boxes, where the stroke is centered on the rectangle that the corners span.
  * The corner radius is kept in native.radius but not drawn (one info per label).
- * factory(helpers) -> { handlers }; registered by js/components/box/index.js as `languages: { tpcl, tspl }`.
+ * Emit (the inverse): BOX x1,y1,x2,y2,thickness with the corners normalized to min/max and the thickness (item.width) in dots,
+ * at least 1.
+ * factory(helpers) -> { handlers, emit }; registered by js/components/box/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -16,9 +18,19 @@
   const { diagnostics: diag } = PB;
 
   function tspl(helpers) {
-    const { sourceOf, num } = helpers;
+    const { sourceOf, num, exactDots, roundDots } = helpers;
+
+    /** BOX x1,y1,x2,y2,thickness of a box item (corners normalized, thickness at least 1 dot). */
+    function emit(item, ctx) {
+      const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
+      const thickness = Math.max(1, roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0)));
+      const [left, top, right, bottom] = [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)].map(roundDots);
+      return `BOX ${left},${top},${right},${bottom},${thickness}`;
+    }
 
     return {
+      // emit(item, ctx) -> the BOX command of a box item
+      emit,
       handlers: [
         {
           // BOX x,y,xEnd,yEnd,thickness[,radius]

@@ -10,6 +10,10 @@
  *   factory(helpers) -> { handlers }. Registered by js/components/text/index.js as `languages: { tpcl, tspl }`.
  * Limits (reported as info diagnostics): the model has no alignment nor word wrap, so alignment 2/3 draws left and BLOCK
  * is drawn as one line of text; counters/variables ("@1", "x"+@1) are kept as literal text.
+ * Emit (the inverse): `emit(item, ctx)` writes a TEXT command. A mono font whose size and width are whole multiples of a
+ * built-in bitmap font becomes that font "1".."8"; anything else becomes the scalable font "0" with POINT sizes (the
+ * exact inverse of fontOf), with one info that the TSPL fonts differ from the source font when family, weight or style
+ * cannot be represented.
  */
 (function (PB) {
   'use strict';
@@ -37,8 +41,74 @@
   /** Line-break escapes of BLOCK content (\[R], \[L]); the model draws one line, so they become a space. */
   const BLOCK_BREAK = /\\\[[RL]\]/g;
 
+  /** How far (in multiplier units) a model font may be from an exact bitmap font + integer multipliers, and the TSPL maximum. */
+  const MULTIPLIER_TOLERANCE = 0.05;
+  const MAX_MULTIPLIER = 10;
+
+  /** Fallback size (0.1 mm) for a text whose font has no usable size. */
+  const DEFAULT_SIZE = 80;
+
+  /**
+   * Bitmap font that draws a mono model font: the entry of BITMAP_FONTS whose cell height times an integer y-mul (1..10)
+   * reproduces the size and whose cell width times an integer x-mul (1..10) reproduces the width, both within
+   * MULTIPLIER_TOLERANCE. Best fit first (smallest total deviation), then the lowest multiplier (the real cell of the
+   * font is kept, e.g. font 3 x1 rather than font 1 x2), then the lowest font number. Null if none fits.
+   */
+  function bitmapChoice(font, dot) {
+    if (font.family !== 'mono') return null;
+    const heightDots = font.size / dot;
+    let best = null;
+    for (const [name, [cellW, cellH]] of Object.entries(BITMAP_FONTS)) {
+      const y = heightDots / cellH;
+      const x = (font.scaleX * heightDots * MONO_ADVANCE) / cellW;
+      const [yi, xi] = [Math.round(y), Math.round(x)];
+      if (yi < 1 || yi > MAX_MULTIPLIER || xi < 1 || xi > MAX_MULTIPLIER) continue;
+      if (Math.abs(y - yi) > MULTIPLIER_TOLERANCE || Math.abs(x - xi) > MULTIPLIER_TOLERANCE) continue;
+      const score = Math.round((Math.abs(y - yi) + Math.abs(x - xi)) * 1000);
+      if (!best || score < best.score || (score === best.score && yi < best.ymul)) best = { name, xmul: xi, ymul: yi, score };
+    }
+    return best;
+  }
+
   function tspl(helpers) {
-    const { sourceOf, num, ROTATIONS } = helpers;
+    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData } = helpers;
+
+    /** Rotation in degrees: the nearest quarter turn, with a warning once if the item was not on one. */
+    function rotationDegrees(ctx, rotation) {
+      const turns = Number.isFinite(rotation) ? Math.round(rotation / 90) : 0;
+      const degrees = (((turns * 90) % 360) + 360) % 360;
+      if (degrees !== rotation && !(rotation == null && degrees === 0)) {
+        ctx.once('tspl-rotation', () => diag.warning('Hay textos con una rotación que no es múltiplo de 90°: se ajustan al giro más cercano'));
+      }
+      return degrees;
+    }
+
+    /**
+     * TEXT x,y,"font",rotation,x-mul,y-mul,"content". Built-in font "1".."8" when the model font is one of them (see
+     * bitmapChoice); else font "0" with POINT sizes: y-mul = size in points, x-mul = y-mul * scaleX (minimum 1 both).
+     */
+    function emit(item, ctx) {
+      const font = item.font || {};
+      const size = Number.isFinite(font.size) && font.size > 0 ? font.size : DEFAULT_SIZE;
+      const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
+      const weight = font.weight == null ? 400 : font.weight;
+      const regular = weight === 400 && (font.style || 'normal') === 'normal';
+      const choice = bitmapChoice({ ...font, size, scaleX }, units.dotSize(ctx.dpi));
+      let name = '0';
+      let [xmul, ymul] = [0, 0];
+      if (choice) {
+        ({ name, xmul, ymul } = choice);
+      } else {
+        ymul = Math.max(1, Math.round(size / units.UNITS_PER_POINT));
+        xmul = Math.max(1, Math.round(ymul * scaleX));
+      }
+      const exact = regular && (choice ? true : (font.family || 'sans') === 'sans');
+      if (!exact) {
+        ctx.once('tspl-fonts', () => diag.info('Las fuentes TSPL no coinciden con las de origen (familia, peso o cursiva): se usan las incorporadas más cercanas'));
+      }
+      const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
+      return `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${quoted(safeData(ctx, item.data))}`;
+    }
 
     /** Multiplier or point size: a positive number, 1 (with a warning) otherwise. */
     function multiplier(ctx, ref, arg, label) {
@@ -112,6 +182,8 @@
     const validPoint = p => p.x !== null && p.y !== null;
 
     return {
+      // emit(item, ctx) -> the TEXT command of a text item
+      emit,
       handlers: [
         {
           // TEXT x,y,"font",rotation,x-mul,y-mul,[alignment,]"content": 8 arguments when the alignment is present

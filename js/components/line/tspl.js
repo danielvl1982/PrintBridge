@@ -7,7 +7,10 @@
  * bar covers exactly x..x+width and y..y+height (no compensation needed):
  *   width >= height: (x, y + h/2) -> (x + w, y + h/2), thickness h;  otherwise (x + w/2, y) -> (x + w/2, y + h), thickness w.
  * native keeps the command measures in dots ({ width, height, kind: 'BAR' }, like TPCL keeps native.width).
- * factory(helpers) -> { handlers }; registered by js/components/line/index.js as `languages: { tpcl, tspl }`.
+ * Emit (the inverse): an axis-aligned line (within one dot) becomes BAR x,y,w,h centered on the line, with the line width as
+ * thickness; a diagonal line cannot be written (TSPL has DIAGONAL, but this viewer's parser does not read it) and is
+ * skipped with a warning. A parsed BAR re-emits identically.
+ * factory(helpers) -> { handlers, emit }; registered by js/components/line/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -18,9 +21,27 @@
   const { diagnostics: diag } = PB;
 
   function tspl(helpers) {
-    const { sourceOf, num } = helpers;
+    const { sourceOf, num, exactDots, roundDots } = helpers;
+
+    /** BAR x,y,width,height for an axis-aligned line item; diagonal lines are skipped with a warning. */
+    function emit(item, ctx) {
+      const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
+      const thickness = Math.max(1, roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0)));
+      const horizontal = Math.abs(y2 - y1) <= 1;
+      if (!horizontal && Math.abs(x2 - x1) > 1) {
+        ctx.once('tspl-diagonal', () => diag.warning('Hay líneas diagonales que no se escriben: TSPL tiene DIAGONAL, pero el intérprete de este visor no lo soporta'));
+        return [];
+      }
+      const length = Math.abs(horizontal ? x2 - x1 : y2 - y1);
+      const [lengthDots, left, top] = [roundDots(length), Math.min(x1, x2), Math.min(y1, y2)];
+      return horizontal
+        ? `BAR ${roundDots(left)},${roundDots((y1 + y2) / 2 - thickness / 2)},${lengthDots},${thickness}`
+        : `BAR ${roundDots((x1 + x2) / 2 - thickness / 2)},${roundDots(top)},${thickness},${lengthDots}`;
+    }
 
     return {
+      // emit(item, ctx) -> the BAR command of an axis-aligned line item
+      emit,
       handlers: [
         {
           // BAR x,y,width,height

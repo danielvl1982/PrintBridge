@@ -37,11 +37,14 @@
   const isEol = c => c === '\r' || c === '\n';
   const isBlank = c => c === ' ' || c === '\t';
 
-  /** Argument text -> its value: quotes removed and the \["] escape resolved (an unquoted token is returned as is). */
+  /** Escapes of a quote inside a string: the manual's \["] and the common \" (an unquoted token is returned as is). */
+  const QUOTE_ESCAPES = /\\\["\]|\\"/g;
+
+  /** Argument text -> its value: quotes removed and the \["] / \" escapes resolved. */
   function unquote(raw) {
     if (raw.length === 0 || raw[0] !== '"') return raw;
     const body = raw.length > 1 && raw.endsWith('"') && !raw.endsWith('\\"') ? raw.slice(1, -1) : raw.slice(1);
-    return body.replace(/\\"/g, '"');
+    return body.replace(QUOTE_ESCAPES, '"');
   }
 
   /**
@@ -61,6 +64,7 @@
     for (let i = from; i < to; i++) {
       const c = src[i];
       if (quoted && c === '\\' && src[i + 1] === '"') { i++; continue; }
+      if (quoted && c === '\\' && src.startsWith('["]', i + 1)) { i += 3; continue; }
       if (c === '"') quoted = !quoted;
       else if (c === ',' && !quoted) {
         push(i);
@@ -145,8 +149,45 @@
   /** Item -> position of the command in the source text (a single span: the command line). */
   const sourceOf = cmd => ({ spans: [{ start: cmd.start, end: cmd.end }], label: cmd.raw });
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // Emit helpers shared with the slices
+
+  /** String argument: "..." with the \["] escape for the quotes inside (PB.emit.escapeQuotes). */
+  const quoted = str => `"${PB.emit.escapeQuotes(str)}"`;
+
+  /** Rounds to whole dots; the epsilon keeps x.5 values that float noise nudged just below from rounding down. */
+  const roundDots = v => Math.round(v + 1e-6);
+
+  /** 0.1 mm -> dots at the context's resolution, without rounding (for sums and centers before the final round). */
+  const exactDots = (ctx, mm10) => mm10 / units.dotSize(ctx.dpi);
+
+  /** 0.1 mm -> whole dots, never negative. */
+  const toDots = (ctx, mm10) => Math.max(0, roundDots(exactDots(ctx, Number.isFinite(mm10) ? mm10 : 0)));
+
+  /** Text of a line-oriented command argument: line breaks become spaces (one warning per emit). */
+  const LINE_BREAKS = /[\r\n]/g;
+  const VARIABLE_NAME = /#[A-Za-z_]\w*#/;
+
+  /**
+   * Field data as it can be written inside a TSPL string: CR/LF would end the command line, so each becomes a space
+   * (one Spanish warning per emit); #NAME# placeholders (TPCL variables) have no TSPL substitution and are written
+   * literally (one Spanish info per emit). Returns the unquoted, unescaped text.
+   */
+  function safeData(ctx, data) {
+    const value = data == null ? '' : String(data);
+    if (VARIABLE_NAME.test(value)) {
+      ctx.once('tspl-variables', () => diag.info('Las variables #NOMBRE# se escriben como texto literal en TSPL (no hay sustitución)'));
+    }
+    if (!/[\r\n]/.test(value)) return value;
+    ctx.once('tspl-framing', () => diag.warning('Hay datos con saltos de línea, que rompen el formato TSPL (un comando por línea): se sustituyen por espacios'));
+    return value.replace(LINE_BREAKS, ' ');
+  }
+
   /** Helpers the slices' TSPL hooks share with this file. Passed once to each slice's `languages.tspl` factory. */
-  const SLICE_HELPERS = Object.freeze({ sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH });
+  const SLICE_HELPERS = Object.freeze({
+    sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
+    quoted, roundDots, exactDots, toDots, safeData,
+  });
 
   // ---------------------------------------------------------------------------------------------------------------
   // Handlers of the setup commands
@@ -280,8 +321,44 @@
   const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|BITMAP|BAR|BOX)[ \t]+\d)/im;
   const detect = src => typeof src === 'string' && !/\{[\s\S]*?\|\}/.test(src) && TSPL_LINE.test(src);
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // Emit: neutral model -> TSPL text
+
+  /** 0.1 mm -> the number of a "<n> mm" length, with at most one decimal ("991" -> "99.1"). */
+  const mmNumber = mm10 => String(+(mm10 / 10).toFixed(1));
+
+  /**
+   * SIZE, GAP, DIRECTION and CLS. SIZE needs both measures (else it is omitted with a warning); GAP only when the model
+   * knows the separation (else omitted with an info). REFERENCE and SHIFT are never written: the parser folds them into
+   * the coordinates. DIRECTION 1 is the origin the parser assumes (top-left).
+   */
+  function headerLines(model, ctx) {
+    const size = (model && model.size) || {};
+    const out = [];
+    if (Number.isFinite(size.width) && Number.isFinite(size.height)) {
+      out.push(`SIZE ${mmNumber(size.width)} mm,${mmNumber(size.height)} mm`);
+    } else {
+      ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe SIZE, indique el tamaño antes de exportar'));
+    }
+    if (Number.isFinite(size.gap)) out.push(`GAP ${mmNumber(size.gap)} mm,0 mm`);
+    else ctx.report(diag.info('No se escribe GAP: la separación entre etiquetas o la marca negra no está especificada, compruebe el ajuste en su impresora'));
+    out.push('DIRECTION 1', 'CLS');
+    return out;
+  }
+
+  /**
+   * Neutral model -> { text, diagnostics }: header, the items (slices' emit hooks), then PRINT 1,1. Lines are joined
+   * with CRLF (the line ending TSPL printers expect) and the text ends with one, so the last command is executed.
+   */
+  function emit(model, { dpi = PB.config.resolutions[0] } = {}) {
+    const ctx = PB.emit.createContext({ dpi, language: 'tspl' });
+    const header = headerLines(model, ctx);
+    const { lines } = PB.emit.run(model, COMPOSED, ctx);
+    return { text: [...header, ...lines, 'PRINT 1,1', ''].join('\r\n'), diagnostics: ctx.diagnostics };
+  }
+
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS });
 
-  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse });
+  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
