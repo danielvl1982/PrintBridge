@@ -67,3 +67,4 @@ The user's TEC SV4T is TPCL (already supported). TSC TTP uses TSPL and is the ne
 - Next: user browser smoke test, then archive.
 - Native review (per slice, all approved and acknowledged): [main..7d71714] plan+T1+T2; [..b4be02a] T3+T4; [..876eef3] T5+T6; [..34efc8b] T7+T8. Test count 372/372.
 - Pending: user browser smoke test (see checklist above), then push/merge decision. Follow-up feature: TSPL write-back (move, update, palette build) and emitter (TPCL<->TSPL).
+- Browser smoke test passed (user, 2026-10-07). Merged to main.
