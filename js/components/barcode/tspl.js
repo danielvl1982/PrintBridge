@@ -10,7 +10,7 @@
  *     25/25C/ITF14/EAN14 and EAN13 have a neutral symbology; every other type is 'unknown' (drawn approximately, the
  *     validator of the slice warns) and keeps its TSPL type in native.type.
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
- *   factory(helpers) -> { handlers, emit }. Registered by js/components/barcode/index.js as `languages: { tpcl, tspl }`.
+ *   factory(helpers) -> { handlers, emit, build, coordinates, editable }. Registered by js/components/barcode/index.js as `languages: { tpcl, tspl }`.
  * Emit (the inverse): `emit(item, ctx)` writes a BARCODE command.
  *   - code128 -> "128"; a leading FNC1 only -> "EAN128" (FNC1 removed from the data); FNC1 elsewhere -> "128M" with !102
  *     at each FNC1 (the parser drops start codes, so none is written);
@@ -54,7 +54,14 @@
   const CONTROL_CODE = /!(\d{3})/g;
   const START_CODES = Object.freeze(['103', '104', '105']);
 
+  /** Height of a freshly inserted barcode, in 0.1 mm (the TPCL template is 8 mm too). */
+  const TEMPLATE_HEIGHT = 80;
+
   /** Wide/narrow ratios the manual allows for Code 39 and ITF (1:2, 2:5, 1:3), and the one used without explicit widths. */
+  /** Largest height / wide bar (dots) and narrow bar offered in the properties panel. */
+  const MAX_DOTS = 9999;
+  const MAX_NARROW = 10;
+
   const RATIOS = Object.freeze([2, 2.5, 3]);
   const DEFAULT_RATIO = 3;
 
@@ -68,7 +75,20 @@
   const nearestRatio = ratio => RATIOS.reduce((best, r) => (Math.abs(r - ratio) < Math.abs(best - ratio) ? r : best), RATIOS[0]);
 
   function tspl(helpers) {
-    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, toDots, safeData } = helpers;
+    const {
+      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, toDots, safeData, numberField, selectField,
+      insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
+    } = helpers;
+
+    /**
+     * Adds BARCODE x,y,"128",height,1,rotation,2,2,"<#CODIGOBARRAS{k}#>" (Code 128 with the text below, 8 mm tall) at the
+     * drop point, rotated (360 - options.viewRotation) % 360 to look upright in the view.
+     */
+    function build(text, point, options) {
+      const { x, y } = dropDots(text, point, options);
+      const placeholder = quoted(freePlaceholder(text, 'CODIGOBARRAS'));
+      return insertCommand(text, `BARCODE ${x},${y},"128",${lengthDots(options, TEMPLATE_HEIGHT)},1,${itemRotation(options)},2,2,${placeholder}`);
+    }
 
     /** Rotation in degrees: the nearest quarter turn, with a warning once if the item was not on one. */
     function rotationDegrees(ctx, rotation) {
@@ -160,9 +180,36 @@
       return text;
     }
 
+    const dots = (dpi, v) => (Number.isFinite(v) ? Math.round(v / PB.units.dotSize(dpi)) : undefined);
+
+    /** Properties of BARCODE (content and type untouched). The wide bar only matters for the wide/narrow symbologies. */
+    const barcodeFields = wideNarrow => [
+      numberField('height', 'Alto (puntos)', 3, 1, MAX_DOTS, (item, { dpi }) => dots(dpi, item.height)),
+      selectField('readable', 'Texto legible', 4, [
+        { value: 0, label: 'No' }, { value: 1, label: 'Izquierda' }, { value: 2, label: 'Centro' }, { value: 3, label: 'Derecha' },
+      ], item => (item.native ? item.native.humanReadable : undefined)),
+      selectField('rotation', 'Rotación', 5, [0, 90, 180, 270], item => item.rotation),
+      numberField('narrow', 'Barra estrecha (puntos)', 6, 1, MAX_NARROW, item => item.native && item.native.module),
+      ...(wideNarrow ? [numberField('wide', 'Barra ancha (puntos)', 7, 1, MAX_DOTS, item => item.native && item.native.wide)] : []),
+    ];
+    const isBarcode = (item, cmd) => (cmd ? cmd.name === 'BARCODE' : item.ref === 'BARCODE');
+    const isWideNarrow = (item, cmd) => {
+      const type = cmd ? cmd.args[2] && cmd.args[2].value : item.native && item.native.type;
+      const known = TYPES[String(type).toUpperCase().replace(ADD_ON, '$1')];
+      return !!known && (known.symbology === 'code39' || known.symbology === 'itf');
+    };
+
     return {
       // emit(item, ctx) -> the BARCODE command of a barcode item
       emit,
+      // build(text, point, options) -> text with a new BARCODE command (palette)
+      build,
+      // Move: BARCODE x,y are arguments 0 and 1 (dots)
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BARCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
+      editable: [
+        { applies: (item, cmd) => isBarcode(item, cmd) && isWideNarrow(item, cmd), fields: barcodeFields(true) },
+        { applies: isBarcode, fields: barcodeFields(false) },
+      ],
       handlers: [
         {
           // BARCODE x,y,"type",height,human readable,rotation,narrow,wide,[alignment,]"content"

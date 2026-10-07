@@ -233,10 +233,8 @@
   function updatePalette(language) {
     if (language === paletteLanguage) return;
     paletteLanguage = language;
-    const entries = language && language.componentTemplates ? [...language.componentTemplates()] : [];
-    // The image is an app-level entry (a preview overlay, not a language component); it needs insertCommand to be written later
-    if (language && language.insertCommand) entries.push({ kind: imageComponent.kind, label: imageComponent.label });
-    palette.render(entries);
+    // The image is an app-level entry (a preview overlay, not a language component): only languages with insertImage get it
+    palette.render(ui.paletteEntries(language, { kind: imageComponent.kind, label: imageComponent.label }));
   }
 
   /**
@@ -427,9 +425,9 @@
   function insertImage() {
     const image = state.image;
     if (!image) return;
-    // Only an unrecognized (e.g. empty) text falls back to TPCL; a recognized language without insertCommand is never written to
+    // Only an unrecognized (e.g. empty) text falls back to TPCL; a recognized language without insertImage is never written to
     const language = languages.detect(editor.text()) || languages.get('tpcl');
-    if (!language.insertCommand) {
+    if (!language.insertImage || !language.insertCommand) {
       refresh({ notices: [diag.warning(`El lenguaje de la etiqueta (${language.name}) no admite insertar imágenes en el código: la imagen es solo una vista previa`)] });
       return;
     }

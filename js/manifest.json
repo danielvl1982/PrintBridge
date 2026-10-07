@@ -48,6 +48,7 @@
   "js/components/image/overlay.js",
   "js/components/image/index.js",
   "js/languages/tpcl.js",
+  "js/languages/tspl-edit.js",
   "js/languages/tspl.js",
   "js/view.js",
   "js/drawing.js",

@@ -93,10 +93,12 @@ test('the configuration offers 203 and 300 dpi, 203 first (the TPCL default)', (
   assert.deepEqual([...PB.config.resolutions], [203, 300]);
 });
 
-test('TSPL has none of the optional editing hooks but the size ones, so the app takes its absent-hook paths', () => {
-  for (const hook of ['moveItem', 'updateItem', 'describeItem', 'componentTemplates', 'buildComponent', 'insertCommand']) {
-    assert.equal(tspl[hook], undefined, hook);
+test('TSPL has the editing and palette hooks, but not the image insertion (TPCL only)', () => {
+  for (const hook of ['moveItem', 'updateItem', 'describeItem', 'insertCommand', 'componentTemplates', 'buildComponent']) {
+    assert.equal(typeof tspl[hook], 'function', hook);
   }
+  assert.ok(!tspl.insertImage);
+  assert.equal(tpcl.insertImage, true);
   // TSPL writes the label size (SIZE/GAP)
   for (const hook of ['sizeCommands', 'applySize']) assert.equal(typeof tspl[hook], 'function', hook);
   // TPCL keeps all of them

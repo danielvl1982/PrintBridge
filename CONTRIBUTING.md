@@ -29,7 +29,8 @@ Open `index.html` in a browser to try the app. There is nothing to install.
   register it in the component's `index.js` as `languages: { tpcl, tspl, <lang> }`. The language file in `js/languages/<lang>.js` builds its handler table
   with `PB.composeSlices('<lang>', helpers, { handlers })`, which collects the slices registered for that language (list the slice files before the language file in the manifest).
   Hooks for editing (`moveItem`, `updateItem`, `describeItem`, `componentTemplates`, `buildComponent`, `insertCommand`, `applySize`) are optional: the app
-  disables moving, the properties panel, the palette and size writing for a language that lacks them (TSPL writes only the size: `SIZE` and `GAP`).
+  disables moving, the properties panel, the palette and size writing for a language that lacks them (TPCL and TSPL have them all; the image entry needs the extra `insertImage: true`, which only TPCL sets, see `js/core/languages.js`).
+  A slice gets the palette entry by returning `build(text, point, options)` from its factory; TSPL's slices use the shared helpers `dropDots`, `itemRotation`, `freePlaceholder` and `insertCommand` of `js/languages/tspl.js`.
 - Label sizes: `config.sizes` is a language-agnostic catalog of standard sizes (`{ id, name, w, h, p }` in mm, pitch = height + 3), with no
   printer data. The drawing always follows the size the label declares (`PB.sizes.view`); the Formato row shows it and writes edits back through the
   language's `applySize`, which must only write what declares the size (TPCL: `{D…|}`, never `{AX…|}`).

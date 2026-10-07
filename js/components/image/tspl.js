@@ -71,6 +71,8 @@
     return {
       // emit(item, ctx) -> the BITMAP command of an image item
       emit,
+      // Move: BITMAP x,y are arguments 0 and 1 (dots); only the header changes, the payload bytes are never touched
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BITMAP', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       handlers: [
         {
           // BITMAP x,y,widthBytes,heightDots,mode,<binary>

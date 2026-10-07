@@ -390,6 +390,7 @@
     sizeCommands,
     applySize,
     insertCommand,
+    insertImage: true, // the app writes the preview image as a TPCL SG command (images.buildSG); see js/core/languages.js
     moveItem,
     updateItem,
     describeItem,

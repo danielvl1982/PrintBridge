@@ -11,7 +11,7 @@
  * Emit (the inverse): `emit(item, ctx)` writes QRCODE x,y,<ecc>,<cell dots>,A,0,"data": mode A, rotation 0 (the model has
  * none), unknown ecc -> M (warning), cell = round(cell / dot) clamped 1..10 (warning once when clamped).
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
- *   factory(helpers) -> { handlers, emit }. Registered by js/components/qr/index.js as `languages: { tpcl, tspl }`.
+ *   factory(helpers) -> { handlers, emit, build, coordinates, editable }. Registered by js/components/qr/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -70,7 +70,19 @@
   }
 
   function tspl(helpers) {
-    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData } = helpers;
+    const {
+      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField,
+      insertCommand, freePlaceholder, dropDots,
+    } = helpers;
+
+    /**
+     * Adds QRCODE x,y,M,4,A,0,"<#QR{k}#>" at the drop point. The rotation is always 0, like the TPCL template: the viewer
+     * draws QR codes unrotated, so a rotated one would not look upright in a rotated view and would only add a diagnostic.
+     */
+    function build(text, point, options) {
+      const { x, y } = dropDots(text, point, options);
+      return insertCommand(text, `QRCODE ${x},${y},${DEFAULT_ECC},${DEFAULT_CELL},A,0,${quoted(freePlaceholder(text, 'QR'))}`);
+    }
 
     /** QRCODE x,y,ecc,cell,A,0,"data" of a qr item. */
     function emit(item, ctx) {
@@ -87,9 +99,31 @@
       return `QRCODE ${x},${y},${ECC_LEVELS[eccKey] ?? DEFAULT_ECC},${cell},A,0,${quoted(safeData(ctx, item.data))}`;
     }
 
+    /** ECC level: an unquoted letter L/M/Q/H (argument 2); anything else is left alone. */
+    const eccField = {
+      key: 'ecc', label: 'Corrección de errores', type: 'select', arg: 2,
+      options: Object.keys(ECC_LEVELS).map(value => ({ value, label: value })),
+      model: item => item.ecc,
+      read: a => { const v = a.raw.toUpperCase(); return v in ECC_LEVELS ? v : undefined; },
+      write: v => (typeof v === 'string' && v.toUpperCase() in ECC_LEVELS ? v.toUpperCase() : null),
+    };
+
     return {
       // emit(item, ctx) -> the QRCODE command of a qr item
       emit,
+      // build(text, point, options) -> text with a new QRCODE command (palette)
+      build,
+      // Move: QRCODE x,y are arguments 0 and 1 (dots)
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'QRCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
+      // Properties: ECC level, cell width and rotation (mode, extra options and content are never touched)
+      editable: [{
+        applies: (item, cmd) => (cmd ? cmd.name === 'QRCODE' : item.ref === 'QRCODE'),
+        fields: [
+          eccField,
+          numberField('cell', 'Celda (puntos)', 3, 1, MAX_CELL, item => item.native && item.native.cell),
+          selectField('rotation', 'Rotación', 5, [0, 90, 180, 270], item => item.native && item.native.rotation),
+        ],
+      }],
       handlers: [
         {
           // QRCODE x,y,ECClevel,cellWidth,mode,rotation,[J#,][M#,][S#,][X#,][L#,]"content"
