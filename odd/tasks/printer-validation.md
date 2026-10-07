@@ -18,6 +18,14 @@ Several TPCL details come from the app's own reference examples and the manuals,
       (in 0.1 mm, e.g. `{D0630,1000,0600|}` for a 3 mm gap). Follow-up feature once P2 is verified: derive the pitch from `GAP`
       (display already does it: sizes.declaredPitch) and the reverse (pitch - height -> `GAP`) in the emitters.
 - [ ] P4 If P2/P3 show problems, record the observed behaviour here (what printed, what the printer did) and fix the emitter.
+- [ ] P5 TSPL `DIRECTION 0`: the viewer draws it as DIRECTION 1 (info diagnostic). Research (official manual, only partly readable)
+      could NOT confirm which value is the default/upright one; one secondary report (a TSC ML241P job) suggests DIRECTION 0 prints
+      180 degrees from upright. Implementing the flip blind would show every label upside down if the assumption is wrong.
+      Check on a real TSC printer: print an asymmetric TEXT at (0,0) with DIRECTION 0 and with DIRECTION 1 (or read the manual's
+      DIRECTION figures). If DIRECTION 0 is the 180-degree one, implement: effective view rotation = (user rotation + 180 when
+      DIRECTION 0) % 360 in js/app.js options()/refresh/insertComponent (view.js, drawing.js, ui.js already handle 180), emit
+      `DIRECTION n[,m]` from `native` instead of the fixed `DIRECTION 1` (tspl.js headerLines), update the info message and the two
+      "edited as DIRECTION 1" test wordings; mirror (m) needs its own transform and is out of the first change. TPCL has no direction.
 
 ## Expected file (TSPL example -> TPCL, 203 dpi)
 ```
