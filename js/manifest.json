@@ -2,6 +2,7 @@
   "js/lib/qrcode-generator.min.js",
   "js/config.js",
   "js/components/registry.js",
+  "js/components/compose.js",
   "js/core/model.js",
   "js/core/diagnostics.js",
   "js/core/units.js",

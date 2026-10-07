@@ -38,6 +38,8 @@
  * factory once with its helpers object and composes the result with the kinds that are not migrated yet.
  * Slice file layout, loaded in this order (see js/manifest.json): <id>/render.js and <id>/<language>.js publish their
  * pieces on PB.slices.<id>; <id>/index.js is the only file that calls register().
+ * A language composes its slices with PB.composeSlices(langId, helpers, base) (js/components/compose.js, loaded right after
+ * this file; it is on PB, not on PB.components, because that registry object is frozen).
  * Consumers (languages, drawing, validator, palette) look slices up with get(kind) or forItem(item) and fall back to
  * their own tables for kinds with no slice. This file depends on nothing and must load before any slice.
  */

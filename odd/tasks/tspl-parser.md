@@ -35,7 +35,7 @@ The user's TEC SV4T is TPCL (already supported). TSC TTP uses TSPL and is the ne
 - Classic scripts/IIFE/`PB`, manifest + index.html identical order, tests via `loadUpTo`. Code/comments English, UI strings Spanish. Test-first with `node --test` (baseline 243/243). Planning heuristic ~400 changed lines per task, not a cap.
 
 ## Tasks
-- [ ] T1 Generic slice composition helper (`composeSlices(langId, helpers)`) used by tpcl.js; no behavior change.
+- [x] T1 Generic slice composition helper (`composeSlices(langId, helpers)`) used by tpcl.js; no behavior change.
 - [ ] T2 `js/languages/tspl.js` skeleton: detect, tokenizer (quotes, CRLF, BITMAP binary by length), ctx, SIZE/GAP/DIRECTION/REFERENCE/SHIFT, ignored commands, unknown-command warnings, source spans, dpi; registration + tests.
 - [ ] T3 text slice `tspl.js`: TEXT and BLOCK (fonts, multipliers, rotation, alignment).
 - [ ] T4 barcode slice `tspl.js`: BARCODE (type map, human readable, rotation, module).
@@ -52,4 +52,5 @@ The user's TEC SV4T is TPCL (already supported). TSC TTP uses TSPL and is the ne
 
 ## Progress
 - Research done: manual v3.0 read directly (agent report), sample real TSPL files requested from the user.
-- Next: T1.
+- T1 done: RED observed (compose.js missing from manifest, test file failed to load), then GREEN; `node --test`: 248/248 pass (243 + 5 new), fail 0. Added `js/components/compose.js` (`PB.composeSlices`, on PB because `PB.components` is frozen), registered in manifest.json and index.html after registry.js; tpcl.js now composes through it with its legacy tables as `base`. Not yet committed.
+- Next: T2.

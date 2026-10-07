@@ -269,22 +269,17 @@
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
   });
 
-  /** Slices that provide TPCL hooks (js/components/*), with their hooks built from SLICE_HELPERS, in `order`. */
-  const SLICES = PB.components.all()
-    .filter(def => def.languages && def.languages.tpcl)
-    .map(def => ({ id: def.kind, order: def.order, modelKind: def.modelKind || def.kind, label: def.label, hooks: def.languages.tpcl(SLICE_HELPERS) }));
-
-  // The tables above hold the kinds not migrated to a slice yet; each ALL_* adds the slices' entries after them.
-  const ALL_HANDLERS = [...HANDLERS, ...SLICES.flatMap(s => s.hooks.handlers || [])];
-  const ALL_COORDINATES = [...COORDINATES, ...SLICES.flatMap(s => s.hooks.coordinates || [])];
-  const ALL_MOVABLE = [...MOVABLE, ...SLICES.filter(s => s.hooks.coordinates).map(s => s.modelKind)];
-  const ALL_EDITABLE = [...EDITABLE, ...SLICES.flatMap(s => s.hooks.editable || [])];
-  const ALL_RULES = [...RULES, ...SLICES.flatMap(s => s.hooks.rules || [])];
-  /**
-   * Component kinds of the palette (neutral), in display order (SLICES are already sorted by `order`). A slice without a
-   * `build` hook (the image: the app inserts it from a picture) is not a template.
-   */
-  const COMPONENTS = Object.freeze(SLICES.filter(s => s.hooks.build).map(({ id, label }) => ({ kind: id, label })));
+  // The tables above hold the kinds not migrated to a slice yet; the generic composition (js/components/compose.js)
+  // adds the slices' hooks after them, in slice `order`.
+  const COMPOSED = PB.composeSlices('tpcl', SLICE_HELPERS, { handlers: HANDLERS, coordinates: COORDINATES, movable: MOVABLE, editable: EDITABLE, rules: RULES });
+  const SLICES = COMPOSED.slices;
+  const ALL_HANDLERS = COMPOSED.handlers;
+  const ALL_COORDINATES = COMPOSED.coordinates;
+  const ALL_MOVABLE = COMPOSED.movable;
+  const ALL_EDITABLE = COMPOSED.editable;
+  const ALL_RULES = COMPOSED.rules;
+  /** Component kinds of the palette (neutral), in display order. A slice without a `build` hook (the image) is not a template. */
+  const COMPONENTS = COMPOSED.components;
 
   /** Editable shape of an item (null: not editable) and, with a text and a source, its match over the command. */
   function editableOf(item, text) {
