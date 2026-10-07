@@ -18,16 +18,6 @@
   <button id="btnExample">Cargar ejemplo</button>
 </header>
 
-<div class="toolbar toolbar--secondary">
-  <label title="Tamaño de la etiqueta en la impresora. 'Según la etiqueta' usa el tamaño que declara el archivo">Tamaño etiqueta
-    <select id="size"></select>
-  </label>
-  <label>Ancho <input id="szW" type="number" step="0.1" min="5"> mm</label>
-  <label>Alto <input id="szH" type="number" step="0.1" min="5"> mm</label>
-  <label title="Distancia entre el inicio de una etiqueta y la siguiente (alto + separación)">Paso <input id="szP" type="number" step="0.1" min="5"> mm</label>
-  <button id="btnApply" title="Escribe este tamaño en el código de la etiqueta">Aplicar a la etiqueta</button>
-</div>
-
 <input id="imageFile" type="file" accept="image/*" hidden>
 
 <main>
@@ -48,6 +38,15 @@
     </section>
   </div>
   <div class="stage">
+    <div class="size-row">
+    <label title="Tamaño de la etiqueta en la impresora. 'Según la etiqueta' usa el tamaño que declara el archivo">Tamaño etiqueta
+      <select id="size"></select>
+    </label>
+    <label>Ancho <input id="szW" type="number" step="0.1" min="5"> mm</label>
+    <label>Alto <input id="szH" type="number" step="0.1" min="5"> mm</label>
+    <label title="Distancia entre el inicio de una etiqueta y la siguiente (alto + separación)">Paso <input id="szP" type="number" step="0.1" min="5"> mm</label>
+    <button id="btnApply" title="Escribe este tamaño en el código de la etiqueta">Aplicar a la etiqueta</button>
+    </div>
     <div class="view-row">
     <label>Resolución <select id="dpi"></select></label>
     <label title="Ajusta el tamaño de las fuentes si en la impresión real salen más grandes o más pequeñas">Escala texto

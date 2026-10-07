@@ -79,12 +79,38 @@ test('the six view controls sit in the stage, before the component strip', () =>
 
 test('the toolbars no longer hold the view controls', () => {
   const header = html.slice(at('<header class="toolbar">'), at('</header>'));
-  const secondary = html.slice(at('<div class="toolbar toolbar--secondary">'), at('<input id="imageFile"'));
+  // P1c changed the premise: the secondary toolbar no longer exists, so only the header is checked here.
   for (const id of VIEW_IDS) {
     assert.ok(!header.includes('id="' + id + '"'), id + ' still in the header');
-    assert.ok(!secondary.includes('id="' + id + '"'), id + ' still in the secondary toolbar');
   }
   for (const id of ['btnOpen', 'file', 'example', 'btnExample']) assert.ok(header.includes('id="' + id + '"'), id + ' missing from the header');
+});
+
+const SIZE_IDS = ['size', 'szW', 'szH', 'szP', 'btnApply'];
+
+test('the five label-size controls sit in the stage size row, before the view row', () => {
+  const stage = at('<div class="stage">');
+  const sizeRow = at('<div class="size-row">');
+  const viewRow = at('<div class="view-row">');
+  assert.ok(stage < sizeRow && sizeRow < viewRow, 'size row must be the first row of .stage');
+  for (const id of SIZE_IDS) {
+    assert.equal(countId(id), 1, id);
+    const i = at('id="' + id + '"');
+    assert.ok(sizeRow < i && i < viewRow, id + ' must be inside .size-row before .view-row');
+  }
+  assert.ok(html.includes('Tamaño etiqueta'));
+});
+
+test('stage DOM order: size row, view row, strip, properties bar, preview', () => {
+  const marks = ['<div class="size-row">', '<div class="view-row">', '<div class="strip"', 'id="propsPanel"', '<section class="panel preview">'].map(at);
+  for (let i = 1; i < marks.length; i++) assert.ok(marks[i - 1] < marks[i], 'order broken at index ' + i);
+});
+
+test('no secondary toolbar remains and the header holds none of the size controls', () => {
+  assert.ok(!html.includes('toolbar--secondary'));
+  assert.equal((html.match(/class="toolbar/g) || []).length, 1, 'the header is the only toolbar');
+  const header = html.slice(at('<header class="toolbar">'), at('</header>'));
+  for (const id of SIZE_IDS) assert.ok(!header.includes('id="' + id + '"'), id + ' still in the header');
 });
 
 test('the app is called "Print Bridge" in the title and the header', () => {
