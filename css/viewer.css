@@ -14,6 +14,9 @@
 
 * { box-sizing: border-box; }
 
+/* Class rules that set `display` (flex/grid) would otherwise defeat the `hidden` attribute the scripts toggle */
+[hidden] { display: none !important; }
+
 body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
 
 /* Toolbars */
@@ -36,6 +39,8 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 .column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+/* Right-hand stage: action strip, properties bar and the label preview, top to bottom */
+.stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 small { color: var(--muted); }
 
@@ -65,21 +70,33 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .convert-note { color: var(--warn); }
 .convert-status { color: var(--muted); }
 
+/* Action strip: the component palette as a compact horizontal row (palette.js hides this wrapper when the language has no templates) */
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+.strip-title { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+.strip .palette { gap: 6px; }
+.strip .palette-item { padding: 3px 8px; font-size: 12px; }
+
 /* Preview container */
 .preview { min-width: 0; }
 .preview .bar { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 6px; font-family: Consolas, monospace; }
-/* The maximum height avoids vertical scrolling with rotated (tall and narrow) labels: the drawing is centered and fitted */
-#svgwrap svg { width: 100%; height: auto; max-height: calc(100vh - 140px); display: block; background: #f4f5f7; }
+/* The maximum height avoids vertical scrolling with rotated (tall and narrow) labels: the drawing is centered and fitted.
+   300px = 140 (the two toolbars ~92 + main padding 32 + preview header ~16) + 48 (action strip) + 48 (properties bar min-height)
+   + 24 (two 12px stage gaps) + ~40 (preview caption, padding and borders). */
+#svgwrap svg { width: 100%; height: auto; max-height: calc(100vh - 300px); display: block; background: #f4f5f7; }
 
-/* Properties panel: one row per field, label on the left and the control on the right */
-.props { display: grid; grid-template-columns: 1fr; gap: 6px; }
-.props label { display: grid; grid-template-columns: minmax(90px, 1fr) 1.4fr; gap: 8px; align-items: center; color: var(--muted); }
+/* Properties bar: ONE compact row (title + fields inline), wrapping on narrow widths.
+   min-height 48px reserves the row's height (title/empty state/fields are ~30px plus the 6px+6px padding and borders)
+   so the preview below does not jump when an object is selected or deselected. */
+.props-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 48px; }
+.props-bar h2 { margin: 0; white-space: nowrap; }
+.props-bar .empty { margin: 0; }
+.props { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.props label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .props input, .props select { font: inherit; padding: 2px 4px; min-width: 0; }
-.props input[type=number] { width: 80px; }
+.props input[type=number] { width: 72px; }
 .props input[type=range] { width: 100px; padding: 0; }
-.props input[type=checkbox] { justify-self: start; }
 .props input:disabled { background: #eef0f3; color: var(--muted); }
 .props-input { display: flex; gap: 6px; align-items: center; }
 .props-input output { min-width: 3.2em; color: var(--text); }
-.props-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.props-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .props-kind { text-transform: none; letter-spacing: 0; font-weight: 400; }

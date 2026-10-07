@@ -20,7 +20,7 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
 - Responsive: usable down to narrow widths (wrapping), `prefers` nothing fancy; no new libraries; English code/comments, Spanish UI text. Baseline `node --test` 574/574.
 
 ## Tasks
-- [ ] P1 Action strip above the preview: palette horizontal + properties inline bar (CSS + HTML move, minimal JS only if panel visibility toggling needs it). User checks in the browser before P2.
+- [x] P1 (structure verified by tests/layout-structure.test.js; visual check pending in the browser) Action strip above the preview: palette horizontal + properties inline bar (CSS + HTML move, minimal JS only if panel visibility toggling needs it). User checks in the browser before P2.
 - [ ] P2 Left column tabs: Código / Variables / Avisos (+ badge count), viewport-height column.
 - [ ] P3 "Convertir…" dialog from the top bar (reuse js/convert-panel.js unchanged where possible).
 - [ ] P4 Top bar merge and grouping, sticky preview, final polish and README screenshots/notes.
@@ -32,4 +32,13 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
 - Sequential delegated writers; native review per commit group (UI files are not covered by Node tests: the review matters).
 
 ## Progress
-- Design agreed. Next: P1.
+- Design agreed.
+- P1 written (not committed): node --test 579/579 (574 baseline + 5 in tests/layout-structure.test.js); RED observed first (3 of 5 failed). No JS change was needed: js/palette.js:43 hides `container.parentElement`, which is now the `.strip` wrapper.
+  - index.html:41-89: new `<div class="stage">` right of the column; inside, in order: `.strip` wrapper (starts `hidden`, holds `.strip-title` "Componentes" + `ul#palette`), `section#propsPanel.props-bar` (same ids, titles and inputs, moved unchanged), the existing `.preview` section. Componentes and Propiedades panels removed from the left column (it keeps Código, Convertir, Variables, Avisos).
+  - css/viewer.css:17-18: global `[hidden] { display: none !important; }` (needed because class rules with `display: flex/grid` defeat the attribute; the old `.props { display: grid }` already did, so the empty form/overlay were not truly hidden before).
+  - css/viewer.css:43: `.stage` flex column, gap 12px.
+  - css/viewer.css:74-77: `.strip`, `.strip-title`, compact `.strip .palette-item` (label.css still provides the item look).
+  - css/viewer.css:85: preview SVG `max-height: calc(100vh - 300px)` (was 140px; +48 strip +48 bar +24 gaps +~40 caption/padding), calculation in the comment above it.
+  - css/viewer.css:87-101: properties bar as one flex row (`.props-bar`, `min-height: 48px` reserved), `.props` grid -> wrapping flex, `label` text and control side by side, compact number inputs (72px); removed the grid-only `checkbox justify-self` rule.
+  - tests/layout-structure.test.js: ids exactly once, DOM order palette < propsPanel < preview inside the stage, left column free of palette/props, palette hidden-wrapper contract matches js/palette.js and js/app.js.
+  - Browser checklist: palette buttons visible and clickable (TPCL); palette strip hidden for TSPL; drag from palette onto the label still works; select an item -> bar fills and edits; deselect -> empty state "Selecciona un objeto" without the preview moving; image overlay controls appear in the bar (X, Y, Ancho, Umbral, buttons) and only for an image; narrow window wraps without breakage; no unexpected page scroll with the TPCL spool example; the 300px SVG max-height fits at your usual window height (tell me if too small/large).

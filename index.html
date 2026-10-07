@@ -40,11 +40,27 @@
 
 <main>
   <div class="column">
-    <section class="panel" hidden>
-      <h2>Componentes</h2>
-      <ul id="palette" class="palette"></ul>
+    <section class="panel">
+      <h2>Código de etiqueta</h2>
+      <textarea id="src" spellcheck="false" placeholder="Pega aquí el contenido de la etiqueta (o arrastra el archivo)"></textarea>
+      <small>Pega el texto, arrastra un archivo aquí o usa “Abrir archivo…”. Clic en un elemento del dibujo selecciona su línea.</small>
     </section>
-    <section class="panel" id="propsPanel">
+    <section class="panel convert" id="convert"></section>
+    <section class="panel">
+      <h2>Variables (#NOMBRE# / &lt;#NOMBRE#&gt;)</h2>
+      <div id="vars" class="vars"></div>
+    </section>
+    <section class="panel">
+      <h2>Avisos</h2>
+      <ul id="msgs" class="msgs"></ul>
+    </section>
+  </div>
+  <div class="stage">
+    <div class="strip" hidden>
+      <span class="strip-title">Componentes</span>
+      <ul id="palette" class="palette"></ul>
+    </div>
+    <section class="panel props-bar" id="propsPanel">
       <h2>Propiedades <span id="propsKind" class="props-kind"></span></h2>
       <p id="propsEmpty" class="empty">Selecciona un objeto</p>
       <div id="propsForm" class="props" hidden></div>
@@ -64,26 +80,12 @@
         </div>
       </div>
     </section>
-    <section class="panel">
-      <h2>Código de etiqueta</h2>
-      <textarea id="src" spellcheck="false" placeholder="Pega aquí el contenido de la etiqueta (o arrastra el archivo)"></textarea>
-      <small>Pega el texto, arrastra un archivo aquí o usa “Abrir archivo…”. Clic en un elemento del dibujo selecciona su línea.</small>
-    </section>
-    <section class="panel convert" id="convert"></section>
-    <section class="panel">
-      <h2>Variables (#NOMBRE# / &lt;#NOMBRE#&gt;)</h2>
-      <div id="vars" class="vars"></div>
-    </section>
-    <section class="panel">
-      <h2>Avisos</h2>
-      <ul id="msgs" class="msgs"></ul>
+    <section class="panel preview">
+      <div class="bar"><span id="dims"></span><span id="cursor">x: –  y: –</span></div>
+      <div id="svgwrap"></div>
+      <small>Unidades en 0,1 mm (rejilla cada 100 = 10 mm). Las fuentes de la impresora se simulan con Arial/Times/Courier: los anchos de texto son aproximados. Code128, Code39, ITF y QR se generan reales.</small>
     </section>
   </div>
-  <section class="panel preview">
-    <div class="bar"><span id="dims"></span><span id="cursor">x: –  y: –</span></div>
-    <div id="svgwrap"></div>
-    <small>Unidades en 0,1 mm (rejilla cada 100 = 10 mm). Las fuentes de la impresora se simulan con Arial/Times/Courier: los anchos de texto son aproximados. Code128, Code39, ITF y QR se generan reales.</small>
-  </section>
 </main>
 
 <!-- Order matters: each file uses the previous ones. -->
