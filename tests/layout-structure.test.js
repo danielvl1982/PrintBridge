@@ -264,3 +264,14 @@ test('the Componentes title has the same typography as the Propiedades heading (
   }
   assert.equal(title.get('font-weight'), '700', 'bold like a browser h2');
 });
+
+test('the size row and the view row have a title with the same style as Componentes (Formato, Vista)', () => {
+  for (const [row, title, firstControl] of [['size-row', 'Formato', 'id="size"'], ['view-row', 'Vista', 'id="dpi"']]) {
+    const start = html.indexOf('<div class="' + row + '">');
+    assert.ok(start >= 0, row + ' exists');
+    const tag = '<span class="strip-title">' + title + '</span>';
+    const at = html.indexOf(tag, start);
+    assert.ok(at > start, row + ' has the title ' + title);
+    assert.ok(at < html.indexOf(firstControl, start), 'the title comes before the first control of ' + row);
+  }
+});

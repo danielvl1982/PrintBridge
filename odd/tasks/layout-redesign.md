@@ -90,3 +90,4 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
 ## Open ideas
 - Optional: load the example on select and drop the button.
 - P1i done (user request): the "Componentes" title (`.strip-title`) now has the same typography as the "Propiedades" heading (13px, bold, uppercase, letter-spacing .04em, muted), checked by a CSS-parsing structural test; node --test 596/596. Browser check: both titles look identical.
+- P1j done (user request): titles "Formato" (size row) and "Vista" (view row) added with the same `.strip-title` style as Componentes/Propiedades; structural test; browser check: both rows show their title and still fit one line at normal width.
