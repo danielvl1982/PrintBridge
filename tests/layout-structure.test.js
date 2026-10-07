@@ -174,3 +174,11 @@ test('the file input keeps its attributes and the file controls keep their text'
     '<button id="btnExample">Cargar ejemplo</button>',
   ]) assert.ok(html.includes(piece), piece);
 });
+
+test('the Convertir panel sits right below the Variables panel in the left column (Código, Variables, Convertir, Avisos)', () => {
+  const order = ['id="src"', 'id="vars"', 'id="convert"', 'id="msgs"'].map(k => html.indexOf(k));
+  assert.ok(order.every(i => i > 0), 'all four panels exist');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'src, vars, convert, msgs in this DOM order');
+  const column = html.slice(html.indexOf('<div class="column">'), html.indexOf('<div class="stage">'));
+  assert.ok(column.includes('id="convert"'), 'convert stays in the left column');
+});
