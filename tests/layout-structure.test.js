@@ -143,17 +143,39 @@ const FILE_IDS = ['btnOpen', 'file', 'example', 'btnExample'];
 const columnHtml = () => html.slice(at('<div class="column">'), at('<div class="stage">'));
 const sizeRowHtml = () => html.slice(at('<div class="size-row">'), at('<div class="view-row">'));
 
-test('the four file controls sit once in the left column, before #src, and not in the size row', () => {
+// P1g changed the premise: the file controls no longer lead the column in their own row; they live in the Código panel header.
+const codePanelHtml = () => {
   const column = columnHtml();
-  const src = column.indexOf('id="src"');
+  const start = column.indexOf('<section class="panel">');
+  return column.slice(start, column.indexOf('</section>', start));
+};
+
+test('the four file controls sit once in the Código de etiqueta panel, before #src, and not in the size row', () => {
+  const panel = codePanelHtml();
+  assert.ok(panel.includes('<h2>Código de etiqueta</h2>'), 'first column panel is Código de etiqueta');
+  const src = panel.indexOf('id="src"');
   assert.ok(src > 0);
   for (const id of FILE_IDS) {
     assert.equal(countId(id), 1, id);
-    const i = column.indexOf('id="' + id + '"');
-    assert.ok(i >= 0 && i < src, id + ' must be in the left column before #src');
+    const i = panel.indexOf('id="' + id + '"');
+    assert.ok(i >= 0 && i < src, id + ' must be in the Código panel before #src');
     assert.ok(!sizeRowHtml().includes('id="' + id + '"'), id + ' still in the size row');
   }
   assert.ok(!html.includes('row-group'), 'the file/size group wrappers are gone');
+});
+
+test('no file-row remains; the Código panel header holds the title and the actions, with the example pair joined', () => {
+  assert.ok(!html.includes('file-row'), 'file-row is gone');
+  const panel = codePanelHtml();
+  assert.match(panel, /<div class="panel-head">\s*<h2>Código de etiqueta<\/h2>\s*<div class="panel-actions">/);
+  const head = panel.slice(0, panel.indexOf('id="src"'));
+  const group = head.match(/<div class="btn-group">([\s\S]*?)<\/div>/);
+  assert.ok(group, 'btn-group exists');
+  assert.ok(group[1].includes('id="example"') && group[1].includes('id="btnExample"'), 'select and button are in the group');
+  assert.ok(group[1].indexOf('id="example"') < group[1].indexOf('id="btnExample"'), 'button right after the select');
+  assert.ok(!group[1].includes('id="btnOpen"'), 'Abrir archivo is outside the group');
+  assert.ok(head.indexOf('id="btnOpen"') < head.indexOf('id="example"'), 'Abrir archivo before the example select');
+  assert.ok(head.indexOf('id="file"') > head.indexOf('id="btnOpen"') && head.indexOf('id="file"') < head.indexOf('class="btn-group"'), 'hidden input next to Abrir archivo');
 });
 
 test('the size row holds only the five size controls, in order', () => {
@@ -197,11 +219,11 @@ test('the file input keeps its attributes and the file controls keep their text'
   ]) assert.ok(html.includes(piece), piece);
 });
 
-// P1f changed the premise: the file row now leads the column and Avisos left it (column: file row, Código, Variables, Convertir).
-test('the left column order is file row, Código, Variables, Convertir', () => {
-  const order = ['id="btnOpen"', 'id="src"', 'id="vars"', 'id="convert"'].map(k => html.indexOf(k));
-  assert.ok(order.every(i => i > 0), 'all four blocks exist');
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'file row, src, vars, convert in this DOM order');
+// P1g changed the premise: there is no file row any more (its controls are in the Código panel header), so the column is Código, Variables, Convertir.
+test('the left column order is Código, Variables, Convertir', () => {
+  const order = ['id="src"', 'id="vars"', 'id="convert"'].map(k => html.indexOf(k));
+  assert.ok(order.every(i => i > 0), 'all three blocks exist');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'src, vars, convert in this DOM order');
   const column = html.slice(html.indexOf('<div class="column">'), html.indexOf('<div class="stage">'));
   assert.ok(column.includes('id="convert"'), 'convert stays in the left column');
 });

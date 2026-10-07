@@ -18,14 +18,18 @@
 
 <main>
   <div class="column">
-    <section class="file-row">
-      <button id="btnOpen">Abrir archivo…</button>
-      <input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>
-      <label>Ejemplo <select id="example"></select></label>
-      <button id="btnExample">Cargar ejemplo</button>
-    </section>
     <section class="panel">
-      <h2>Código de etiqueta</h2>
+      <div class="panel-head">
+        <h2>Código de etiqueta</h2>
+        <div class="panel-actions">
+          <button id="btnOpen">Abrir archivo…</button>
+          <input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>
+          <div class="btn-group">
+            <label>Ejemplo <select id="example"></select></label>
+            <button id="btnExample">Cargar ejemplo</button>
+          </div>
+        </div>
+      </div>
       <textarea id="src" spellcheck="false" placeholder="Pega aquí el contenido de la etiqueta (o arrastra el archivo)"></textarea>
       <small>Pega el texto, arrastra un archivo aquí o usa “Abrir archivo…”. Clic en un elemento del dibujo selecciona su línea.</small>
     </section>

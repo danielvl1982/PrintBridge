@@ -23,11 +23,8 @@ body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14p
 .toolbar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .toolbar h1 { font-size: 16px; margin: 0 12px 0 0; }
 .toolbar .logo { width: 28px; height: 28px; margin-right: -6px; }
-.toolbar label, .view-row label, .size-row label, .file-row label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-.toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .file-row select { font: inherit; padding: 2px 4px; }
-/* The example select shrinks and wraps inside the 340px column instead of overflowing it */
-.file-row select { min-width: 0; max-width: 100%; }
-.file-row label { min-width: 0; flex-wrap: wrap; }
+.toolbar label, .view-row label, .size-row label, .panel-actions label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .panel-actions select { font: inherit; padding: 2px 4px; }
 .toolbar input[type=number], .view-row input[type=number], .size-row input[type=number] { width: 72px; }
 .toolbar input[type=range] { width: 110px; padding: 0; }
 .toolbar output { min-width: 3.2em; color: var(--text); }
@@ -45,8 +42,17 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 /* Right-hand stage: size row, view row, action strip, properties bar and the label preview, top to bottom */
 .stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 /* Label-size row (first row of the stage) and view options row below it: same panel row, same controls look as the toolbar */
-.size-row, .view-row, .file-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 38px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-/* File row: first block of the left column, directly above the code box (P1f); same compact row look as the stage rows */
+.size-row, .view-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 38px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+/* Code panel header (P1g): title on the left, file actions on the right, wrapping inside the narrow column.
+   The bottom margin lives here (not on the h2) so the textarea spacing is unchanged. */
+.panel-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 8px; }
+.panel .panel-head h2 { margin: 0; }
+.panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+/* Example pair: label + select + button read as one joined control (square inner corners, shared border) */
+.btn-group { display: flex; align-items: stretch; min-width: 0; max-width: 100%; }
+.panel-actions .btn-group label { min-width: 0; gap: 4px; }
+.panel-actions .btn-group select { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 4px 0 0 4px; }
+.panel-actions .btn-group button { margin-left: -1px; border-radius: 0 4px 4px 0; white-space: nowrap; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 small { color: var(--muted); }
 
