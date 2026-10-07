@@ -44,7 +44,9 @@ test('the left column no longer holds the palette or the properties', () => {
   for (const id of ['palette', 'propsPanel', 'propsKind', 'propsEmpty', 'propsForm', 'propsOverlay']) {
     assert.ok(!column.includes('id="' + id + '"'), id + ' still in the column');
   }
-  for (const id of ['src', 'convert', 'vars', 'msgs']) assert.ok(column.includes('id="' + id + '"'), id + ' missing from the column');
+  // P1f changed the premise: Avisos (#msgs) moved to the stage, so the column keeps src, vars and convert only.
+  for (const id of ['src', 'convert', 'vars']) assert.ok(column.includes('id="' + id + '"'), id + ' missing from the column');
+  assert.ok(!column.includes('id="msgs"'), 'msgs must not be in the column');
 });
 
 test('the palette keeps its visibility contract: palette.js hides the parent, which starts hidden', () => {
@@ -137,19 +139,39 @@ test('the logo is used in the header and as favicon, and the file is a safe SVG'
 
 const FILE_IDS = ['btnOpen', 'file', 'example', 'btnExample'];
 
-test('the four file controls sit in the size row, in a leading group before the size controls', () => {
-  const sizeRow = at('<div class="size-row">');
-  const viewRow = at('<div class="view-row">');
-  const sizeSelect = at('id="size"');
-  const fileGroup = at('row-group--file');
-  const sizeGroup = at('row-group--size');
-  assert.ok(sizeRow < fileGroup && fileGroup < sizeGroup && sizeGroup < viewRow, 'groups inside .size-row, file group first');
+// P1f replaced the P1d test (file controls in the size row) with the two tests below.
+const columnHtml = () => html.slice(at('<div class="column">'), at('<div class="stage">'));
+const sizeRowHtml = () => html.slice(at('<div class="size-row">'), at('<div class="view-row">'));
+
+test('the four file controls sit once in the left column, before #src, and not in the size row', () => {
+  const column = columnHtml();
+  const src = column.indexOf('id="src"');
+  assert.ok(src > 0);
   for (const id of FILE_IDS) {
     assert.equal(countId(id), 1, id);
-    const i = at('id="' + id + '"');
-    assert.ok(fileGroup < i && i < sizeGroup && i < sizeSelect, id + ' must be in the file group before #size');
+    const i = column.indexOf('id="' + id + '"');
+    assert.ok(i >= 0 && i < src, id + ' must be in the left column before #src');
+    assert.ok(!sizeRowHtml().includes('id="' + id + '"'), id + ' still in the size row');
   }
-  assert.ok(sizeGroup < sizeSelect, '#size lives in the size group');
+  assert.ok(!html.includes('row-group'), 'the file/size group wrappers are gone');
+});
+
+test('the size row holds only the five size controls, in order', () => {
+  const row = sizeRowHtml();
+  const ids = [...row.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
+  assert.deepEqual(ids, SIZE_IDS);
+});
+
+test('Avisos (#msgs) is the last element of the stage, right after the preview section, and not in the column', () => {
+  assert.equal(countId('msgs'), 1);
+  const msgs = at('id="msgs"');
+  const preview = at('<section class="panel preview">');
+  const previewEnd = html.indexOf('</section>', preview);
+  const stageEnd = html.indexOf('</main>');
+  assert.ok(previewEnd < at('<section class="panel msgs-panel">') && at('<section class="panel msgs-panel">') < msgs && msgs < stageEnd);
+  assert.ok(!columnHtml().includes('id="msgs"'));
+  // Nothing but closing tags between the Avisos section and the end of the stage.
+  assert.match(html.slice(msgs, stageEnd), /^id="msgs" class="msgs"><\/ul>\s*<\/section>\s*<\/div>\s*$/);
 });
 
 test('the header holds only the logo and the title', () => {
@@ -175,10 +197,11 @@ test('the file input keeps its attributes and the file controls keep their text'
   ]) assert.ok(html.includes(piece), piece);
 });
 
-test('the Convertir panel sits right below the Variables panel in the left column (Código, Variables, Convertir, Avisos)', () => {
-  const order = ['id="src"', 'id="vars"', 'id="convert"', 'id="msgs"'].map(k => html.indexOf(k));
-  assert.ok(order.every(i => i > 0), 'all four panels exist');
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'src, vars, convert, msgs in this DOM order');
+// P1f changed the premise: the file row now leads the column and Avisos left it (column: file row, Código, Variables, Convertir).
+test('the left column order is file row, Código, Variables, Convertir', () => {
+  const order = ['id="btnOpen"', 'id="src"', 'id="vars"', 'id="convert"'].map(k => html.indexOf(k));
+  assert.ok(order.every(i => i > 0), 'all four blocks exist');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'file row, src, vars, convert in this DOM order');
   const column = html.slice(html.indexOf('<div class="column">'), html.indexOf('<div class="stage">'));
   assert.ok(column.includes('id="convert"'), 'convert stays in the left column');
 });
