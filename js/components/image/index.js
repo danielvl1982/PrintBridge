@@ -6,7 +6,7 @@
 (function (PB) {
   'use strict';
 
-  const { render, tpcl, overlay } = PB.slices.image;
+  const { render, tpcl, tspl, overlay } = PB.slices.image;
 
   PB.components.register({
     kind: 'image',
@@ -19,6 +19,6 @@
     render,
     // File-picker half of the preview overlay (the app creates one picker and owns the overlay state)
     overlay,
-    languages: { tpcl },
+    languages: { tpcl, tspl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

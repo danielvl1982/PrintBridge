@@ -41,6 +41,7 @@
   "js/components/image/codec.js",
   "js/components/image/render.js",
   "js/components/image/tpcl.js",
+  "js/components/image/tspl.js",
   "js/components/image/panel.js",
   "js/components/image/overlay.js",
   "js/components/image/index.js",
