@@ -6,6 +6,7 @@
   "js/core/model.js",
   "js/core/diagnostics.js",
   "js/core/units.js",
+  "js/core/emit.js",
   "js/core/barcode-data.js",
   "js/core/sources.js",
   "js/core/variables.js",

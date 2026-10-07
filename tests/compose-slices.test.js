@@ -52,5 +52,5 @@ test('components only lists the slices with a build hook', () => {
 
 test('an unknown language returns empty lists and a missing base is allowed', () => {
   const out = PB.composeSlices('nope', helpers);
-  assert.deepEqual(out, { slices: [], handlers: [], coordinates: [], movable: [], editable: [], rules: [], components: [] });
+  assert.deepEqual(out, { slices: [], handlers: [], coordinates: [], movable: [], editable: [], rules: [], components: [], emitters: {} });
 });

@@ -5,7 +5,8 @@
  *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text,
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
  *     updateItem?(text, item, changes, { dpi }) -> text, describeItem?(item, text?) -> { kind, fields },
- *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text }
+ *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text,
+ *     emit?(model, { dpi }) -> { text, diagnostics } }
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
  * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
@@ -20,6 +21,9 @@
  * buildComponent (optional): the text with a new component of that kind whose top-left corner is at x/y (0.1 mm,
  *   clamped); unchanged for an unknown kind or an invalid point. viewRotation (0/90/180/270 degrees clockwise, default 0)
  *   is the current view rotation: the item is written rotated (360 - viewRotation) % 360 so it looks upright in that view.
+ * emit (optional): the printer-language text for a neutral model, plus the diagnostics (fidelity warnings) found while
+ *   writing it. The language owns header, trailer, id numbering and ordering; items come from the slices' `emit` hooks
+ *   (see PB.composeSlices). PB.languages.emit(id, model, opts) calls it and normalizes the result.
  * Optional size fields (used by PB.sizes; without them the language neither checks nor writes the size):
  *   - sizeCommands: source text lines the language needs to declare that size.
  *   - matchesSize: diagnostics (error if the size is required) for the differences between the label and the size.
@@ -35,7 +39,10 @@
     if (!language) return 'not provided';
     if (typeof language.id !== 'string' || !language.id) return 'id must be a non-empty string';
     if (typeof language.name !== 'string' || !language.name) return `name must be a non-empty string (id "${language.id}")`;
-    return ['detect', 'parse'].filter(k => typeof language[k] !== 'function').map(k => `${k} must be a function (id "${language.id}")`)[0] || null;
+    const missing = ['detect', 'parse'].filter(k => typeof language[k] !== 'function').map(k => `${k} must be a function (id "${language.id}")`)[0];
+    if (missing) return missing;
+    if (language.emit !== undefined && typeof language.emit !== 'function') return `emit must be a function when present (id "${language.id}")`;
+    return null;
   }
 
   PB.languages = Object.freeze({
@@ -50,5 +57,13 @@
     get: id => list.find(l => l.id === id) || null,
     /** First language whose detect recognizes the text, or null if none. */
     detect: src => list.find(l => l.detect(src)) || null,
+    /** Runs the language's emit hook: { text: string, diagnostics: array }. Throws Error if unknown or without emit. */
+    emit(id, model, opts) {
+      const language = list.find(l => l.id === id);
+      if (!language) throw new Error(`Unknown language: "${id}"`);
+      if (typeof language.emit !== 'function') throw new Error(`Language "${id}" cannot emit`);
+      const result = language.emit(model, opts) || {};
+      return { text: result.text == null ? '' : String(result.text), diagnostics: Array.isArray(result.diagnostics) ? result.diagnostics : [] };
+    },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

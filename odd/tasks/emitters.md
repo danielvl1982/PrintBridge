@@ -34,7 +34,7 @@ The viewer is read-only and TSPL has no editing yet. An emitter unlocks migratio
 - Classic scripts/IIFE/`PB`, manifest + index.html identical order, tests via `loadUpTo`. Code/comments English, UI strings Spanish. Test-first (observe RED). Baseline `node --test` 372/372. Review per commit group (whole-branch exceeds the reviewer budget). Planning heuristic ~400 changed lines per task.
 
 ## Tasks
-- [ ] T1 Emit contract: optional language `emit` hook (documented), `PB.composeSlices` `emitters` list, shared emit helpers (dots conversion, escaping, id allocation, diagnostics) + tests with a fake slice/language.
+- [x] T1 Emit contract: optional language `emit` hook (documented), `PB.composeSlices` `emitters` list, shared emit helpers (dots conversion, escaping, id allocation, diagnostics) + tests with a fake slice/language.
 - [ ] T2 TPCL emitter part 1: header/trailer driver, text (PC/PV + RC/RV), line, box; round-trip TPCL->TPCL on the spool and barcodes examples (items only for the kinds done).
 - [ ] T3 TPCL emitter part 2: barcode (XB + RB, widths form, FNC1), qr, image (SG); full TPCL->TPCL round trip on all TPCL examples.
 - [ ] T4 TSPL emitter part 1: header/trailer driver, text (fonts 1-8/0), line (BAR), box (BOX); TSPL->TSPL round trip.
@@ -49,4 +49,5 @@ The viewer is read-only and TSPL has no editing yet. An emitter unlocks migratio
 - Sequential delegated writers, one per task; native review per commit group.
 
 ## Progress
-- Explorer mapping done. Next: T1.
+- Explorer mapping done.
+- T1 done (uncommitted): tests/emit-contract.test.js written first, RED observed (11/11 failing: no PB.emit, no languages.emit, no emitters); then js/core/emit.js, languages.js emit hook + PB.languages.emit, composeSlices emitters, registry header, manifest + index.html. tests/compose-slices.test.js deepEqual updated for the new emitters field. node --test: 383/383 (372 baseline + 11 new). Next: T2.

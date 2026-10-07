@@ -27,9 +27,12 @@
  *     overlay,                   preview-overlay helpers owned by the slice (image: { createPicker({ fileInput, refresh }) }),
  *                                used by js/app.js, which keeps the overlay state
  *     languages: {
- *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable?, rules? })
+ *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable?, rules?, emit? })
  *     }
  *   }
+ * emit(item, ctx) (language hook, optional): the lines that item becomes in that language, as a string or string[]
+ * (empty ones are skipped); it reports fidelity warnings with ctx.report(diagnostic). ctx comes from PB.emit.createContext
+ * (dpi, dot(), ids, once()); PB.composeSlices collects the hooks in `emitters` and PB.emit.run drives them.
  * Parse handlers are tried in slice `order` and the first whose pattern matches wins, so patterns of different slices
  * must not overlap: a generic pattern excludes what a more specific slice owns (the barcode XB handler skips well-formed
  * QR commands with a negative lookahead) instead of relying on registration or `order`.
