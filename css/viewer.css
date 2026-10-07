@@ -23,8 +23,8 @@ body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14p
 .toolbar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
 .toolbar h1 { font-size: 16px; margin: 0 12px 0 0; }
 .toolbar .logo { width: 28px; height: 28px; margin-right: -6px; }
-.toolbar label, .view-row label, .size-row label, .panel-actions label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-.toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .panel-actions select { font: inherit; padding: 2px 4px; }
+.toolbar label, .view-row label, .size-row label, .panel-actions label, .panel-foot label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .panel-actions select, .panel-foot select { font: inherit; padding: 2px 4px; }
 .toolbar input[type=number], .view-row input[type=number], .size-row input[type=number] { width: 72px; }
 .toolbar input[type=range] { width: 110px; padding: 0; }
 .toolbar output { min-width: 3.2em; color: var(--text); }
@@ -48,11 +48,13 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 .panel-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 8px; }
 .panel .panel-head h2 { margin: 0; }
 .panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+/* Example row (P1h): own small row under the help text of the code panel, left aligned */
+.panel-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 8px; margin-top: 6px; min-width: 0; }
 /* Example pair: label + select + button read as one joined control (square inner corners, shared border) */
 .btn-group { display: flex; align-items: stretch; min-width: 0; max-width: 100%; }
-.panel-actions .btn-group label { min-width: 0; gap: 4px; }
-.panel-actions .btn-group select { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 4px 0 0 4px; }
-.panel-actions .btn-group button { margin-left: -1px; border-radius: 0 4px 4px 0; white-space: nowrap; }
+.panel-foot .btn-group label { min-width: 0; gap: 4px; }
+.panel-foot .btn-group select { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 4px 0 0 4px; }
+.panel-foot .btn-group button { margin-left: -1px; border-radius: 0 4px 4px 0; white-space: nowrap; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 small { color: var(--muted); }
 
@@ -68,11 +70,10 @@ textarea.drag { outline: 2px dashed var(--accent); }
 
 /* Messages (the class is the message level) */
 .msgs { margin: 0; padding-left: 18px; }
-/* Avisos panel: last block of the stage, below the label drawing. Compact and bounded: the list scrolls instead of growing.
-   Height = list 96 + h2 16 + h2 margin 4 + vertical padding 12 + borders 2 = 130 (the panel gap of 12 is counted in the SVG rule). */
+/* Avisos panel: last block of the stage, below the label drawing. It grows with its content (no max-height, no inner scroll):
+   with many warnings the page scrolls. Minimum footprint (list at two lines) is counted in the SVG rule below. */
 .msgs-panel { padding: 6px 12px; }
 .msgs-panel h2 { margin: 0 0 4px; }
-.msgs-panel .msgs { max-height: 96px; overflow: auto; }
 .msgs li { margin: 2px 0; }
 .msgs li.error { color: var(--err); }
 .msgs li.warning { color: var(--warn); }
@@ -106,8 +107,12 @@ textarea.drag { outline: 2px dashed var(--accent); }
    already fits the buttons), so the arithmetic is unchanged: 360px. If the groups wrap on narrow widths the row grows, as before.
    P1f: the file group left the size row (it is now in the left column, which does not affect the stage height), and the Avisos
    panel was added below the preview: +130 (panel at its maximum, see .msgs-panel) + 12 (one more stage gap) = +142.
-   360 + 142 = 502, rounded to 500px. */
-#svgwrap svg { width: 100%; height: auto; max-height: calc(100vh - 500px); display: block; background: #f4f5f7; }
+   360 + 142 = 502, rounded to 500px.
+   P1h: the Avisos list no longer has a 96px maximum, so only the panel's MINIMUM footprint is subtracted now: h2 16 + h2 margin 4
+   + vertical padding 12 + borders 2 + list at two lines (2 x (18 line + 4 li margins) = 44) = 78, plus one 12px stage gap = 90.
+   360 + 90 = 450px. The floor of 240px keeps the drawing usable on short windows. With many warnings the panel grows past
+   that minimum and the PAGE scrolls (there is no inner scrollbar), the drawing size is unaffected. */
+#svgwrap svg { width: 100%; height: auto; max-height: max(240px, calc(100vh - 450px)); display: block; background: #f4f5f7; }
 
 /* Properties bar: ONE compact row (title + fields inline), wrapping on narrow widths.
    min-height 48px reserves the row's height (title/empty state/fields are ~30px plus the 6px+6px padding and borders)

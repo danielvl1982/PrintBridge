@@ -150,7 +150,8 @@ const codePanelHtml = () => {
   return column.slice(start, column.indexOf('</section>', start));
 };
 
-test('the four file controls sit once in the Código de etiqueta panel, before #src, and not in the size row', () => {
+// P1h changed the premise: only #btnOpen and #file stay in the header (before #src); the example pair moved below the help text.
+test('the file controls sit once in the Código de etiqueta panel: open/file before #src, example pair after it, none in the size row', () => {
   const panel = codePanelHtml();
   assert.ok(panel.includes('<h2>Código de etiqueta</h2>'), 'first column panel is Código de etiqueta');
   const src = panel.indexOf('id="src"');
@@ -158,24 +159,43 @@ test('the four file controls sit once in the Código de etiqueta panel, before #
   for (const id of FILE_IDS) {
     assert.equal(countId(id), 1, id);
     const i = panel.indexOf('id="' + id + '"');
-    assert.ok(i >= 0 && i < src, id + ' must be in the Código panel before #src');
+    assert.ok(i >= 0, id + ' must be in the Código panel');
+    if (id === 'btnOpen' || id === 'file') assert.ok(i < src, id + ' must be before #src');
+    else assert.ok(i > src, id + ' must be after #src');
     assert.ok(!sizeRowHtml().includes('id="' + id + '"'), id + ' still in the size row');
   }
   assert.ok(!html.includes('row-group'), 'the file/size group wrappers are gone');
 });
 
-test('no file-row remains; the Código panel header holds the title and the actions, with the example pair joined', () => {
+test('Código panel order: header (title, Abrir archivo, hidden file), #src, help text, then the joined example group', () => {
   assert.ok(!html.includes('file-row'), 'file-row is gone');
   const panel = codePanelHtml();
   assert.match(panel, /<div class="panel-head">\s*<h2>Código de etiqueta<\/h2>\s*<div class="panel-actions">/);
   const head = panel.slice(0, panel.indexOf('id="src"'));
-  const group = head.match(/<div class="btn-group">([\s\S]*?)<\/div>/);
-  assert.ok(group, 'btn-group exists');
-  assert.ok(group[1].includes('id="example"') && group[1].includes('id="btnExample"'), 'select and button are in the group');
-  assert.ok(group[1].indexOf('id="example"') < group[1].indexOf('id="btnExample"'), 'button right after the select');
-  assert.ok(!group[1].includes('id="btnOpen"'), 'Abrir archivo is outside the group');
-  assert.ok(head.indexOf('id="btnOpen"') < head.indexOf('id="example"'), 'Abrir archivo before the example select');
-  assert.ok(head.indexOf('id="file"') > head.indexOf('id="btnOpen"') && head.indexOf('id="file"') < head.indexOf('class="btn-group"'), 'hidden input next to Abrir archivo');
+  assert.ok(head.indexOf('id="btnOpen"') > 0 && head.indexOf('id="file"') > head.indexOf('id="btnOpen"'), 'hidden input next to Abrir archivo');
+  assert.ok(!head.includes('btn-group') && !head.includes('id="example"') && !head.includes('id="btnExample"'), 'example pair is not in the header');
+  // #example / #btnExample are not inside .panel-actions.
+  const actions = head.slice(head.indexOf('<div class="panel-actions">'));
+  assert.ok(!actions.includes('id="example"') && !actions.includes('id="btnExample"'), 'example pair is outside .panel-actions');
+  const src = panel.indexOf('id="src"');
+  const small = panel.indexOf('<small>');
+  const group = panel.indexOf('<div class="btn-group">');
+  assert.ok(src < small && small < group, '#src, then the help text, then the group');
+  assert.ok(panel.slice(small, group).includes('Clic en un elemento del dibujo selecciona su línea.'), 'help text is the <small> right before the group');
+  const body = panel.slice(group).match(/<div class="btn-group">([\s\S]*?)<\/div>/);
+  assert.ok(body, 'btn-group exists');
+  assert.ok(body[1].includes('id="example"') && body[1].includes('id="btnExample"'), 'select and button are in the group');
+  assert.ok(body[1].indexOf('id="example"') < body[1].indexOf('id="btnExample"'), 'button right after the select');
+  assert.ok(!body[1].includes('id="btnOpen"'), 'Abrir archivo is outside the group');
+});
+
+test('Avisos grows freely: no max-height or overflow rule on .msgs-panel / .msgs / #msgs', () => {
+  const css = fs.readFileSync(path.join(ROOT, 'css', 'viewer.css'), 'utf8').replace(/\/\*[\s\S]*?\*\//g, '');
+  const rules = [...css.matchAll(/([^{}]+)\{([^{}]*)\}/g)].filter(m => /msgs/.test(m[1]));
+  assert.ok(rules.length > 0, 'msgs rules exist');
+  for (const [, sel, body] of rules) {
+    assert.doesNotMatch(body, /max-height|overflow/, 'rule "' + sel.trim() + '" must not bound the height');
+  }
 });
 
 test('the size row holds only the five size controls, in order', () => {
