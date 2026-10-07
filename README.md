@@ -31,7 +31,7 @@ from scratch with the example label.
 | `js/core/convert.js` | `PB.convert`: the pure part of "Convertir a…" (`run`, `targets`, `toBytes`, `fileName`) on top of the language registry |
 | `js/components/registry.js` | `PB.components`: the registry where each label component registers itself |
 | `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
-| `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL reads, builds, moves and edits; TSPL only reads (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`) |
+| `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL and TSPL both read, build (palette), move and edit (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`) |
 | `js/components/compose.js` | `PB.composeSlices`: builds a language's handler table from the slices that registered for it |
 | `js/languages/tpcl.js` | TPCL reading and writing (fonts and commands of the TEC/Toshiba printers; the language `emit` hook writes header, items and trailer) |
 | `js/languages/tspl.js` | TSPL reading and writing (tokenizer, label setup commands, language registration and the `emit` hook; the drawing commands come from the component slices) |
@@ -179,8 +179,11 @@ What is lost or approximated (each case is reported in the warnings list):
 ## TSPL support (TSC TTP)
 
 The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`BITMAP`/`BAR`/`BOX`
-followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. It is **almost read only**: the label is drawn
-and clicking an item selects its line, but the only thing written into the label is its size (the **Formato** row); it can be exported to TPCL with **Convertir a…**.
+followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. The label is drawn, clicking an item selects its line, and, as with TPCL, you can
+**drag items** to move them, edit their numeric properties in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, line and box,
+written before `PRINT`) and change the size (the **Formato** row). Only the numbers of a command are rewritten (the text, counters and `BITMAP` data are never touched).
+`REFERENCE` and `SHIFT` are taken into account (the item lands under the cursor), positions never go below 0 and `DIRECTION 0` is edited as `DIRECTION 1`.
+It can be exported to TPCL with **Convertir a…**.
 
 | Command | What it is |
 |---|---|
@@ -195,7 +198,8 @@ and clicking an item selects its line, but the only thing written into the label
 Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
 (images stored in the printer). Also not supported:
 
-- **Editing:** moving items, the **Propiedades** panel, the component palette (it stays hidden) and **Insertar en el código** for the preview image. A preview image can still be overlaid to check positions.
+- **Images in the code:** the **Imagen** palette entry and **Insertar en el código** are TPCL only (TSPL has no `BITMAP` writer yet). A preview image can still be overlaid to check positions.
+- **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR` and a 30 x 20 mm `BOX`; texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), the `BOX` radius and the
   text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.

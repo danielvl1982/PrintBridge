@@ -10,7 +10,7 @@
  * Emit (the inverse): an axis-aligned line (within one dot) becomes BAR x,y,w,h centered on the line, with the line width as
  * thickness; a diagonal line cannot be written (TSPL has DIAGONAL, but this viewer's parser does not read it) and is
  * skipped with a warning. A parsed BAR re-emits identically.
- * factory(helpers) -> { handlers, emit }; registered by js/components/line/index.js as `languages: { tpcl, tspl }`.
+ * factory(helpers) -> { handlers, emit, build, coordinates, editable }; registered by js/components/line/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -23,8 +23,18 @@
   /** Largest width / height offered in the properties panel, in dots. */
   const MAX_DOTS = 9999;
 
+  /** A freshly inserted bar: 40 mm long (0.1 mm, like the TPCL line) and 3 dots thick. */
+  const TEMPLATE_LENGTH = 400;
+  const TEMPLATE_THICKNESS = 3;
+
   function tspl(helpers) {
-    const { sourceOf, num, exactDots, roundDots, numberField } = helpers;
+    const { sourceOf, num, exactDots, roundDots, numberField, insertCommand, dropDots, lengthDots } = helpers;
+
+    /** Adds BAR x,y,width,height: a horizontal bar of TEMPLATE_LENGTH (0.1 mm) and TEMPLATE_THICKNESS dots at the drop point. */
+    function build(text, point, options) {
+      const { x, y } = dropDots(text, point, options);
+      return insertCommand(text, `BAR ${x},${y},${lengthDots(options, TEMPLATE_LENGTH)},${TEMPLATE_THICKNESS}`);
+    }
 
     /** BAR x,y,width,height for an axis-aligned line item; diagonal lines are skipped with a warning. */
     function emit(item, ctx) {
@@ -45,6 +55,8 @@
     return {
       // emit(item, ctx) -> the BAR command of an axis-aligned line item
       emit,
+      // build(text, point, options) -> text with a new BAR command (palette)
+      build,
       // Move: BAR x,y are arguments 0 and 1 (dots); width and height (arguments 2 and 3) are measures, not coordinates
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BAR', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       // Properties: width and height in dots (the item's x2/y2 are derived from them)

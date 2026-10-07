@@ -13,6 +13,18 @@
   /** Short text glyph: each slice declares its own `glyph`; unknown kinds get a generic one. */
   const glyphOf = kind => (PB.components.get(kind) || {}).glyph || '+';
 
+  /**
+   * Entries the palette shows for a language: its component templates, plus the app-level image entry (a preview
+   * overlay, not a language component) only when the language can write an image into the label (`insertImage`, which
+   * needs insertCommand). No language: nothing.
+   */
+  function paletteEntries(language, imageEntry) {
+    if (!language) return [];
+    const entries = language.componentTemplates ? [...language.componentTemplates()] : [];
+    if (language.insertImage && language.insertCommand) entries.push({ kind: imageEntry.kind, label: imageEntry.label });
+    return entries;
+  }
+
   function createPalette(container, { onInsert }) {
     return Object.freeze({
       /** Shows the entries ({ kind, label }); an empty list hides the palette's panel (the container's parent). */
@@ -48,4 +60,5 @@
   PB.ui = PB.ui || {};
   PB.ui.COMPONENT_MIME = COMPONENT_MIME;
   PB.ui.createPalette = createPalette;
+  PB.ui.paletteEntries = paletteEntries;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

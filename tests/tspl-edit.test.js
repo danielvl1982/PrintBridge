@@ -60,9 +60,10 @@ test('insertCommand ignores a PRINT word inside quotes or BITMAP data', () => {
 
 // ---- registration
 
-test('the TSPL language registers the editing hooks (no palette yet)', () => {
-  for (const hook of ['insertCommand', 'moveItem', 'describeItem', 'updateItem']) assert.equal(typeof tspl[hook], 'function', hook);
-  for (const hook of ['componentTemplates', 'buildComponent']) assert.equal(tspl[hook], undefined, hook);
+test('the TSPL language registers the editing and palette hooks', () => {
+  for (const hook of ['insertCommand', 'moveItem', 'describeItem', 'updateItem', 'componentTemplates', 'buildComponent']) {
+    assert.equal(typeof tspl[hook], 'function', hook);
+  }
 });
 
 test('the registered engines ignore keys that are not editable fields (coordinates move through moveItem; fields are in tspl-properties.test.js)', () => {

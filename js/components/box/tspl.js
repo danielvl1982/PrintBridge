@@ -7,7 +7,7 @@
  * The corner radius is kept in native.radius but not drawn (one info per label).
  * Emit (the inverse): BOX x1,y1,x2,y2,thickness with the corners normalized to min/max and the thickness (item.width) in dots,
  * at least 1.
- * factory(helpers) -> { handlers, emit }; registered by js/components/box/index.js as `languages: { tpcl, tspl }`.
+ * factory(helpers) -> { handlers, emit, build, coordinates, editable }; registered by js/components/box/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -20,8 +20,19 @@
   /** Largest thickness / radius offered in the properties panel, in dots. */
   const MAX_DOTS = 9999;
 
+  /** A freshly inserted box: 30 x 20 mm in 0.1 mm, 3 dots thick. */
+  const TEMPLATE_SIZE = Object.freeze([300, 200]);
+  const TEMPLATE_THICKNESS = 3;
+
   function tspl(helpers) {
-    const { sourceOf, num, exactDots, roundDots, numberField } = helpers;
+    const { sourceOf, num, exactDots, roundDots, numberField, insertCommand, dropDots, lengthDots } = helpers;
+
+    /** Adds BOX x,y,xEnd,yEnd,thickness: a TEMPLATE_SIZE (0.1 mm, like the TPCL box) rectangle at the drop point. */
+    function build(text, point, options) {
+      const { x, y } = dropDots(text, point, options);
+      const [w, h] = TEMPLATE_SIZE.map(size => lengthDots(options, size));
+      return insertCommand(text, `BOX ${x},${y},${x + w},${y + h},${TEMPLATE_THICKNESS}`);
+    }
 
     /** BOX x1,y1,x2,y2,thickness of a box item (corners normalized, thickness at least 1 dot). */
     function emit(item, ctx) {
@@ -34,6 +45,8 @@
     return {
       // emit(item, ctx) -> the BOX command of a box item
       emit,
+      // build(text, point, options) -> text with a new BOX command (palette)
+      build,
       // Move: BOX shifts both corners (x,y and xEnd,yEnd: arguments 0..3, dots) by the same delta; thickness and radius stay
       coordinates: [{
         applies: (item, cmd) => !cmd || cmd.name === 'BOX',

@@ -186,10 +186,33 @@
     return value.replace(LINE_BREAKS, ' ');
   }
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // Helpers of the palette `build` hooks
+
+  /** <#NAME{k}#> with the smallest k >= 1 that does not appear in the text (as #NAME{k}# or <#NAME{k}#>), like TPCL's. */
+  function freePlaceholder(text, name) {
+    let k = 1;
+    while (text.includes(`#${name}${k}#`)) k++;
+    return `<#${name}${k}#>`;
+  }
+
+  /** Rotation of a new item: (360 - view rotation) % 360 so that it looks upright in the view (missing/invalid view = 0). */
+  const itemRotation = options => {
+    const view = options && ROTATIONS.includes(options.viewRotation) ? options.viewRotation : 0;
+    return (360 - view) % 360;
+  };
+
+  /** Dots of a new command's top-left corner for a drop point in 0.1 mm (REFERENCE/SHIFT subtracted, never below 0). */
+  const dropDots = (text, point, options) => PB.tsplEdit.dropDots(text, point, { dpi: options && options.dpi ? options.dpi : PB.config.resolutions[0] }, commands);
+
+  /** Length in 0.1 mm of a new component -> whole dots at the build options' resolution (at least 1). */
+  const lengthDots = (options, mm10) => Math.max(1, toDots({ dpi: options && options.dpi ? options.dpi : PB.config.resolutions[0] }, mm10));
+
   /** Helpers the slices' TSPL hooks share with this file. Passed once to each slice's `languages.tspl` factory. */
   const SLICE_HELPERS = Object.freeze({
     sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
     quoted, roundDots, exactDots, toDots, safeData,
+    insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField,
   });
 
@@ -416,10 +439,24 @@
     return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
   }
 
+  /** Component kinds of the palette (neutral), in display order: the slices that have a `build` hook (the image has none). */
+  const COMPONENTS = COMPOSED.components;
+
+  /**
+   * Adds a palette component with its top-left corner at the point ({ x, y } in 0.1 mm) using the slice's `build` hook
+   * (each slice owns its template; options: { dpi, viewRotation }). Unknown kind or invalid point: the text unchanged.
+   */
+  function buildComponent(text, kind, point, options) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
+    const slice = COMPOSED.slices.find(s => s.id === kind);
+    return slice && slice.hooks.build ? slice.hooks.build(text, point, options || {}) : text;
+  }
+
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS });
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize,
-    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem });
+    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

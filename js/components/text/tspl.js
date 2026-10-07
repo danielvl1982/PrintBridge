@@ -7,7 +7,7 @@
  *     0.1 mm, and font.scaleX stretches the simulated mono glyphs so the character advance matches the cell width;
  *   - font "0", ROMAN.TTF and every other (unknown) font are scalable: the multipliers are POINT sizes (y-mul = height).
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
- *   factory(helpers) -> { handlers }. Registered by js/components/text/index.js as `languages: { tpcl, tspl }`.
+ *   factory(helpers) -> { handlers, emit, build, coordinates, editable }. Registered by js/components/text/index.js as `languages: { tpcl, tspl }`.
  * Limits (reported as info diagnostics): the model has no alignment nor word wrap, so alignment 2/3 draws left and BLOCK
  * is drawn as one line of text; counters/variables ("@1", "x"+@1) are kept as literal text.
  * Emit (the inverse): `emit(item, ctx)` writes a TEXT command. A mono font whose size and width are whole multiples of a
@@ -47,6 +47,9 @@
   /** Largest point size of a scalable font offered in the properties panel. */
   const MAX_POINTS = 200;
 
+  /** Bitmap font of a freshly inserted TEXT (16 x 24 dots cell). */
+  const TEMPLATE_FONT = '3';
+
   /** Fallback size (0.1 mm) for a text whose font has no usable size. */
   const DEFAULT_SIZE = 80;
 
@@ -73,7 +76,19 @@
   }
 
   function tspl(helpers) {
-    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField } = helpers;
+    const {
+      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField,
+      insertCommand, freePlaceholder, itemRotation, dropDots,
+    } = helpers;
+
+    /**
+     * Adds TEXT x,y,"3",rotation,1,1,"<#TEXTO{k}#>" (font "3", multipliers 1) at the drop point, rotated
+     * (360 - options.viewRotation) % 360 to look upright in the view. The placeholder is a free TPCL-style variable.
+     */
+    function build(text, point, options) {
+      const { x, y } = dropDots(text, point, options);
+      return insertCommand(text, `TEXT ${x},${y},"${TEMPLATE_FONT}",${itemRotation(options)},1,1,${quoted(freePlaceholder(text, 'TEXTO'))}`);
+    }
 
     /** Rotation in degrees: the nearest quarter turn, with a warning once if the item was not on one. */
     function rotationDegrees(ctx, rotation) {
@@ -210,6 +225,8 @@
     return {
       // emit(item, ctx) -> the TEXT command of a text item
       emit,
+      // build(text, point, options) -> text with a new TEXT command (palette)
+      build,
       // Move: TEXT and BLOCK both start with x,y (arguments 0 and 1, dots); everything else of the command is left alone
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'TEXT' || cmd.name === 'BLOCK', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       // Properties: rotation and multipliers of TEXT (font name and content are never touched)

@@ -17,6 +17,7 @@
  * (@1), BLOCK content, BITMAP bytes and every other line stay byte for byte. An argument that is not a plain number is
  * never edited. The coordinates of an item (0.1 mm) include REFERENCE and SHIFT while the command keeps plain dots, so a
  * move writes target - REFERENCE - SHIFT, rounded to whole dots and never below 0. DIRECTION 0 is edited as DIRECTION 1.
+ * dropDots() applies the same rule to the position of a new palette component (see the slices' `build` hooks).
  */
 (function (PB) {
   'use strict';
@@ -55,6 +56,38 @@
     return out;
   }
 
+  /** Follows the REFERENCE and SHIFT commands fed to it: offset() is what they add to the later coordinates, in dots. */
+  function offsetTracker() {
+    const ref = { x: 0, y: 0 };
+    const shift = { x: 0, y: 0 };
+    return {
+      feed(cmd) {
+        const values = cmd.args.map(a => (DECIMAL.test(a.raw) ? Number(a.raw) : null));
+        if (cmd.name === 'REFERENCE' && values.length >= 2 && values[0] !== null && values[1] !== null) { ref.x = values[0]; ref.y = values[1]; }
+        else if (cmd.name === 'SHIFT' && values.length && !values.slice(0, 2).includes(null)) {
+          if (values.length === 1) { shift.x = 0; shift.y = values[0]; } else { shift.x = values[0]; shift.y = values[1]; }
+        }
+      },
+      offset: () => ({ x: ref.x + shift.x, y: ref.y + shift.y }),
+    };
+  }
+
+  /**
+   * Dots to write for a new command whose top-left corner should land at point ({ x, y } in 0.1 mm): the target minus the
+   * REFERENCE and SHIFT in force where the language inserts it (before the first PRINT, else at the end), the same rule as
+   * moveItem, rounded to whole dots and never below 0. commands: the PB.tspl.commands tokenizer (looked up lazily).
+   */
+  function dropDots(text, point, { dpi } = {}, commands) {
+    const tracker = offsetTracker();
+    for (const cmd of (commands || PB.tspl.commands)(text)) {
+      if (cmd.name === 'PRINT') break;
+      tracker.feed(cmd);
+    }
+    const offset = tracker.offset();
+    const dot = units.dotSize(dpi);
+    return { x: Math.max(0, roundDots(point.x / dot - offset.x)), y: Math.max(0, roundDots(point.y / dot - offset.y)) };
+  }
+
   /**
    * Builds the engines. definitions: { coordinates, editable, commands } (commands: the PB.tspl.commands tokenizer,
    * looked up lazily when not given because js/languages/tspl.js loads after this file).
@@ -69,16 +102,11 @@
     function locate(text, item) {
       const span = item && item.source && item.source.spans && item.source.spans[0];
       if (!span || typeof text !== 'string') return null;
-      const ref = { x: 0, y: 0 };
-      const shift = { x: 0, y: 0 };
+      const tracker = offsetTracker();
       for (const cmd of walk(text)) {
-        if (cmd.start === span.start) return { cmd, offset: { x: ref.x + shift.x, y: ref.y + shift.y } };
+        if (cmd.start === span.start) return { cmd, offset: tracker.offset() };
         if (cmd.start > span.start) return null;
-        const values = cmd.args.map(a => (DECIMAL.test(a.raw) ? Number(a.raw) : null));
-        if (cmd.name === 'REFERENCE' && values.length >= 2 && values[0] !== null && values[1] !== null) { ref.x = values[0]; ref.y = values[1]; }
-        else if (cmd.name === 'SHIFT' && values.length && !values.slice(0, 2).includes(null)) {
-          if (values.length === 1) { shift.x = 0; shift.y = values[0]; } else { shift.x = values[0]; shift.y = values[1]; }
-        }
+        tracker.feed(cmd);
       }
       return null;
     }
@@ -143,5 +171,5 @@
     return { moveItem, describeItem, updateItem };
   }
 
-  PB.tsplEdit = Object.freeze({ createTsplEditing, numberField, selectField });
+  PB.tsplEdit = Object.freeze({ createTsplEditing, dropDots, numberField, selectField });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
