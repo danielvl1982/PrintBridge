@@ -188,6 +188,8 @@
     return {
       // emit(item, ctx) -> the TEXT command of a text item
       emit,
+      // Move: TEXT and BLOCK both start with x,y (arguments 0 and 1, dots); everything else of the command is left alone
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'TEXT' || cmd.name === 'BLOCK', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       handlers: [
         {
           // TEXT x,y,"font",rotation,x-mul,y-mul,[alignment,]"content": 8 arguments when the alignment is present

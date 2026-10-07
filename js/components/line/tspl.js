@@ -42,6 +42,8 @@
     return {
       // emit(item, ctx) -> the BAR command of an axis-aligned line item
       emit,
+      // Move: BAR x,y are arguments 0 and 1 (dots); width and height (arguments 2 and 3) are measures, not coordinates
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BAR', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       handlers: [
         {
           // BAR x,y,width,height

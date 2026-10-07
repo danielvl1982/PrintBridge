@@ -163,6 +163,8 @@
     return {
       // emit(item, ctx) -> the BARCODE command of a barcode item
       emit,
+      // Move: BARCODE x,y are arguments 0 and 1 (dots)
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BARCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       handlers: [
         {
           // BARCODE x,y,"type",height,human readable,rotation,narrow,wide,[alignment,]"content"

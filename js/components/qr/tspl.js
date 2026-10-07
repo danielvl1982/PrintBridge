@@ -90,6 +90,8 @@
     return {
       // emit(item, ctx) -> the QRCODE command of a qr item
       emit,
+      // Move: QRCODE x,y are arguments 0 and 1 (dots)
+      coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'QRCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       handlers: [
         {
           // QRCODE x,y,ECClevel,cellWidth,mode,rotation,[J#,][M#,][S#,][X#,][L#,]"content"

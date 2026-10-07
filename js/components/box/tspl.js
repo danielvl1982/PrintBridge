@@ -31,6 +31,11 @@
     return {
       // emit(item, ctx) -> the BOX command of a box item
       emit,
+      // Move: BOX shifts both corners (x,y and xEnd,yEnd: arguments 0..3, dots) by the same delta; thickness and radius stay
+      coordinates: [{
+        applies: (item, cmd) => !cmd || cmd.name === 'BOX',
+        fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }, { arg: 2, axis: 'x' }, { arg: 3, axis: 'y' }],
+      }],
       handlers: [
         {
           // BOX x,y,xEnd,yEnd,thickness[,radius]

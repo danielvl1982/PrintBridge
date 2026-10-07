@@ -28,7 +28,7 @@ component palette (componentTemplates/buildComponent/insertCommand). Today TSPL 
 - [x] T1 Infrastructure: argument offsets in `commands()`, `insertCommand` (before PRINT, EOL-aware), generic moveItem/describeItem/updateItem
       engines driven by slice `coordinates`/`editable`, registered in the TSPL language; pass `coordinates`/`editable` to composeSlices;
       update tests/tspl-app.test.js.
-- [ ] T2 Move: `coordinates` for TEXT/BLOCK, BARCODE, QRCODE, BAR, BOX, BITMAP (dots delta rounding, BOX shifts both corners, BITMAP header only), tests.
+- [x] T2 Move: `coordinates` for TEXT/BLOCK, BARCODE, QRCODE, BAR, BOX, BITMAP (dots delta rounding, BOX shifts both corners, BITMAP header only), tests.
 - [ ] T3 Properties: `editable` for TEXT (rotation, multipliers), BARCODE (height, narrow/wide, readable, rotation), QRCODE (ecc, cell), BAR/BOX (width, height), tests.
 - [ ] T4 Palette: `build` per slice, `componentTemplates`, `buildComponent` (dots, viewRotation, REFERENCE/SHIFT), tests.
 
@@ -40,3 +40,4 @@ Delegated direct, one writer per task (multi-file each), sequential.
 
 ## Progress
 - T1 done: args carry start/end offsets; js/languages/tspl-edit.js (createTsplEditing, numberField, selectField); insertCommand; hooks registered; 672 tests green (645 + 27).
+- T2 done: `coordinates` in the text (TEXT/BLOCK), barcode, qr, line (BAR), box (BOX, both corners) and image (BITMAP header only) slices; tests/tspl-move.test.js (19 tests; RED observed: 19/19 failing before the slices); tspl-edit.test.js "no definitions" test narrowed to describe/update.
