@@ -54,5 +54,6 @@
   "js/palette.js",
   "js/properties.js",
   "js/ui.js",
+  "js/convert-panel.js",
   "js/app.js"
 ]

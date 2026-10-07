@@ -56,6 +56,15 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .msgs li.warning { color: var(--warn); }
 .msgs li.info { color: var(--muted); }
 
+/* "Convertir a..." panel: compact output box; the diagnostics reuse the .msgs classes */
+.convert h2 { margin-bottom: 8px; }
+.convert-bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+.convert select { font: inherit; padding: 2px 4px; min-width: 0; }
+.convert textarea { height: 140px; background: var(--panel-alt); }
+.convert-summary, .convert-note { margin: 6px 0; }
+.convert-note { color: var(--warn); }
+.convert-status { color: var(--muted); }
+
 /* Preview container */
 .preview { min-width: 0; }
 .preview .bar { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 6px; font-family: Consolas, monospace; }

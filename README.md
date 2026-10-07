@@ -27,15 +27,18 @@ from scratch with the example label.
 | `js/config.js` | Known label sizes and the example label |
 | `js/manifest.json` | Ordered list of every script (same order as `index.html`; the tests load from it) |
 | `js/core/` | Part common to all languages, one file per module: diagnostics, units, sources, variables, language registry, validation and sizes |
+| `js/core/emit.js` | Shared helpers of the emitters (dots, escaping, id numbering, diagnostics) and the driver that calls each item's slice `emit` |
+| `js/core/convert.js` | `PB.convert`: the pure part of "Convertir a…" (`run`, `targets`, `toBytes`, `fileName`) on top of the language registry |
 | `js/components/registry.js` | `PB.components`: the registry where each label component registers itself |
 | `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
 | `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL reads, builds, moves and edits; TSPL only reads (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`) |
 | `js/components/compose.js` | `PB.composeSlices`: builds a language's handler table from the slices that registered for it |
-| `js/languages/tpcl.js` | TPCL reading (fonts and commands of the TEC/Toshiba printers) |
-| `js/languages/tspl.js` | TSPL reading (tokenizer, label setup commands and language registration; the drawing commands come from the component slices) |
+| `js/languages/tpcl.js` | TPCL reading and writing (fonts and commands of the TEC/Toshiba printers; the language `emit` hook writes header, items and trailer) |
+| `js/languages/tspl.js` | TSPL reading and writing (tokenizer, label setup commands, language registration and the `emit` hook; the drawing commands come from the component slices) |
 | `js/view.js` | Preview rotation (pure coordinate mapping) |
 | `js/drawing.js` | Label drawing and overlap detection |
 | `js/ui.js` | Screen panels |
+| `js/convert-panel.js` | The "Convertir a…" panel (target, output, fidelity warnings, Copiar, Descargar) |
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
 | `tests/` | Automated tests (`node --test` from the project root) |
@@ -130,6 +133,34 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
+### Convertir a…
+
+Converts the label in the **Código de etiqueta** box to another printer language (TPCL to TSPL and TSPL to TPCL, for example
+to move a label from a TEC SV4T to a TSC TTP). The source language is detected from the text and the **Resolución** selector
+is used to convert between dots and mm, so set it to the printer's before converting.
+
+- **Convertir:** writes the label in the chosen language in the output box. A line above it says what was converted
+  ("Convertido de … a …"); with an empty or unrecognized label it shows the reason instead.
+- **Avisos de conversión:** a list of everything the conversion could not carry over exactly (orange = warning, gray = information).
+  Read it before printing: the converted label is a starting point, not a guaranteed copy.
+- **Copiar:** copies the output to the clipboard. A TSPL label with images holds raw binary data that the clipboard can
+  alter, so in that case the panel says so and **Descargar** is the reliable way.
+- **Descargar:** saves the output as a file. TSPL is saved as **`.prn`, one byte per character (latin1)**, because the
+  `BITMAP` data is raw binary and UTF-8 would corrupt it; TPCL is saved as `.txt` (UTF-8). The file name is `etiqueta` plus the extension.
+
+What is lost or approximated (each case is reported in the warnings list):
+
+- Text: the TPCL PC bitmap fonts (letter, serif, italic) have no TSPL equivalent; TPCL magnifications in steps of 0.1 become
+  TSPL integer multipliers or a scalable font in whole points.
+- Barcodes: types without a counterpart are skipped with a warning (for example EAN13 in TPCL, UPC-E, or TSPL `128M` control codes).
+- QR: the rotation is not converted.
+- Variables: TPCL `#NAME#` is written literally in TSPL, which has no substitution.
+- Label size: the TPCL pitch and the TSPL gap are **not converted** (TSPL to TPCL writes the height as the pitch; TPCL to TSPL omits `GAP`).
+- TPCL output: the `{XS;…|}` trailer is a default taken from the reference spool and **has not been verified on a printer**.
+- Images: a TSPL `BITMAP` whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet
+  inserted in the code is not part of the conversion.
+- TPCL fields have 4 digits and 2-digit ids, and coordinates are rounded between 0.1 mm and dots.
+
 ## What it draws
 
 | Command | What it is |
@@ -150,7 +181,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 
 The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`BITMAP`/`BAR`/`BOX`
 followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. It is **read only**: the label is drawn
-and clicking an item selects its line, but nothing is written back.
+and clicking an item selects its line, but nothing is edited in the label (it can be exported to TPCL with **Convertir a…**).
 
 | Command | What it is |
 |---|---|
