@@ -83,6 +83,45 @@ test('initCollapsible wires every [data-collapsible] container of the root', () 
   assert.equal(b.title.getAttribute('role'), 'button');
 });
 
+function memoryStorage(initial) {
+  const data = { ...initial };
+  return { data, getItem: k => (k in data ? data[k] : null), setItem: (k, v) => { data[k] = String(v); } };
+}
+
+test('toggling saves the collapsed state of that section in storage', () => {
+  const { container, title } = fixture();
+  container.setAttribute('data-collapsible', 'code');
+  const storage = memoryStorage();
+  PB.ui.makeCollapsible(container, storage);
+  title.fire('click');
+  assert.deepEqual(JSON.parse(storage.data[PB.ui.COLLAPSE_STORAGE_KEY]), { code: true });
+  title.fire('click');
+  assert.deepEqual(JSON.parse(storage.data[PB.ui.COLLAPSE_STORAGE_KEY]), { code: false });
+});
+
+test('a saved collapsed state is restored on start', () => {
+  const { container, title } = fixture();
+  container.setAttribute('data-collapsible', 'view');
+  const storage = memoryStorage({ [PB.ui.COLLAPSE_STORAGE_KEY]: JSON.stringify({ view: true }) });
+  PB.ui.makeCollapsible(container, storage);
+  assert.ok(container.classList.contains('is-collapsed'));
+  assert.equal(title.getAttribute('aria-expanded'), 'false');
+});
+
+test('broken or throwing storage never breaks the toggle', () => {
+  const { container, title } = fixture();
+  container.setAttribute('data-collapsible', 'code');
+  const bad = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  PB.ui.makeCollapsible(container, bad);
+  title.fire('click');
+  assert.ok(container.classList.contains('is-collapsed'));
+  const garbage = memoryStorage({ [PB.ui.COLLAPSE_STORAGE_KEY]: '{not json' });
+  const other = fixture();
+  other.container.setAttribute('data-collapsible', 'code');
+  PB.ui.makeCollapsible(other.container, garbage);
+  assert.ok(!other.container.classList.contains('is-collapsed'));
+});
+
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const tagOf = marker => {
