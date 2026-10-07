@@ -5,7 +5,7 @@
 (function (PB) {
   'use strict';
 
-  const { render, tpcl } = PB.slices.qr;
+  const { render, tpcl, tspl } = PB.slices.qr;
 
   PB.components.register({
     kind: 'qr',
@@ -14,6 +14,6 @@
     label: 'QR',
     glyph: '▦',
     render,
-    languages: { tpcl },
+    languages: { tpcl, tspl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

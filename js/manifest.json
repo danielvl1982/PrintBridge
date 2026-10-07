@@ -29,6 +29,7 @@
   "js/components/qr/matrix.js",
   "js/components/qr/render.js",
   "js/components/qr/tpcl.js",
+  "js/components/qr/tspl.js",
   "js/components/qr/index.js",
   "js/components/line/render.js",
   "js/components/line/tpcl.js",

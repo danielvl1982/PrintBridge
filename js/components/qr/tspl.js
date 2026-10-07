@@ -1,0 +1,136 @@
+/**
+ * QR slice, TSPL language (TSC TTP): the QRCODE command.
+ *   QRCODE x,y,ECClevel,cellWidth,mode,rotation,[J#,][M#,][S#,][X#,][L#,]"content"
+ * It becomes the neutral `qr` item (see js/core/model.js) so the renderer of this slice needs no change:
+ *   - ECC level L/M/Q/H (an unknown one draws with M); cellWidth is in dots (kept in native.cell), cell = dots * dot;
+ *   - mode A (auto): the content is the data; mode M (manual): the content starts with encoding prefixes (A alphanumeric,
+ *     N numeric, K kanji, B + 4 digits = byte count + that many bytes, `!` switches the character set) that are stripped;
+ *   - the optional parameters after the rotation are told apart by their PREFIX LETTER (J justification, M model, S mask,
+ *     X area, L length), in any order and any subset; they are kept in native. Unknown extras are ignored;
+ *   - the neutral item has no rotation: it is kept in native.rotation and the QR is drawn unrotated (one info per label).
+ * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
+ *   factory(helpers) -> { handlers }. Registered by js/components/qr/index.js as `languages: { tpcl, tspl }`.
+ */
+(function (PB) {
+  'use strict';
+
+  PB.slices = PB.slices || {};
+  PB.slices.qr = PB.slices.qr || {};
+
+  const { diagnostics: diag } = PB;
+
+  const ECC_LEVELS = Object.freeze({ L: 'L', M: 'M', Q: 'Q', H: 'H' });
+  const DEFAULT_ECC = 'M';
+  const DEFAULT_CELL = 4;
+
+  /** Counter/variable content: "@1", "x"+@1+"y". */
+  const COUNTER = /(?:^|\+)\s*@\d+/;
+
+  /** Optional parameter: prefix letter + value. Native field and accepted range of each one. */
+  const OPTION = /^([JMSXL])\s*(\d+)$/i;
+  const OPTIONS = Object.freeze({
+    J: { field: 'justification', ok: v => v >= 1 && v <= 9 },
+    M: { field: 'model', ok: v => v === 1 || v === 2 },
+    S: { field: 'mask', ok: v => v >= 0 && v <= 8 },
+    X: { field: 'area', ok: () => true },
+    L: { field: 'length', ok: () => true },
+  });
+
+  const SEGMENT_START = /!(?=[ANBK])/;
+
+  /**
+   * Manual-mode content -> printable payload (segments concatenated), or null when the prefixes are malformed.
+   * "N123456!ATHE" -> "123456THE"; "B0012Product name" -> "Product name" (fewer bytes than counted are tolerated).
+   */
+  function manualData(content) {
+    let i = 0;
+    let out = '';
+    while (i < content.length) {
+      if (content[i] === '!') i++;
+      const letter = content[i];
+      if (!/^[ANBK]$/.test(letter || '')) return null;
+      i++;
+      if (letter === 'B') {
+        const count = /^\d{4}/.exec(content.slice(i));
+        if (!count) return null;
+        i += 4;
+        out += content.substr(i, +count[0]);
+        i += +count[0];
+      } else {
+        const rest = content.slice(i);
+        const next = rest.search(SEGMENT_START);
+        out += next < 0 ? rest : rest.slice(0, next);
+        i += next < 0 ? rest.length : next;
+      }
+    }
+    return out;
+  }
+
+  function tspl(helpers) {
+    const { sourceOf, num, ROTATIONS } = helpers;
+
+    return {
+      handlers: [
+        {
+          // QRCODE x,y,ECClevel,cellWidth,mode,rotation,[J#,][M#,][S#,][X#,][L#,]"content"
+          pattern: /^QRCODE\b/i,
+          handle(m, cmd, ctx) {
+            const ref = 'QRCODE';
+            if (cmd.args.length < 7) { ctx.report(diag.warning(`QRCODE incompleto: ${cmd.raw.slice(0, 40)}`)); return; }
+            const [px, py] = [num(cmd.args[0]), num(cmd.args[1])];
+            if (px === null || py === null) { ctx.report(diag.warning(`QRCODE con coordenadas no válidas: ${cmd.raw.slice(0, 40)}`)); return; }
+
+            const eccKey = cmd.args[2].value.toUpperCase();
+            if (!(eccKey in ECC_LEVELS)) ctx.report(diag.info(`${ref}: corrección de errores "${cmd.args[2].value}" desconocida, se dibuja con ${DEFAULT_ECC}`));
+
+            const cellValue = num(cmd.args[3]);
+            const cellDots = cellValue !== null && cellValue > 0 ? cellValue : DEFAULT_CELL;
+            if (cellDots !== cellValue) ctx.report(diag.warning(`${ref}: ancho de celda "${cmd.args[3].value}" no válido, se usa ${DEFAULT_CELL} puntos`));
+
+            const modeKey = cmd.args[4].value.toUpperCase();
+            const mode = modeKey === 'M' ? 'M' : 'A';
+            if (modeKey !== 'A' && modeKey !== 'M') ctx.report(diag.warning(`${ref}: modo "${cmd.args[4].value}" no válido, se usa A (automático)`));
+
+            const rotation = num(cmd.args[5]);
+            const native = { cell: cellDots, mode, rotation: ROTATIONS.includes(rotation) ? rotation : 0 };
+            if (rotation === null || !ROTATIONS.includes(rotation)) {
+              ctx.report(diag.warning(`${ref}: rotación "${cmd.args[5].value}" no válida, se dibuja sin rotar`));
+            } else if (rotation !== 0 && !ctx.tsplQrRotationNoted) {
+              ctx.tsplQrRotationNoted = true;
+              ctx.report(diag.info('QRCODE: rotación de QR no soportada, se dibuja sin rotar'));
+            }
+
+            // Optional parameters between the rotation and the content, by prefix letter; the rest are ignored
+            for (const arg of cmd.args.slice(6, -1)) {
+              const opt = OPTION.exec(arg.value);
+              const spec = opt && OPTIONS[opt[1].toUpperCase()];
+              if (spec && spec.ok(+opt[2])) native[spec.field] = +opt[2];
+            }
+
+            const last = cmd.args[cmd.args.length - 1];
+            let data = last.value;
+            if (COUNTER.test(last.raw)) {
+              data = last.raw;
+              if (!ctx.tsplCounterNoted) {
+                ctx.tsplCounterNoted = true;
+                ctx.report(diag.info('QRCODE: contador o variable (@n) sin evaluar, se dibuja como texto literal'));
+              }
+            } else if (mode === 'M' && data !== '') {
+              const stripped = manualData(data);
+              if (stripped === null) ctx.report(diag.info(`${ref}: prefijos del modo manual no válidos, se usa el contenido tal cual`));
+              else data = stripped;
+            }
+
+            const { x, y } = ctx.pos(px, py);
+            ctx.addItem({
+              kind: 'qr', ref, source: sourceOf(cmd), x, y, raw: { x: String(px), y: String(py), cell: String(cellDots) },
+              ecc: ECC_LEVELS[eccKey] ?? DEFAULT_ECC, cell: cellDots * ctx.dot, symbology: 'qr', native, data,
+            });
+          },
+        },
+      ],
+    };
+  }
+
+  PB.slices.qr.tspl = tspl;
+})(globalThis.PrintBridge = globalThis.PrintBridge || {});
