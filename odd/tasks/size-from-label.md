@@ -56,3 +56,5 @@ out rewrites `{D…|}` / `SIZE`; picking a standard rewrites the label; opening 
   and the README says the pitch is not converted), so the Paso field of a TSPL label stays empty and the combo shows "Personalizado…" even after writing a standard
   size. Decide whether the parser should expose pitch = height + gap (and the TSPL -> TPCL conversion then carries it).
   Browser checks pending (see Verification).
+- T3 follow-up (user confirmed): sizes.declaredPitch(size) = declared pitch, else height + gap (TSPL) for display only; sizes.view and the
+  combo matching (app.js selectFor) use it, the parser still leaves pitch null so TSPL<->TPCL conversion is unchanged. 640 tests green.

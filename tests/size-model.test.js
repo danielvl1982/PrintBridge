@@ -82,3 +82,23 @@ test('tpcl applySize adds {D...|} when missing and never invents an {AX...|}', (
 test('examples no longer force a size', () => {
   for (const e of PB.examples) assert.equal('sizeId' in e, false, e.id);
 });
+
+test('declaredPitch: TSPL derives pitch = height + gap for display, the parsed model keeps pitch null', () => {
+  const model = tspl.parse('SIZE 100 mm,60 mm\nGAP 3 mm,0 mm');
+  assert.equal(model.size.pitch, null);
+  assert.equal(PB.sizes.declaredPitch(model.size), 630);
+  assert.equal(PB.sizes.view(model).pitch, 630);
+});
+
+test('declaredPitch: an explicit pitch wins, and no pitch and no gap stays null', () => {
+  assert.equal(PB.sizes.declaredPitch({ width: 1000, height: 600, pitch: 610, gap: 30 }), 610);
+  assert.equal(PB.sizes.declaredPitch({ width: 1000, height: 600, pitch: null, gap: null }), null);
+  assert.equal(PB.sizes.declaredPitch({ width: null, height: null, pitch: null, gap: 30 }), null);
+});
+
+test('findBySize matches a TSPL label of a standard size once the display pitch is derived', () => {
+  const catalog = PB.sizes.createCatalog(PB.config.sizes);
+  const model = tspl.parse('SIZE 100 mm,60 mm\nGAP 3 mm,0 mm');
+  const match = catalog.findBySize({ ...model.size, pitch: PB.sizes.declaredPitch(model.size) });
+  assert.equal(match && match.id, '100x60');
+});

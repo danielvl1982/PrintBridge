@@ -138,7 +138,7 @@
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));
       sizePanel.showArea(area);
-      sizePanel.selectFor(model.size);
+      sizePanel.selectFor({ ...model.size, pitch: sizes.declaredPitch(model.size) });
       lastModel = model;
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);

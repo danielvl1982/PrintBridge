@@ -30,12 +30,21 @@
   }
 
   /**
+   * Pitch of the size a label declares, for display: the declared pitch or, when the language only states the separation
+   * (TSPL GAP), height + gap. null if neither is known. The parsed model is not changed.
+   */
+  function declaredPitch(size) {
+    if (size.pitch != null) return size.pitch;
+    return size.width != null && Number.isFinite(size.gap) ? size.height + size.gap : null;
+  }
+
+  /**
    * Drawing area for a model: the size the label declares or, if it declares none, the fallback with a warning.
    * Returns { width, height, pitch, diagnostics }.
    */
   function view(model) {
     const declared = model.size;
-    if (declared.width != null) return { width: declared.width, height: declared.height, pitch: declared.pitch, diagnostics: [] };
+    if (declared.width != null) return { width: declared.width, height: declared.height, pitch: declaredPitch(declared), diagnostics: [] };
     const { w, h } = config.fallbackSize;
     return {
       width: w, height: h, pitch: null,
@@ -51,5 +60,5 @@
     return language && language.applySize ? { text: language.applySize(text, chosen), supported: true } : { text, supported: false };
   }
 
-  PB.sizes = Object.freeze({ resolve, createCatalog, view, apply });
+  PB.sizes = Object.freeze({ resolve, createCatalog, declaredPitch, view, apply });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
