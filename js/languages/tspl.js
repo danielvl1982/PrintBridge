@@ -360,5 +360,6 @@
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS });
 
-  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit });
+  // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
+  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn' });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

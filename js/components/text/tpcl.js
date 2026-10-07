@@ -98,6 +98,10 @@
         const mag = n => String(n).padStart(2, '0');
         return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${rot},B`), wrap(`RC${id};${data}`)];
       }
+      // The outline font is always drawn sans bold: any other family, weight or style is lost
+      if ((font.family || OUTLINE_FONT.family) !== OUTLINE_FONT.family || (font.weight == null ? OUTLINE_FONT.weight : font.weight) !== OUTLINE_FONT.weight || (font.style || 'normal') !== 'normal') {
+        ctx.once('tpcl-fonts', () => diag.info('Las fuentes TPCL no coinciden con las de origen (familia, peso o cursiva): los textos sin fuente de mapa de bits equivalente se escriben con la fuente vectorial (PV)'));
+      }
       const id = allocId(ctx, 'PV');
       const dim = n => pad4(Math.max(1, clampCoord(n)));
       return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${rot},B`), wrap(`RV${id};${data}`)];

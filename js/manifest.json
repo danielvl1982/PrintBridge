@@ -11,6 +11,7 @@
   "js/core/sources.js",
   "js/core/variables.js",
   "js/core/languages.js",
+  "js/core/convert.js",
   "js/core/validator.js",
   "js/core/sizes.js",
   "js/components/text/render.js",

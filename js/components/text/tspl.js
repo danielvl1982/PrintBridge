@@ -106,6 +106,10 @@
       if (!exact) {
         ctx.once('tspl-fonts', () => diag.info('Las fuentes TSPL no coinciden con las de origen (familia, peso o cursiva): se usan las incorporadas más cercanas'));
       }
+      // The scalable font only has whole point sizes: say so when the size or the width had to move
+      if (!choice && (Math.abs(size / units.UNITS_PER_POINT - ymul) > MULTIPLIER_TOLERANCE || Math.abs(ymul * scaleX - xmul) > MULTIPLIER_TOLERANCE)) {
+        ctx.once('tspl-size-rounding', () => diag.info('Hay textos cuyo tamaño se redondea a puntos enteros en la fuente escalable de TSPL: el tamaño impreso puede diferir ligeramente'));
+      }
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
       return `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${quoted(safeData(ctx, item.data))}`;
     }

@@ -310,6 +310,7 @@
       const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : axOf(known || {});
       if (ax) out.push(wrap(ax));
       else ctx.report(diag.info('No se escribe {AX…|}: el tamaño no está en el catálogo, compruebe el ajuste en su impresora'));
+      if (size.pitch == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
     }
     out.push(wrap('C'));
     return out;
@@ -419,5 +420,6 @@
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })),
     buildComponent,
     emit,
+    fileExtension: 'txt',
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

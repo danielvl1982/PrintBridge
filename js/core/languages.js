@@ -6,7 +6,7 @@
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
  *     updateItem?(text, item, changes, { dpi }) -> text, describeItem?(item, text?) -> { kind, fields },
  *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text,
- *     emit?(model, { dpi }) -> { text, diagnostics } }
+ *     emit?(model, { dpi }) -> { text, diagnostics }, fileEncoding?: 'utf-8' | 'latin1', fileExtension?: string }
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
  * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
@@ -24,6 +24,9 @@
  * emit (optional): the printer-language text for a neutral model, plus the diagnostics (fidelity warnings) found while
  *   writing it. The language owns header, trailer, id numbering and ordering; items come from the slices' `emit` hooks
  *   (see PB.composeSlices). PB.languages.emit(id, model, opts) calls it and normalizes the result.
+ * fileEncoding (optional, default 'utf-8'): how PB.convert.toBytes writes the emitted text to a file. 'latin1' is byte
+ *   preserving (one byte per char code, '?' above 255) for languages whose text carries raw binary (TSPL BITMAP data).
+ * fileExtension (optional, default 'txt'): the extension, without dot, PB.convert.fileName suggests for the emitted text.
  * Optional size fields (used by PB.sizes; without them the language neither checks nor writes the size):
  *   - sizeCommands: source text lines the language needs to declare that size.
  *   - matchesSize: diagnostics (error if the size is required) for the differences between the label and the size.
@@ -34,6 +37,9 @@
 
   const list = [];
 
+  /** Values of the optional fileEncoding property. */
+  const FILE_ENCODINGS = Object.freeze(['utf-8', 'latin1']);
+
   /** First shape defect of a language, or null if it is valid. */
   function shapeProblem(language) {
     if (!language) return 'not provided';
@@ -42,6 +48,8 @@
     const missing = ['detect', 'parse'].filter(k => typeof language[k] !== 'function').map(k => `${k} must be a function (id "${language.id}")`)[0];
     if (missing) return missing;
     if (language.emit !== undefined && typeof language.emit !== 'function') return `emit must be a function when present (id "${language.id}")`;
+    if (language.fileEncoding !== undefined && !FILE_ENCODINGS.includes(language.fileEncoding)) return `fileEncoding must be one of ${FILE_ENCODINGS.join(', ')} when present (id "${language.id}")`;
+    if (language.fileExtension !== undefined && !(typeof language.fileExtension === 'string' && /^[A-Za-z0-9]+$/.test(language.fileExtension))) return `fileExtension must be letters and digits without a dot when present (id "${language.id}")`;
     return null;
   }
 
