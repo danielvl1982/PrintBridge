@@ -7,7 +7,12 @@
  * Modes 1 (OR) and 2 (XOR) combine with what is already printed; items are independent in the model, so they are drawn
  * as mode 0 (overwrite) with one info per label.
  * PUTBMP / PUTPCX / PUTPNG print a file stored in the printer: it is not in the stream, so only a warning is given.
- * factory(helpers) -> { handlers }; registered by js/components/image/index.js as `languages: { tpcl, tspl }`.
+ * Emit (the inverse): `emit(item, ctx)` writes BITMAP x,y,widthBytes,height,0,<payload> followed by the line break. The
+ * payload is a JS string with one char (0..255) per byte, so the emitted TEXT holds raw bytes: it must be saved with a
+ * byte-preserving encoding (latin1), never UTF-8 (the UI export of T7 takes care of it). The parser reads the payload by
+ * length, so CR/LF/quote/comma bytes inside it are safe. Rows are ceil(w/8) bytes with white (1) padding bits, so a bitmap
+ * whose width is not a multiple of 8 re-parses as widthBytes*8 dots wide, the extra columns white.
+ * factory(helpers) -> { handlers, emit }; registered by js/components/image/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -21,10 +26,51 @@
   const MAX_WIDTH_BYTES = 1250;
   const MAX_HEIGHT = 9999;
 
+  /** Bytes per row of a bitmap w dots wide. */
+  const widthBytes = w => Math.ceil(w / 8);
+
+  /** Neutral bitmap (1 = black) -> TSPL bytes: inverted (0 = black), MSB first, padding bits white. */
+  function encodeBitmap({ w, h, data }) {
+    const rowBytes = widthBytes(w);
+    const out = new Uint8Array(rowBytes * h).fill(0xFF);
+    for (let row = 0; row < h; row++) {
+      for (let col = 0; col < w; col++) {
+        if (data[row * w + col]) out[row * rowBytes + (col >> 3)] &= ~(0x80 >> (col & 7));
+      }
+    }
+    return out;
+  }
+
   function tspl(helpers) {
-    const { sourceOf, int } = helpers;
+    const { sourceOf, int, exactDots, roundDots } = helpers;
+
+    /** BITMAP command of an image with a bitmap; overlay images (no bitmap) and invalid bitmaps are skipped with a warning. */
+    function emit(item, ctx) {
+      const bm = item.bitmap;
+      if (!bm) {
+        ctx.once('tspl-image-overlay', () => diag.warning('Hay imágenes solo de vista previa (sin bitmap): no se pueden exportar a TSPL'));
+        return [];
+      }
+      const valid = Number.isInteger(bm.w) && Number.isInteger(bm.h) && bm.w > 0 && bm.h > 0 && bm.data && bm.data.length === bm.w * bm.h;
+      if (!valid) {
+        ctx.once('tspl-image-invalid', () => diag.warning('Hay imágenes con un bitmap no válido (tamaño positivo y datos de w×h): no se exportan'));
+        return [];
+      }
+      if (widthBytes(bm.w) > MAX_WIDTH_BYTES || bm.h > MAX_HEIGHT) {
+        ctx.once('tspl-image-size', () => diag.warning(`Hay imágenes que superan el máximo de BITMAP (${MAX_WIDTH_BYTES * 8}×${MAX_HEIGHT} puntos): no se exportan`));
+        return [];
+      }
+      const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
+      const bytes = encodeBitmap(bm);
+      let payload = '';
+      // Chunked: spreading a whole bitmap into fromCharCode would overflow the call stack
+      for (let i = 0; i < bytes.length; i += 8192) payload += String.fromCharCode(...bytes.subarray(i, i + 8192));
+      return [`BITMAP ${x},${y},${widthBytes(bm.w)},${bm.h},0,${payload}`];
+    }
 
     return {
+      // emit(item, ctx) -> the BITMAP command of an image item
+      emit,
       handlers: [
         {
           // BITMAP x,y,widthBytes,heightDots,mode,<binary>
@@ -81,5 +127,8 @@
     };
   }
 
+  // The encoder is exposed for the tests
+  tspl.encodeBitmap = encodeBitmap;
+  tspl.widthBytes = widthBytes;
   PB.slices.image.tspl = tspl;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

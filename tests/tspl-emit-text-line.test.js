@@ -266,8 +266,8 @@ for (const dpi of [203, 300]) {
       }
     });
     assert.deepEqual([second.size.width, second.size.height, second.size.gap], [first.size.width, first.size.height, first.size.gap]);
-    // The barcode and the QR code have no TSPL emitter until T5
-    assert.equal(out.diagnostics.filter(d => /sin emisor/.test(d.text)).length, 2);
+    // Barcode and QR have a TSPL emitter since T5 (the full round trip is in tspl-emit-barcode-qr-image.test.js)
+    assert.equal(out.diagnostics.filter(d => /sin emisor/.test(d.text)).length, 0);
   });
 }
 
@@ -276,7 +276,7 @@ test('a TPCL label emitted as TSPL produces text lines and the expected warnings
   const out = emit(parsed);
   assert.ok(out.text.split('\r\n').filter(l => l.startsWith('TEXT ')).length > 0);
   assert.ok(out.diagnostics.some(d => d.level === 'info' && /fuentes TSPL/.test(d.text)));
-  assert.ok(out.diagnostics.some(d => d.level === 'warning' && /sin emisor/.test(d.text)));
+  assert.ok(out.diagnostics.every(d => !/sin emisor/.test(d.text)));
   assert.ok(out.diagnostics.some(d => d.level === 'info' && /separación/.test(d.text)));
   const back = tspl.parse(out.text);
   assert.deepEqual(levels(back.diagnostics, 'error', 'warning'), []);

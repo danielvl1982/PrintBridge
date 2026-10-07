@@ -8,8 +8,10 @@
  *   - the optional parameters after the rotation are told apart by their PREFIX LETTER (J justification, M model, S mask,
  *     X area, L length), in any order and any subset; they are kept in native. Unknown extras are ignored;
  *   - the neutral item has no rotation: it is kept in native.rotation and the QR is drawn unrotated (one info per label).
+ * Emit (the inverse): `emit(item, ctx)` writes QRCODE x,y,<ecc>,<cell dots>,A,0,"data": mode A, rotation 0 (the model has
+ * none), unknown ecc -> M (warning), cell = round(cell / dot) clamped 1..10 (warning once when clamped).
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
- *   factory(helpers) -> { handlers }. Registered by js/components/qr/index.js as `languages: { tpcl, tspl }`.
+ *   factory(helpers) -> { handlers, emit }. Registered by js/components/qr/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
   'use strict';
@@ -22,6 +24,7 @@
   const ECC_LEVELS = Object.freeze({ L: 'L', M: 'M', Q: 'Q', H: 'H' });
   const DEFAULT_ECC = 'M';
   const DEFAULT_CELL = 4;
+  const MAX_CELL = 10;
 
   /** Counter/variable content: "@1", "x"+@1+"y". */
   const COUNTER = /(?:^|\+)\s*@\d+/;
@@ -67,9 +70,26 @@
   }
 
   function tspl(helpers) {
-    const { sourceOf, num, ROTATIONS } = helpers;
+    const { sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData } = helpers;
+
+    /** QRCODE x,y,ecc,cell,A,0,"data" of a qr item. */
+    function emit(item, ctx) {
+      const eccKey = String(item.ecc ?? '').toUpperCase();
+      if (!(eccKey in ECC_LEVELS)) {
+        ctx.once('tspl-qr-ecc', () => diag.warning(`Hay códigos QR con corrección de errores "${item.ecc ?? ''}" desconocida: se escriben con ${DEFAULT_ECC}`));
+      }
+      let cell = Number.isFinite(item.cell) && item.cell > 0 ? roundDots(exactDots(ctx, item.cell)) : DEFAULT_CELL;
+      if (cell < 1 || cell > MAX_CELL) {
+        ctx.once('tspl-qr-cell', () => diag.warning(`Hay códigos QR con una celda fuera de 1..${MAX_CELL} puntos: se ajusta al límite de TSPL`));
+        cell = Math.min(MAX_CELL, Math.max(1, cell));
+      }
+      const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
+      return `QRCODE ${x},${y},${ECC_LEVELS[eccKey] ?? DEFAULT_ECC},${cell},A,0,${quoted(safeData(ctx, item.data))}`;
+    }
 
     return {
+      // emit(item, ctx) -> the QRCODE command of a qr item
+      emit,
       handlers: [
         {
           // QRCODE x,y,ECClevel,cellWidth,mode,rotation,[J#,][M#,][S#,][X#,][L#,]"content"
