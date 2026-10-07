@@ -247,3 +247,20 @@ test('the left column order is Código, Variables, Convertir', () => {
   const column = html.slice(html.indexOf('<div class="column">'), html.indexOf('<div class="stage">'));
   assert.ok(column.includes('id="convert"'), 'convert stays in the left column');
 });
+
+test('the Componentes title has the same typography as the Propiedades heading (.panel h2)', () => {
+  const raw = fs.readFileSync(path.join(ROOT, 'css', 'viewer.css'), 'utf8');
+  const css = raw.split('/*').map((part, i) => (i === 0 ? part : part.slice(part.indexOf('*/') + 2))).join('');
+  const declarations = selector => {
+    const start = css.indexOf(selector + ' {');
+    assert.ok(start >= 0, selector + ' rule exists');
+    const body = css.slice(css.indexOf('{', start) + 1, css.indexOf('}', start));
+    return new Map(body.split(';').map(s => s.trim()).filter(Boolean).map(s => [s.slice(0, s.indexOf(':')).trim(), s.slice(s.indexOf(':') + 1).trim()]));
+  };
+  const heading = declarations('.panel h2');
+  const title = declarations('.strip-title');
+  for (const name of ['font-size', 'text-transform', 'letter-spacing', 'color']) {
+    assert.equal(title.get(name), heading.get(name), name + ' matches the heading');
+  }
+  assert.equal(title.get('font-weight'), '700', 'bold like a browser h2');
+});

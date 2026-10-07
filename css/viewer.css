@@ -90,7 +90,8 @@ textarea.drag { outline: 2px dashed var(--accent); }
 
 /* Action strip: the component palette as a compact horizontal row (palette.js hides this wrapper when the language has no templates) */
 .strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-.strip-title { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+/* Same look as the "Propiedades" heading (.panel h2): 13px, bold, uppercase, muted */
+.strip-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
 .strip .palette { gap: 6px; }
 .strip .palette-item { padding: 3px 8px; font-size: 12px; }
 
