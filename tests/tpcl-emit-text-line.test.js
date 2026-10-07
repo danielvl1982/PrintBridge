@@ -11,7 +11,7 @@ const emit = (model, dpi = 203) => PB.languages.emit('tpcl', model, { dpi });
 const lines = model => emit(model).text.split('\n');
 const model = (items = [], size = {}) => ({
   language: 'tpcl',
-  size: { width: 990, height: 550, pitch: 610, gap: null, native: {}, ...size },
+  size: { width: 990, height: 550, pitch: 610, gap: null, native: { axRaw: 'AX;+010,+000,+00' }, ...size },
   items,
   diagnostics: [],
 });
@@ -34,9 +34,10 @@ test('the tpcl language registers an emit hook', () => {
   assert.equal(typeof tpcl.emit, 'function');
 });
 
-test('header and trailer come from the model size, the catalog AX and the default XS', () => {
-  const out = emit(model());
-  assert.equal(out.text, '{D0610,0990,0550|}\n{AX;+010,+000,+00|}\n{C|}\n{XS;I,0001,0002C4100|}');
+test('header and trailer come from the model size and the default XS, without an invented AX', () => {
+  const out = emit(model([], { native: {} }));
+  assert.equal(out.text, '{D0610,0990,0550|}\n{C|}\n{XS;I,0001,0002C4100|}');
+  assert.ok(out.diagnostics.some(d => d.level === 'info' && /^No se escribe \{AX/.test(d.text)));
   assert.ok(out.diagnostics.some(d => d.level === 'info' && /\{XS\}.*por defecto.*verifíquelos en su impresora/.test(d.text)));
 });
 
@@ -54,8 +55,8 @@ test('a changed size builds D again and drops a stale axRaw', () => {
   assert.ok(out.diagnostics.some(d => d.level === 'info' && /AX/.test(d.text)));
 });
 
-test('a size outside the catalog omits AX with a Spanish info', () => {
-  const out = emit(model([], { pitch: 550, width: 800, height: 500 }));
+test('a size with no AX in the source omits AX with a Spanish info', () => {
+  const out = emit(model([], { pitch: 550, width: 800, height: 500, native: {} }));
   assert.equal(out.text.split('\n')[0], '{D0550,0800,0500|}');
   assert.ok(!/\{AX/.test(out.text));
   assert.ok(out.diagnostics.some(d => d.level === 'info' && /AX/.test(d.text)));

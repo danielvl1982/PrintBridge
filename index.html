@@ -3,48 +3,72 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PrintBridge</title>
+<title>Print Bridge</title>
+<link rel="icon" type="image/svg+xml" href="img/logo.svg">
 <link rel="stylesheet" href="css/viewer.css">
 <link rel="stylesheet" href="css/label.css">
 </head>
 <body>
 <header class="toolbar">
-  <h1>PrintBridge</h1>
-  <label>Resolución <select id="dpi"></select></label>
-  <label title="Ajusta el tamaño de las fuentes si en la impresión real salen más grandes o más pequeñas">Escala texto
-    <input id="calib" type="number" min="50" max="200" step="5" value="100">%
-  </label>
-  <label title="Gira la vista previa en sentido horario (solo es visual: no cambia la etiqueta)">Giro
-    <select id="rotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select>
-  </label>
-  <label><input id="optGrid" type="checkbox" checked> Rejilla</label>
-  <label><input id="optAnchor" type="checkbox" checked> Puntos origen</label>
-  <label><input id="optOverlap" type="checkbox" checked> Marcar solapas</label>
-  <button id="btnOpen">Abrir archivo…</button>
-  <input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>
-  <label>Ejemplo <select id="example"></select></label>
-  <button id="btnExample">Cargar ejemplo</button>
+  <img class="logo" src="img/logo.svg" alt="" width="28" height="28">
+  <h1>Print Bridge</h1>
 </header>
-
-<div class="toolbar toolbar--secondary">
-  <label title="Tamaño de la etiqueta en la impresora. 'Según la etiqueta' usa el tamaño que declara el archivo">Tamaño etiqueta
-    <select id="size"></select>
-  </label>
-  <label>Ancho <input id="szW" type="number" step="0.1" min="5"> mm</label>
-  <label>Alto <input id="szH" type="number" step="0.1" min="5"> mm</label>
-  <label title="Distancia entre el inicio de una etiqueta y la siguiente (alto + separación)">Paso <input id="szP" type="number" step="0.1" min="5"> mm</label>
-  <button id="btnApply" title="Escribe este tamaño en el código de la etiqueta">Aplicar a la etiqueta</button>
-</div>
 
 <input id="imageFile" type="file" accept="image/*" hidden>
 
 <main>
   <div class="column">
-    <section class="panel" hidden>
-      <h2>Componentes</h2>
-      <ul id="palette" class="palette"></ul>
+    <section class="panel" data-collapsible="code">
+      <div class="panel-head">
+        <h2>Código de etiqueta</h2>
+        <div class="panel-actions">
+          <button id="btnOpen">Abrir archivo…</button>
+          <input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>
+        </div>
+      </div>
+      <textarea id="src" spellcheck="false" placeholder="Pega aquí el contenido de la etiqueta (o arrastra el archivo)"></textarea>
+      <small>Pega el texto, arrastra un archivo aquí o usa “Abrir archivo…”. Clic en un elemento del dibujo selecciona su línea.</small>
+      <div class="panel-foot">
+        <div class="btn-group">
+          <label>Ejemplo <select id="example"></select></label>
+          <button id="btnExample">Cargar ejemplo</button>
+        </div>
+      </div>
     </section>
-    <section class="panel" id="propsPanel">
+    <section class="panel" data-collapsible="variables">
+      <h2>Variables (#NOMBRE# / &lt;#NOMBRE#&gt;)</h2>
+      <div id="vars" class="vars"></div>
+    </section>
+    <section class="panel convert" id="convert" data-collapsible="convert"></section>
+  </div>
+  <div class="stage">
+    <div class="size-row" data-collapsible="format">
+    <span class="strip-title">Formato</span>
+    <label title="Tamaños estándar. Al elegir uno se escribe en la etiqueta; 'Personalizado…' te deja teclear el tuyo en Ancho, Alto y Paso">Tamaño etiqueta
+      <select id="size"></select>
+    </label>
+    <label title="Tamaño que declara la etiqueta. Al cambiarlo se escribe en el código">Ancho <input id="szW" type="number" step="0.1" min="5"> mm</label>
+    <label title="Tamaño que declara la etiqueta. Al cambiarlo se escribe en el código">Alto <input id="szH" type="number" step="0.1" min="5"> mm</label>
+    <label title="Distancia entre el inicio de una etiqueta y la siguiente (alto + separación). Vacío: igual al alto">Paso <input id="szP" type="number" step="0.1" min="5"> mm</label>
+    </div>
+    <div class="view-row" data-collapsible="view">
+    <span class="strip-title">Vista</span>
+    <label>Resolución <select id="dpi"></select></label>
+    <label title="Ajusta el tamaño de las fuentes si en la impresión real salen más grandes o más pequeñas">Escala texto
+      <input id="calib" type="number" min="50" max="200" step="5" value="100">%
+    </label>
+    <label title="Gira la vista previa en sentido horario (solo es visual: no cambia la etiqueta)">Giro
+      <select id="rotation"><option value="0">0°</option><option value="90">90°</option><option value="180">180°</option><option value="270">270°</option></select>
+    </label>
+    <label><input id="optGrid" type="checkbox" checked> Rejilla</label>
+    <label><input id="optAnchor" type="checkbox" checked> Puntos origen</label>
+    <label><input id="optOverlap" type="checkbox" checked> Marcar solapas</label>
+    </div>
+    <div class="strip" data-collapsible="components" hidden>
+      <span class="strip-title">Componentes</span>
+      <ul id="palette" class="palette"></ul>
+    </div>
+    <section class="panel props-bar" id="propsPanel" data-collapsible="properties">
       <h2>Propiedades <span id="propsKind" class="props-kind"></span></h2>
       <p id="propsEmpty" class="empty">Selecciona un objeto</p>
       <div id="propsForm" class="props" hidden></div>
@@ -64,26 +88,16 @@
         </div>
       </div>
     </section>
-    <section class="panel">
-      <h2>Código de etiqueta</h2>
-      <textarea id="src" spellcheck="false" placeholder="Pega aquí el contenido de la etiqueta (o arrastra el archivo)"></textarea>
-      <small>Pega el texto, arrastra un archivo aquí o usa “Abrir archivo…”. Clic en un elemento del dibujo selecciona su línea.</small>
+    <section class="panel preview">
+      <div class="bar"><span id="dims"></span><span id="cursor">x: –  y: –</span></div>
+      <div id="svgwrap"></div>
+      <small>Unidades en 0,1 mm (rejilla cada 100 = 10 mm). Las fuentes de la impresora se simulan con Arial/Times/Courier: los anchos de texto son aproximados. Code128, Code39, ITF y QR se generan reales.</small>
     </section>
-    <section class="panel convert" id="convert"></section>
-    <section class="panel">
-      <h2>Variables (#NOMBRE# / &lt;#NOMBRE#&gt;)</h2>
-      <div id="vars" class="vars"></div>
-    </section>
-    <section class="panel">
+    <section class="panel msgs-panel">
       <h2>Avisos</h2>
       <ul id="msgs" class="msgs"></ul>
     </section>
   </div>
-  <section class="panel preview">
-    <div class="bar"><span id="dims"></span><span id="cursor">x: –  y: –</span></div>
-    <div id="svgwrap"></div>
-    <small>Unidades en 0,1 mm (rejilla cada 100 = 10 mm). Las fuentes de la impresora se simulan con Arial/Times/Courier: los anchos de texto son aproximados. Code128, Code39, ITF y QR se generan reales.</small>
-  </section>
 </main>
 
 <!-- Order matters: each file uses the previous ones. -->
@@ -143,6 +157,7 @@
 <script src="js/properties.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/convert-panel.js"></script>
+<script src="js/collapse.js"></script>
 <script src="js/app.js"></script>
 </body>
 </html>

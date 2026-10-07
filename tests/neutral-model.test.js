@@ -6,7 +6,7 @@ const PB = loadUpTo('js/languages/tpcl.js');
 const example = PB.examples[0];
 const tpcl = PB.languages.get('tpcl');
 const parse = src => tpcl.parse(src);
-const required = PB.sizes.resolve(PB.config.sizes[0]);
+const standard = PB.sizes.resolve({ w: 99, h: 55, p: 61 });
 
 test('neutral model: language and size of the reference spool example', () => {
   const model = parse(example.source);
@@ -46,26 +46,18 @@ test('neutral model: the font keeps its neutral shape', () => {
 
 test('sizes: the catalog finds by neutral size', () => {
   const catalog = PB.sizes.createCatalog(PB.config.sizes);
-  assert.equal(catalog.findBySize(parse(example.source).size).id, 'spool-99x55');
+  assert.equal(catalog.findBySize(parse('{D0630,1000,0600|}').size).id, '100x60');
+  assert.equal(catalog.findBySize(parse(example.source).size), null);
   assert.equal(catalog.findBySize(parse('{D0500,0900,0500|}').size), null);
   assert.equal(catalog.findBySize(parse('{C|}').size), null);
 });
 
-test('sizes: matchesSize keeps the required error', () => {
-  assert.deepEqual(tpcl.matchesSize(parse(example.source), required), []);
-  const bad = tpcl.matchesSize(parse('{D0500,0900,0500|}'), required);
-  assert.equal(bad.length, 2);
-  assert.ok(bad.every(d => d.level === 'error'));
-  assert.match(bad[0].text, /debería llevar \{D0610,0990,0550\|\} \(99×55 mm\) y lleva \{D0500,0900,0500\|\}/);
-  assert.match(bad[1].text, /el ajuste debe ser \{AX;\+010,\+000,\+00\|\} y es inexistente/);
-});
-
-test('sizes: sizeCommands and applySize write D and AX, idempotent', () => {
-  assert.deepEqual(tpcl.sizeCommands(required), ['{D0610,0990,0550|}', '{AX;+010,+000,+00|}']);
-  const once = tpcl.applySize('{D0500,0900,0500|}\n{AX;+001,+000,+00|}\n{C|}', required);
-  assert.equal(once, '{D0610,0990,0550|}\n{AX;+010,+000,+00|}\n{C|}');
-  assert.equal(tpcl.applySize(once, required), once);
-  assert.equal(PB.sizes.apply(tpcl, once, required).text, once);
+test('sizes: sizeCommands and applySize write only D and keep the AX, idempotent', () => {
+  assert.deepEqual(tpcl.sizeCommands(standard), ['{D0610,0990,0550|}']);
+  const once = tpcl.applySize('{D0500,0900,0500|}\n{AX;+001,+000,+00|}\n{C|}', standard);
+  assert.equal(once, '{D0610,0990,0550|}\n{AX;+001,+000,+00|}\n{C|}');
+  assert.equal(tpcl.applySize(once, standard), once);
+  assert.equal(PB.sizes.apply(tpcl, once, standard).text, once);
 });
 
 test('neutral validator: uses symbology', () => {

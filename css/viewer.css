@@ -14,18 +14,21 @@
 
 * { box-sizing: border-box; }
 
+/* Class rules that set `display` (flex/grid) would otherwise defeat the `hidden` attribute the scripts toggle */
+[hidden] { display: none !important; }
+
 body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14px; color: var(--text); background: var(--bg); }
 
 /* Toolbars */
 .toolbar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.toolbar--secondary { padding: 8px 16px; background: var(--panel-alt); }
 .toolbar h1 { font-size: 16px; margin: 0 12px 0 0; }
-.toolbar label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
-.toolbar select, .toolbar input { font: inherit; padding: 2px 4px; }
-.toolbar input[type=number] { width: 72px; }
+.toolbar .logo { width: 28px; height: 28px; margin-right: -6px; }
+.toolbar label, .view-row label, .size-row label, .panel-actions label, .panel-foot label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .panel-actions select, .panel-foot select { font: inherit; padding: 2px 4px; }
+.toolbar input[type=number], .view-row input[type=number], .size-row input[type=number] { width: 72px; }
 .toolbar input[type=range] { width: 110px; padding: 0; }
 .toolbar output { min-width: 3.2em; color: var(--text); }
-.toolbar input:disabled { background: #eef0f3; color: var(--muted); }
+.toolbar input:disabled, .size-row input:disabled { background: #eef0f3; color: var(--muted); }
 
 button { font: inherit; padding: 4px 10px; border: 1px solid var(--line); background: var(--panel-alt); border-radius: 4px; cursor: pointer; }
 button:hover:not(:disabled) { background: #eef1f5; }
@@ -36,6 +39,22 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
 .column { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
+/* Right-hand stage: size row, view row, action strip, properties bar and the label preview, top to bottom */
+.stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* Label-size row (first row of the stage) and view options row below it: same panel row, same controls look as the toolbar */
+.size-row, .view-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 38px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+/* Code panel header (P1g): title on the left, file actions on the right, wrapping inside the narrow column.
+   The bottom margin lives here (not on the h2) so the textarea spacing is unchanged. */
+.panel-head { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 6px 10px; margin-bottom: 8px; }
+.panel .panel-head h2 { margin: 0; }
+.panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
+/* Example row (P1h): own small row under the help text of the code panel, left aligned */
+.panel-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 8px; margin-top: 6px; min-width: 0; }
+/* Example pair: label + select + button read as one joined control (square inner corners, shared border) */
+.btn-group { display: flex; align-items: stretch; min-width: 0; max-width: 100%; }
+.panel-foot .btn-group label { min-width: 0; gap: 4px; }
+.panel-foot .btn-group select { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 4px 0 0 4px; }
+.panel-foot .btn-group button { margin-left: -1px; border-radius: 0 4px 4px 0; white-space: nowrap; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 small { color: var(--muted); }
 
@@ -51,6 +70,10 @@ textarea.drag { outline: 2px dashed var(--accent); }
 
 /* Messages (the class is the message level) */
 .msgs { margin: 0; padding-left: 18px; }
+/* Avisos panel: last block of the stage, below the label drawing. It grows with its content (no max-height, no inner scroll):
+   with many warnings the page scrolls. Minimum footprint (list at two lines) is counted in the SVG rule below. */
+.msgs-panel { padding: 6px 12px; }
+.msgs-panel h2 { margin: 0 0 4px; }
 .msgs li { margin: 2px 0; }
 .msgs li.error { color: var(--err); }
 .msgs li.warning { color: var(--warn); }
@@ -65,21 +88,56 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .convert-note { color: var(--warn); }
 .convert-status { color: var(--muted); }
 
+/* Action strip: the component palette as a compact horizontal row (palette.js hides this wrapper when the language has no templates) */
+.strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; padding: 6px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+/* Same look as the "Propiedades" heading (.panel h2): 13px, bold, uppercase, muted */
+.strip-title { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); white-space: nowrap; }
+.strip .palette { gap: 6px; }
+.strip .palette-item { padding: 3px 8px; font-size: 12px; }
+
 /* Preview container */
 .preview { min-width: 0; }
 .preview .bar { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 6px; font-family: Consolas, monospace; }
-/* The maximum height avoids vertical scrolling with rotated (tall and narrow) labels: the drawing is centered and fitted */
-#svgwrap svg { width: 100%; height: auto; max-height: calc(100vh - 140px); display: block; background: #f4f5f7; }
+/* The maximum height avoids vertical scrolling with rotated (tall and narrow) labels: the drawing is centered and fitted.
+   360px = 49 (header, now the only bar: 10+10 padding + 28 logo + 1 border) + 32 (main padding top and bottom) + 16 (preview header)
+   + 172 (stage rows: size row 38 + view row 38 + action strip 48 + properties bar 48) + 48 (four 12px stage gaps)
+   + ~40 (preview caption, padding and borders) = 357, rounded up to 360. Previous 350px had ~92 for two bars; the second bar is gone
+   (-43), plus the size row 38 and one more gap 12 (+50), net +7 -> 357.
+   P1d re-check: the file actions moved from the header into the size row, but the header stays one bar of the same height
+   (logo 28 still sets it: 49) and the row count is unchanged (the groups share the existing size row, whose 38px min-height
+   already fits the buttons), so the arithmetic is unchanged: 360px. If the groups wrap on narrow widths the row grows, as before.
+   P1f: the file group left the size row (it is now in the left column, which does not affect the stage height), and the Avisos
+   panel was added below the preview: +130 (panel at its maximum, see .msgs-panel) + 12 (one more stage gap) = +142.
+   360 + 142 = 502, rounded to 500px.
+   P1h: the Avisos list no longer has a 96px maximum, so only the panel's MINIMUM footprint is subtracted now: h2 16 + h2 margin 4
+   + vertical padding 12 + borders 2 + list at two lines (2 x (18 line + 4 li margins) = 44) = 78, plus one 12px stage gap = 90.
+   360 + 90 = 450px. The floor of 240px keeps the drawing usable on short windows. With many warnings the panel grows past
+   that minimum and the PAGE scrolls (there is no inner scrollbar), the drawing size is unaffected. */
+#svgwrap svg { width: 100%; height: auto; max-height: max(240px, calc(100vh - 450px)); display: block; background: #f4f5f7; }
 
-/* Properties panel: one row per field, label on the left and the control on the right */
-.props { display: grid; grid-template-columns: 1fr; gap: 6px; }
-.props label { display: grid; grid-template-columns: minmax(90px, 1fr) 1.4fr; gap: 8px; align-items: center; color: var(--muted); }
+/* Properties bar: ONE compact row (title + fields inline), wrapping on narrow widths.
+   min-height 48px reserves the row's height (title/empty state/fields are ~30px plus the 6px+6px padding and borders)
+   so the preview below does not jump when an object is selected or deselected. */
+.props-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 48px; }
+.props-bar h2 { margin: 0; white-space: nowrap; }
+.props-bar .empty { margin: 0; }
+.props { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; }
+.props label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .props input, .props select { font: inherit; padding: 2px 4px; min-width: 0; }
-.props input[type=number] { width: 80px; }
+.props input[type=number] { width: 72px; }
 .props input[type=range] { width: 100px; padding: 0; }
-.props input[type=checkbox] { justify-self: start; }
 .props input:disabled { background: #eef0f3; color: var(--muted); }
 .props-input { display: flex; gap: 6px; align-items: center; }
 .props-input output { min-width: 3.2em; color: var(--text); }
-.props-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+.props-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .props-kind { text-transform: none; letter-spacing: 0; font-weight: 400; }
+
+/* Collapsible sections (js/collapse.js): the title is the toggle, with a chevron; collapsed keeps only the head (title row) */
+.collapse-toggle { cursor: pointer; user-select: none; display: inline-flex; align-items: center; gap: 6px; }
+.collapse-toggle::before { content: "\25BE"; display: inline-block; font-size: 12px; transition: transform .15s; }
+.is-collapsed .collapse-toggle::before { transform: rotate(-90deg); }
+.collapse-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+.is-collapsed > :not(.collapse-head) { display: none !important; }
+.is-collapsed .panel-actions { display: none; }
+.is-collapsed .panel-head, .is-collapsed h2 { margin-bottom: 0; }
+.props-bar.is-collapsed, .is-collapsed.panel { min-height: 0; }

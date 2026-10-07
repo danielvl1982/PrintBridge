@@ -42,7 +42,7 @@ test('sizes: apply without applySize leaves the text unchanged and says so', () 
 });
 
 test('sizes: apply with applySize returns the written text', () => {
-  const size = PB.sizes.resolve(PB.config.sizes[0]);
+  const size = PB.sizes.resolve({ w: 99, h: 55, p: 61 });
   const out = PB.sizes.apply(tpcl, '{C|}', size);
   assert.equal(out.supported, true);
   assert.match(out.text, /^\{D0610,0990,0550\|\}/);

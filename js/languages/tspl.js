@@ -357,9 +357,45 @@
     return { text: [...header, ...lines, 'PRINT 1,1', ''].join('\r\n'), diagnostics: ctx.diagnostics };
   }
 
+  // ---------------------------------------------------------------------------------------------------------------
+  // Size writing: resolved size (0.1 mm: { w, h, p }) -> SIZE / GAP lines
+
+  /** SIZE always; GAP (pitch - height) only when the pitch is larger than the height (else the separation is unknown). */
+  function sizeCommands(size) {
+    const out = [`SIZE ${mmNumber(size.w)} mm,${mmNumber(size.h)} mm`];
+    const pitch = size.p == null ? size.h : size.p;
+    if (pitch > size.h) out.push(`GAP ${mmNumber(pitch - size.h)} mm,0 mm`);
+    return out;
+  }
+
+  /**
+   * Writes the size in the text: the first SIZE line and the first GAP line are replaced in place, a missing SIZE is
+   * added at the top and a missing GAP right after the SIZE line. Only those command lines change (found with the parser's
+   * tokenizer, so BITMAP data and quoted content are never matched); the line ending and the trailing newline stay.
+   * With pitch == height no GAP is written and an existing one is left alone.
+   */
+  function applySize(text, size) {
+    const [sizeLine, gapLine] = sizeCommands(size);
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    let sizeCmd = null;
+    let gapCmd = null;
+    for (const cmd of commands(text)) {
+      if (!sizeCmd && /^SIZE\b/i.test(cmd.raw)) sizeCmd = cmd;
+      else if (!gapCmd && /^GAP\b/i.test(cmd.raw)) gapCmd = cmd;
+    }
+    const edits = []; // { start, end, value } on the original text
+    const sizeValue = sizeLine + (gapLine && !gapCmd ? eol + gapLine : '');
+    if (sizeCmd) edits.push({ start: sizeCmd.start, end: sizeCmd.end, value: sizeValue });
+    else edits.push({ start: 0, end: 0, value: sizeValue + eol });
+    if (gapLine && gapCmd) edits.push({ start: gapCmd.start, end: gapCmd.end, value: gapLine });
+    let out = text;
+    for (const e of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, e.start) + e.value + out.slice(e.end);
+    return out;
+  }
+
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS });
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
-  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn' });
+  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

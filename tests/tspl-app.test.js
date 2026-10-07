@@ -93,20 +93,24 @@ test('the configuration offers 203 and 300 dpi, 203 first (the TPCL default)', (
   assert.deepEqual([...PB.config.resolutions], [203, 300]);
 });
 
-test('TSPL has none of the optional editing hooks, so the app takes its absent-hook paths', () => {
-  for (const hook of ['moveItem', 'updateItem', 'describeItem', 'componentTemplates', 'buildComponent', 'insertCommand', 'sizeCommands', 'applySize']) {
+test('TSPL has none of the optional editing hooks but the size ones, so the app takes its absent-hook paths', () => {
+  for (const hook of ['moveItem', 'updateItem', 'describeItem', 'componentTemplates', 'buildComponent', 'insertCommand']) {
     assert.equal(tspl[hook], undefined, hook);
   }
+  // TSPL writes the label size (SIZE/GAP)
+  for (const hook of ['sizeCommands', 'applySize']) assert.equal(typeof tspl[hook], 'function', hook);
   // TPCL keeps all of them
   for (const hook of ['moveItem', 'updateItem', 'describeItem', 'componentTemplates', 'buildComponent', 'insertCommand', 'applySize']) {
     assert.equal(typeof tpcl[hook], 'function', hook);
   }
 });
 
-test('size Apply on a TSPL label does not change the text and reports it as unsupported', () => {
+test('size Apply on a TSPL label writes SIZE and GAP and reports it as supported', () => {
   const source = PB.examples.find(e => e.language === 'tspl').source;
-  const result = PB.sizes.apply(PB.languages.detect(source), source, PB.sizes.resolve({ name: 'x', w: 50, h: 30, p: 30 }));
-  assert.deepEqual(result, { text: source, supported: false });
+  const result = PB.sizes.apply(PB.languages.detect(source), source, PB.sizes.resolve({ name: 'x', w: 50, h: 30, p: 33 }));
+  assert.equal(result.supported, true);
+  assert.match(result.text, /^SIZE 50 mm,30 mm/im);
+  assert.match(result.text, /^GAP 3 mm,0 mm/im);
 });
 
 test('the palette of a language without componentTemplates is empty and its panel hidden', () => {

@@ -55,7 +55,7 @@ const example = PB.examples[0];
 const tpcl = PB.languages.get('tpcl');
 const draw = rotation => {
   const model = tpcl.parse(example.source, { dpi: 203 });
-  const area = PB.sizes.view(model, PB.sizes.resolve(PB.config.sizes[0]));
+  const area = PB.sizes.view(model);
   const opts = { textScale: 1, showGrid: true, showAnchors: true, values: example.values };
   return PB.svgRenderer.render(model, area, rotation === undefined ? opts : { ...opts, rotation }).svg;
 };

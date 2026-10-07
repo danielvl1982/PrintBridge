@@ -55,26 +55,26 @@ test('variables: names and substitution', () => {
   assert.equal(PB.variables.substitute('#QTY# mts <#LOT#> #X#', { QTY: '400', LOT: '200001' }), '400 mts 200001 #X#');
 });
 
-test('sizes: required gives an error if it does not match and nothing if it does', () => {
-  const size = PB.sizes.resolve(PB.config.sizes[0]);
-  const ok = PB.sizes.view(parse(example.source), size);
+test('sizes: the drawing follows the size the label declares, with no mismatch diagnostics', () => {
+  const ok = PB.sizes.view(parse(example.source));
   assert.deepEqual(ok.diagnostics, []);
   assert.deepEqual([ok.width, ok.height, ok.pitch], [990, 550, 610]);
-  const bad = PB.sizes.view(parse('{D0500,0900,0500|}'), size);
-  assert.equal(bad.diagnostics.length, 2);
-  assert.ok(bad.diagnostics.every(d => d.level === 'error'));
+  const other = PB.sizes.view(parse('{D0500,0900,0500|}'));
+  assert.deepEqual([other.width, other.height, other.pitch], [900, 500, 500]);
+  assert.deepEqual(other.diagnostics, []);
 });
 
-test('sizes: without D or a chosen size uses the fallback with a warning', () => {
-  const v = PB.sizes.view(parse('{PC001;0010,0010,05,05,J,00,B=A|}'), null);
+test('sizes: without D uses the fallback with a warning', () => {
+  const v = PB.sizes.view(parse('{PC001;0010,0010,05,05,J,00,B=A|}'));
   assert.equal(v.width, 990);
   assert.equal(v.diagnostics[0].level, 'warning');
 });
 
-test('sizes: apply writes D and AX', () => {
-  const size = PB.sizes.resolve(PB.config.sizes[0]);
+test('sizes: apply writes only D', () => {
+  const size = PB.sizes.resolve({ w: 99, h: 55, p: 61 });
   const out = PB.sizes.apply(tpcl, '{PC001;0010,0010,05,05,J,00,B=A|}', size).text;
-  assert.match(out, /^\{D0610,0990,0550\|\}\n\{AX;\+010,\+000,\+00\|\}\n/);
+  assert.match(out, /^\{D0610,0990,0550\|\}\n\{PC001/);
+  assert.doesNotMatch(out, /AX/);
 });
 
 test('validator: TPCL and neutral rules', () => {

@@ -1,7 +1,7 @@
 /**
  * Printer language registry. Each language provides:
  *   { id, name, detect(text) -> boolean, parse(text, { dpi }) -> model, validate?(model) -> diagnostics,
- *     sizeCommands?(resolvedSize) -> string[], matchesSize?(model, resolvedSize) -> diagnostics,
+ *     sizeCommands?(resolvedSize) -> string[],
  *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text,
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
  *     updateItem?(text, item, changes, { dpi }) -> text, describeItem?(item, text?) -> { kind, fields },
@@ -27,9 +27,8 @@
  * fileEncoding (optional, default 'utf-8'): how PB.convert.toBytes writes the emitted text to a file. 'latin1' is byte
  *   preserving (one byte per char code, '?' above 255) for languages whose text carries raw binary (TSPL BITMAP data).
  * fileExtension (optional, default 'txt'): the extension, without dot, PB.convert.fileName suggests for the emitted text.
- * Optional size fields (used by PB.sizes; without them the language neither checks nor writes the size):
+ * Optional size fields (used by PB.sizes; without them the language does not write the size):
  *   - sizeCommands: source text lines the language needs to declare that size.
- *   - matchesSize: diagnostics (error if the size is required) for the differences between the label and the size.
  *   - applySize: source text with the size written, replacing or adding its commands (idempotent).
  */
 (function (PB) {

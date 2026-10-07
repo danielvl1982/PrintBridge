@@ -110,37 +110,15 @@
   /** D command (without braces) matching a resolved size: D<pitch>,<width>,<length>. */
   const dCommand = s => `D${pad4(s.p)},${pad4(s.w)},${pad4(s.h)}`;
 
-  /** AX adjustment that goes with the catalog size (null if it has none). */
-  const axOf = size => (size.native && size.native.tpcl && size.native.tpcl.ax) || null;
-
-  /** {D…|} lines and, if the size requires it, {AX…|} that declare that size. */
+  /** The {D…|} line that declares the size (the {AX…|} adjustment is printer specific and is never written here). */
   function sizeCommands(size) {
-    const ax = axOf(size);
-    return [`{${dCommand(size)}|}`, ...(ax ? [`{${ax}|}`] : [])];
+    return [`{${dCommand(size)}|}`];
   }
 
-  /** Differences between the label's D/AX and the chosen size. Error if the size is required, warning if not. */
-  function matchesSize(model, size) {
-    const make = size.required ? diag.error : diag.warning;
-    const { dRaw, axRaw } = model.size.native;
-    const want = dCommand(size);
-    const ax = axOf(size);
-    const out = [];
-    if (dRaw !== want) {
-      out.push(make(`${size.name}: la etiqueta debería llevar {${want}|} (${units.formatMm(size.w)}×${units.formatMm(size.h)} mm) y lleva ${dRaw ? '{' + dRaw + '|}' : 'ninguno'}. Usa "Aplicar a la etiqueta"`));
-    }
-    if (ax && axRaw !== ax) {
-      out.push(make(`${size.name}: el ajuste debe ser {${ax}|} y es ${axRaw ? '{' + axRaw + '|}' : 'inexistente'}`));
-    }
-    return out;
-  }
-
-  /** Writes the size (and its AX, if it has one) in the text, replacing or adding the commands. */
+  /** Writes the size in the text, replacing the {D…|} command or adding it at the start. An existing {AX…|} is left untouched. */
   function applySize(text, size) {
-    const [d, ax] = sizeCommands(size);
-    let out = /\{D\d[^|]*\|\}/.test(text) ? text.replace(/\{D\d[^|]*\|\}/, d) : `${d}\n${text}`;
-    if (ax) out = /\{AX;[^|]*\|\}/.test(out) ? out.replace(/\{AX;[^|]*\|\}/, ax) : out.replace(d, `${d}\n${ax}`);
-    return out;
+    const [d] = sizeCommands(size);
+    return /\{D\d[^|]*\|\}/.test(text) ? text.replace(/\{D\d[^|]*\|\}/, () => d) : `${d}\n${text}`;
   }
 
   /**
@@ -294,7 +272,7 @@
   /** Print command written when the source does not provide one (parameters of the reference spool example). */
   const DEFAULT_XS = 'XS;I,0001,0002C4100';
 
-  /** {D…|}, {AX…|} and {C|}: D/AX are reused from the source while the size is unchanged, else built (AX from the catalog). */
+  /** {D…|}, {AX…|} and {C|}: D/AX are reused from the source while the size is unchanged, else D is built and AX is dropped. */
   function headerLines(model, ctx) {
     const size = (model && model.size) || {};
     const native = size.native || {};
@@ -306,10 +284,9 @@
       const m = native.dRaw && /^D(\d+),(\d+),(\d+)/.exec(native.dRaw);
       const unchanged = !!m && +m[1] === pitch && +m[2] === size.width && +m[3] === size.height;
       out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w: size.width, h: size.height })));
-      const known = PB.sizes.createCatalog(PB.config.sizes).findBySize({ pitch, width: size.width, height: size.height });
-      const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : axOf(known || {});
+      const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : null;
       if (ax) out.push(wrap(ax));
-      else ctx.report(diag.info('No se escribe {AX…|}: el tamaño no está en el catálogo, compruebe el ajuste en su impresora'));
+      else ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
       if (size.pitch == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
     }
     out.push(wrap('C'));
@@ -411,7 +388,6 @@
     parse,
     validate: model => model.items.flatMap(item => ALL_RULES.flatMap(rule => rule(item))),
     sizeCommands,
-    matchesSize,
     applySize,
     insertCommand,
     moveItem,

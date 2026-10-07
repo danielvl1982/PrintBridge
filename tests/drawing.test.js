@@ -7,9 +7,9 @@ const PB = loadUpTo('js/drawing.js');
 const example = PB.examples[0];
 const tpcl = PB.languages.get('tpcl');
 
-const draw = (src, { dpi = 203, area = PB.sizes.resolve(PB.config.sizes[0]), values = example.values, model } = {}) => {
+const draw = (src, { dpi = 203, values = example.values, model } = {}) => {
   const m = model || tpcl.parse(src, { dpi });
-  const view = PB.sizes.view(m, area);
+  const view = PB.sizes.view(m);
   return PB.svgRenderer.render(m, view, { textScale: 1, showGrid: false, showAnchors: false, values });
 };
 const count = (svg, re) => (svg.match(re) || []).length;

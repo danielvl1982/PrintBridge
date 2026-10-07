@@ -1,28 +1,26 @@
 /**
  * PrintBridge configuration: known label sizes and example labels.
- * It is the only file that needs to be touched to add a fixed size or a new example.
+ * It is the only file that needs to be touched to add a standard size or a new example.
  * The fonts and commands specific to each language live in its module (js/languages/).
  */
 
 /**
  * Static configuration, common to all languages.
- * Known label sizes are added here.
+ * Standard label sizes are added here.
  */
 (function (PB) {
   'use strict';
 
   PB.config = Object.freeze({
     /**
-     * Known label sizes (in mm). For other sizes, use "Personalizado…" in the viewer.
-     *  - p: pitch (distance between the start of one label and the next).
-     *  - native: language-specific data, by id (tpcl.ax: {AX…|} adjustment the label must carry).
-     *  - required: if true, a label that does not match is an error instead of a warning.
+     * Standard label sizes (in mm), language-agnostic. For other sizes, type them in the Formato row ("Personalizado…").
+     *  - id: "<w>x<h>"; p: pitch (distance between the start of one label and the next) = height + 3 mm.
      */
     sizes: Object.freeze([
-      { id: 'spool-99x55', name: 'Bobina 99×55 (TEC)', w: 99, h: 55, p: 61, native: { tpcl: { ax: 'AX;+010,+000,+00' } }, required: true },
-    ]),
+      [100, 150], [100, 100], [100, 60], [80, 50], [60, 40], [50, 30], [40, 30],
+    ].map(([w, h]) => Object.freeze({ id: `${w}x${h}`, name: `${w}×${h} mm`, w, h, p: h + 3 }))),
 
-    /** Size used for drawing if the label does not declare its own and none has been chosen (in 0.1 mm). */
+    /** Size used for drawing if the label does not declare its own (in 0.1 mm). */
     fallbackSize: Object.freeze({ w: 990, h: 550 }),
 
     /** Ratio of the capital letter height to the font size (to detect overlaps of real ink). */
@@ -45,7 +43,6 @@
       id: 'spool-99x55',
       name: 'Etiqueta de bobina — ejemplo',
       language: 'tpcl',
-      sizeId: 'spool-99x55',
       values: {
         MFRDATE: '2026/Jan/01', PN: '100001', LOT: '200001', QTY: '400', ROLLNUM: '1', TOTALROLLS: '10',
         CODIGOBARRAS: '100001@200001@400 mts@1/10@2026/Jan/01',
