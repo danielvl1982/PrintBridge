@@ -43,6 +43,8 @@
       onInsert: insertComponent,
     },
   );
+  // The image slice owns its palette entry (kind, label) and the file-picker half of the overlay
+  const imageComponent = PB.components.get('image');
   const palette = ui.createPalette($('palette'), { onInsert: kind => insertComponent(kind, DEFAULT_COMPONENT_POINT[0], DEFAULT_COMPONENT_POINT[1]) });
   // Language whose components the palette shows (null = none yet); the list is rebuilt only when it changes
   let paletteLanguage;
@@ -65,6 +67,9 @@
     { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay') },
     { onChange: changeProperty },
   );
+
+  // Picks the file for the image entry and remembers where the picture lands
+  const imagePicker = imageComponent.overlay.createPicker({ fileInput: $('imageFile'), refresh: options => refresh(options) });
 
   let lastModel = null;
 
@@ -226,36 +231,8 @@
     paletteLanguage = language;
     const entries = language && language.componentTemplates ? [...language.componentTemplates()] : [];
     // The image is an app-level entry (a preview overlay, not a language component); it needs insertCommand to be written later
-    if (language && language.insertCommand) entries.push({ kind: IMAGE_KIND, label: 'Imagen' });
+    if (language && language.insertCommand) entries.push({ kind: imageComponent.kind, label: imageComponent.label });
     palette.render(entries);
-  }
-
-  /** Palette kind of the image entry: handled by the app, never passed to the language. */
-  const IMAGE_KIND = 'image';
-
-  /** Position (mm) the next loaded image takes, set when the picker is opened from the palette; null = keep the fields. */
-  let pendingImagePosition = null;
-  $('imageFile').addEventListener('cancel', () => { pendingImagePosition = null; });
-
-  /**
-   * Opens the file picker for the image entry; the loaded picture is placed at x, y (label units, 0.1 mm).
-   * A drop is not a reliable user gesture for file pickers: if the browser reports no active gesture, or click() throws,
-   * the user is told to click the entry instead.
-   */
-  function pickImage(x, y, { dropped = false } = {}) {
-    const hint = diag.warning('El navegador no permite abrir el selector de archivos al soltar: haz clic en "Imagen" de la paleta');
-    if (dropped && navigator.userActivation && !navigator.userActivation.isActive) {
-      refresh({ notices: [hint] });
-      return;
-    }
-    const toMm = value => Math.min(999.9, Math.max(0, Math.round(value) / 10));
-    pendingImagePosition = [toMm(x), toMm(y)];
-    try {
-      $('imageFile').click();
-    } catch (error) {
-      pendingImagePosition = null;
-      refresh({ notices: [hint] });
-    }
   }
 
   /**
@@ -263,8 +240,8 @@
    * Ctrl+Z working in the editor, and the first command it added is selected.
    */
   function insertComponent(kind, x, y, { dropped = false } = {}) {
-    if (kind === IMAGE_KIND) {
-      pickImage(x, y, { dropped });
+    if (kind === imageComponent.kind) {
+      imagePicker.pick(x, y, { dropped });
       return;
     }
     const language = languages.detect(editor.text()) || languages.get('tpcl');
@@ -318,10 +295,8 @@
     readImage(file).then(
       image => {
         state.image = image;
-        if (pendingImagePosition) {
-          imagePanel.setPosition(...pendingImagePosition);
-          pendingImagePosition = null;
-        }
+        const position = imagePicker.takePosition();
+        if (position) imagePanel.setPosition(...position);
         // Drop any conversion still running for the previous picture: its stale result would leave previewKey set
         cancelPreview();
         imagePanel.setActive(true);
@@ -330,7 +305,7 @@
         updatePreview();
       },
       error => {
-        pendingImagePosition = null;
+        imagePicker.clear();
         refresh({ notices: [diag.error(`No se pudo añadir la imagen: ${error.message}`)] });
       },
     );

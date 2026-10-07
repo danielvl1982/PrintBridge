@@ -1,12 +1,12 @@
 /**
  * Image slice: registers the `image` component (TPCL SG graphic and the preview overlay). Loads after the other files of
- * the slice (codec.js, render.js, tpcl.js). It has no `build` hook, so the language does not list it as a template: the
+ * the slice (codec.js, render.js, tpcl.js, panel.js, overlay.js). It has no `build` hook, so the language does not list it as a template: the
  * app adds its palette entry itself (it opens a file picker) after the language's templates, which is why it is last.
  */
 (function (PB) {
   'use strict';
 
-  const { render, tpcl } = PB.slices.image;
+  const { render, tpcl, overlay } = PB.slices.image;
 
   PB.components.register({
     kind: 'image',
@@ -17,6 +17,8 @@
     // No data command: skipped by the "no content" rule
     carriesData: false,
     render,
+    // File-picker half of the preview overlay (the app creates one picker and owns the overlay state)
+    overlay,
     languages: { tpcl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

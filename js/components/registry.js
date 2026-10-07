@@ -24,6 +24,8 @@
  *                                analysis uses the group's getBBox() for both. The text hook also fits its .hit area
  *     validate(item),            neutral (language-independent) validation: returns diagnostics for that item, run by
  *                                PB.validator after the rules every kind shares (barcode: approximate symbologies)
+ *     overlay,                   preview-overlay helpers owned by the slice (image: { createPicker({ fileInput, refresh }) }),
+ *                                used by js/app.js, which keeps the overlay state
  *     languages: {
  *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable?, rules? })
  *     }
