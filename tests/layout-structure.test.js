@@ -12,7 +12,7 @@ const REQUIRED_IDS = [
   'palette', 'propsPanel', 'propsKind', 'propsEmpty', 'propsForm', 'propsOverlay',
   'imgX', 'imgY', 'imgW', 'imgThreshold', 'imgThresholdValue', 'btnImageInsert', 'btnImageRemove', 'imageFile',
   'svgwrap', 'dims', 'cursor', 'src', 'vars', 'msgs', 'convert',
-  'dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap', 'btnOpen', 'file', 'example', 'btnExample',
+  'dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap', 'btnOpen', 'file', 'example',
   'size', 'szW', 'szH', 'szP',
 ];
 
@@ -137,7 +137,7 @@ test('the logo is used in the header and as favicon, and the file is a safe SVG'
   assert.doesNotMatch(svg, /url\(\s*['"]?https?:/i);
 });
 
-const FILE_IDS = ['btnOpen', 'file', 'example', 'btnExample'];
+const FILE_IDS = ['btnOpen', 'file', 'example'];
 
 // P1f replaced the P1d test (file controls in the size row) with the two tests below.
 const columnHtml = () => html.slice(at('<div class="column">'), at('<div class="stage">'));
@@ -151,7 +151,7 @@ const codePanelHtml = () => {
 };
 
 // P1h changed the premise: only #btnOpen and #file stay in the header (before #src); the example pair moved below the help text.
-test('the file controls sit once in the Código de etiqueta panel: open/file before #src, example pair after it, none in the size row', () => {
+test('the file controls sit once in the Código de etiqueta panel: open/file before #src, example combo after it, none in the size row', () => {
   const panel = codePanelHtml();
   assert.ok(panel.includes('<h2>Código de etiqueta</h2>'), 'first column panel is Código de etiqueta');
   const src = panel.indexOf('id="src"');
@@ -167,26 +167,25 @@ test('the file controls sit once in the Código de etiqueta panel: open/file bef
   assert.ok(!html.includes('row-group'), 'the file/size group wrappers are gone');
 });
 
-test('Código panel order: header (title, Abrir archivo, hidden file), #src, help text, then the joined example group', () => {
+test('Código panel order: header (title, Abrir archivo, hidden file), #src, help text, then the example combo', () => {
   assert.ok(!html.includes('file-row'), 'file-row is gone');
   const panel = codePanelHtml();
   assert.match(panel, /<div class="panel-head">\s*<h2>Código de etiqueta<\/h2>\s*<div class="panel-actions">/);
   const head = panel.slice(0, panel.indexOf('id="src"'));
   assert.ok(head.indexOf('id="btnOpen"') > 0 && head.indexOf('id="file"') > head.indexOf('id="btnOpen"'), 'hidden input next to Abrir archivo');
-  assert.ok(!head.includes('btn-group') && !head.includes('id="example"') && !head.includes('id="btnExample"'), 'example pair is not in the header');
-  // #example / #btnExample are not inside .panel-actions.
+  assert.ok(!head.includes('id="example"'), 'the example combo is not in the header');
+  // #example is not inside .panel-actions.
   const actions = head.slice(head.indexOf('<div class="panel-actions">'));
-  assert.ok(!actions.includes('id="example"') && !actions.includes('id="btnExample"'), 'example pair is outside .panel-actions');
+  assert.ok(!actions.includes('id="example"'), 'the example combo is outside .panel-actions');
   const src = panel.indexOf('id="src"');
   const small = panel.indexOf('<small>');
-  const group = panel.indexOf('<div class="btn-group">');
-  assert.ok(src < small && small < group, '#src, then the help text, then the group');
-  assert.ok(panel.slice(small, group).includes('Clic en un elemento del dibujo selecciona su línea.'), 'help text is the <small> right before the group');
-  const body = panel.slice(group).match(/<div class="btn-group">([\s\S]*?)<\/div>/);
-  assert.ok(body, 'btn-group exists');
-  assert.ok(body[1].includes('id="example"') && body[1].includes('id="btnExample"'), 'select and button are in the group');
-  assert.ok(body[1].indexOf('id="example"') < body[1].indexOf('id="btnExample"'), 'button right after the select');
-  assert.ok(!body[1].includes('id="btnOpen"'), 'Abrir archivo is outside the group');
+  const example = panel.indexOf('id="example"');
+  assert.ok(src < small && small < example, '#src, then the help text, then the example combo');
+  assert.ok(panel.slice(small, example).includes('Clic en un elemento del dibujo selecciona su línea.'), 'help text comes right before the combo row');
+  const foot = panel.match(/<div class="panel-foot">([\s\S]*?)<\/div>/);
+  assert.ok(foot && foot[1].includes('id="example"'), 'the combo sits in .panel-foot');
+  assert.ok(!foot[1].includes('<button') && !foot[1].includes('id="btnOpen"'), 'no button in the example row');
+  assert.ok(!html.includes('btn-group') && !html.includes('btnExample') && !html.includes('Cargar ejemplo'), 'the joined group and its button are gone');
 });
 
 test('Avisos grows freely: no max-height or overflow rule on .msgs-panel / .msgs / #msgs', () => {
@@ -238,7 +237,6 @@ test('the file input keeps its attributes and the file controls keep their text'
     '<input id="file" type="file" accept=".ter,.txt,.zpl,.prn,.tspl,.tpcl" hidden>',
     '<button id="btnOpen">Abrir archivo…</button>',
     '<label>Ejemplo <select id="example"></select></label>',
-    '<button id="btnExample">Cargar ejemplo</button>',
   ]) assert.ok(html.includes(piece), piece);
 });
 
