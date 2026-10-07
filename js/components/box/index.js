@@ -16,6 +16,6 @@
     render: PB.slices.line.render,
     // Like lines, boxes take no part in the label-overflow and overlap checks
     layout: () => null,
-    languages: { tpcl: PB.slices.box.tpcl },
+    languages: { tpcl: PB.slices.box.tpcl, tspl: PB.slices.box.tspl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
