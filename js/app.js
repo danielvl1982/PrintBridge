@@ -20,7 +20,7 @@
   // image: picture overlaid on the label, { href (data URL), naturalW, naturalH } or null. Preview only, never written to the code.
   // image also holds `converted` once the 1-bit conversion that the preview shows is ready:
   // { key: 'WxH@threshold', bitmap: { w, h, data } | null (null = conversion failed, plain picture shown) }.
-  const state = { values: { ...examples[0].values }, image: null };
+  const state = { values: { ...examples[0].values }, image: null, fileName: undefined };
 
   const messages = ui.createMessagesPanel($('msgs'));
   const variablesPanel = ui.createVariablesPanel($('vars'), { values: state.values, onChange: () => refresh() });
@@ -29,7 +29,7 @@
     catalog,
     { onApply: applySize },
   );
-  const editor = ui.createEditor($('src'), { openButton: $('btnOpen'), fileInput: $('file') }, { onEdit: () => refresh(), onOpen: text => open(text) });
+  const editor = ui.createEditor($('src'), { openButton: $('btnOpen'), fileInput: $('file') }, { onEdit: () => refresh(), onOpen: (text, name) => { if (name) state.fileName = name; open(text); } });
   const preview = ui.createPreview(
     { container: $('svgwrap'), cursor: $('cursor'), dimensions: $('dims') },
     {
@@ -63,8 +63,8 @@
     },
   );
 
-  // "Convertir a...": converts what the editor holds at the resolution the app parses with; no file name is tracked yet
-  ui.createConvertPanel({ root: $('convert'), getText: () => editor.text(), getDpi: () => Number($('dpi').value), getSourceName: () => undefined });
+  // "Convertir a...": converts what the editor holds at the resolution the app parses with; downloads are named after the opened file (or the example)
+  ui.createConvertPanel({ root: $('convert'), getText: () => editor.text(), getDpi: () => Number($('dpi').value), getSourceName: () => state.fileName });
 
   // Collapsible sections: after every title is rendered (the Convertir panel builds its own)
   ui.initCollapsible(document);
@@ -450,6 +450,7 @@
   }
 
   function loadExample(example) {
+    state.fileName = example.id;
     Object.assign(state.values, example.values);
     variablesPanel.invalidate();
     open(example.source, { language: languages.get(example.language) });

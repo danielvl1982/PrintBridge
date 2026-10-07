@@ -198,7 +198,7 @@
 /**
  * Label code editor: type, paste, drag a file or open it with the button.
  *  - onEdit(): the user changed the text by typing (notified after a short delay).
- *  - onOpen(text): a whole label arrives (pasted, dragged or opened from a file).
+ *  - onOpen(text, name?): a whole label arrives (pasted, dragged or opened from a file); name is the file name, none when pasted.
  */
 (function (PB) {
   'use strict';
@@ -209,7 +209,7 @@
   function createEditor(textarea, { openButton, fileInput }, { onEdit, onOpen }) {
     let timer;
     // Files are read as bytes so that binary payloads (TSPL BITMAP) survive; see PB.ui.decodeFile
-    const readFile = file => file.arrayBuffer().then(buffer => onOpen(PB.ui.decodeFile(new Uint8Array(buffer))));
+    const readFile = file => file.arrayBuffer().then(buffer => onOpen(PB.ui.decodeFile(new Uint8Array(buffer)), file.name));
 
     textarea.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(onEdit, EDIT_DELAY_MS); });
     // After pasting, the text is already in the textarea: it is treated as a new label (to choose its size)
