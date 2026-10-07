@@ -50,11 +50,8 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 .panel-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; min-width: 0; }
 /* Example row (P1h): own small row under the help text of the code panel, left aligned */
 .panel-foot { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-start; gap: 6px 8px; margin-top: 6px; min-width: 0; }
-/* Example pair: label + select + button read as one joined control (square inner corners, shared border) */
-.btn-group { display: flex; align-items: stretch; min-width: 0; max-width: 100%; }
-.panel-foot .btn-group label { min-width: 0; gap: 4px; }
-.panel-foot .btn-group select { min-width: 0; max-width: 100%; border: 1px solid var(--line); border-radius: 4px 0 0 4px; }
-.panel-foot .btn-group button { margin-left: -1px; border-radius: 0 4px 4px 0; white-space: nowrap; }
+.panel-foot label { min-width: 0; gap: 4px; }
+.panel-foot select { min-width: 0; max-width: 100%; }
 .panel h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 8px; }
 small { color: var(--muted); }
 

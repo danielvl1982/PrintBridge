@@ -52,7 +52,7 @@ Any of these ways:
 - Paste the label content into the **Código de etiqueta** box.
 - Drag the file (`.ter`, `.txt`, `.zpl`, `.prn`, `.tspl` or `.tpcl`) onto that box.
 - **Abrir archivo…** button.
-- **Cargar ejemplo** button: loads the reference 99×55 spool label with sample data, a barcode example (TPCL) or a 100×60 TSPL label.
+- **Ejemplo** combo: choosing an entry loads the reference 99×55 spool label with sample data, a barcode example (TPCL) or a 100×60 TSPL label.
 
 The drawing updates immediately while typing in the code, so coordinates and sizes can be tried directly.
 

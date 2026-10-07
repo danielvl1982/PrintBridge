@@ -459,8 +459,7 @@
 
   // --- Startup ---
   $('dpi').replaceChildren(...config.resolutions.map(d => Object.assign(document.createElement('option'), { value: d, textContent: `${d} dpi` })));
-  $('example').replaceChildren(...examples.map(e => Object.assign(document.createElement('option'), { value: e.id, textContent: e.name })));
-  $('btnExample').addEventListener('click', () => loadExample(examples.find(e => e.id === $('example').value)));
+  PB.ui.createExamplePicker($('example'), examples, { onPick: loadExample });
   ['dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap'].forEach(id => $(id).addEventListener('input', () => refresh()));
   // The resolution changes the size in dots, so the 1-bit preview has to be converted again
   $('dpi').addEventListener('input', () => updatePreview({ delay: PREVIEW_DELAY_MS }));

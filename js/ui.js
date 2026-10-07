@@ -24,6 +24,29 @@
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
 
 /**
+ * "Ejemplo" combo: a disabled placeholder is the shown value; choosing an example calls onPick(example) and the combo
+ * goes back to the placeholder, so choosing the same example again loads it again.
+ */
+(function (PB) {
+  'use strict';
+
+  function createExamplePicker(select, examples, { onPick }) {
+    const option = (value, textContent) => Object.assign(document.createElement('option'), { value, textContent });
+    const placeholder = Object.assign(option('', 'Elegir ejemplo…'), { disabled: true });
+    select.replaceChildren(placeholder, ...examples.map(e => option(e.id, e.name)));
+    select.value = '';
+    select.addEventListener('change', () => {
+      const example = examples.find(e => e.id === select.value);
+      select.value = '';
+      if (example) onPick(example);
+    });
+  }
+
+  PB.ui = PB.ui || {};
+  PB.ui.createExamplePicker = createExamplePicker;
+})(globalThis.PrintBridge = globalThis.PrintBridge || {});
+
+/**
  * "Variables" panel: one input per #VARIABLE# of the label.
  * The values are kept in the "values" object it receives (shared with the rest of the viewer).
  */
