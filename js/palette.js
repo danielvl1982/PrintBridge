@@ -11,7 +11,7 @@
   const COMPONENT_MIME = 'application/x-printbridge-component';
 
   /** Short text glyph of the kinds not migrated to a slice yet; a slice declares its own `glyph`. Unknown kinds get a generic one. */
-  const GLYPHS = Object.freeze({ barcode: '|||', qr: '▦', image: '🖼' });
+  const GLYPHS = Object.freeze({ qr: '▦', image: '🖼' });
 
   const glyphOf = kind => (PB.components.get(kind) || {}).glyph || GLYPHS[kind] || '+';
 

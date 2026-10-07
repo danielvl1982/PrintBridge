@@ -31,13 +31,6 @@
   /** Control commands that draw nothing. */
   const CONTROL_COMMANDS = Object.freeze(['C', 'XS', 'AX', 'XQ']);
 
-  /** Neutral symbology of each TPCL barcode type (the other types are 'unknown'). */
-  const SYMBOLOGIES = Object.freeze({ 2: 'itf', 3: 'code39', B: 'code39', 9: 'code128', A: 'code128', T: 'qr' });
-  const symbologyOf = type => SYMBOLOGIES[type] || 'unknown';
-
-  /** Check digit option (field e of Code 39 / ITF) -> neutral check; the options not listed are 'unsupported'. */
-  const CHECK_OPTIONS = Object.freeze({ code39: { 1: 'none', 3: 'mod43' }, itf: { 1: 'none' } });
-
   const DIGITS = /^\d+$/;
 
   /** TPCL rotation in degrees, clockwise: texts 00/11/22/33, barcodes 0/1/2/3. */
@@ -71,51 +64,6 @@
         ctx.addField(ref, {
           kind: 'qr', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3], cell: m[5] },
           ecc: ECC_LEVELS[m[4]] ?? DEFAULT_ECC, cell: +m[5] * ctx.dot, symbology: 'qr', native: { type: 'T', cell: +m[5] }, data: null,
-        });
-      },
-    },
-    {
-      // Code 39 / ITF: XBnn;x,y,<type>,<e check digit>,<ff narrow bar>,<gg narrow space>,<hh wide bar>,<ii wide space>,
-      //   <jj inter-character space>,<k rotation>,<llll height 0.1 mm>,<p human readable>[,<qq zero suppression>][,<r T|P|N start/stop>]
-      // Verified only for the legacy [ESC]XB form of the B-SX4T specification (research T9). The {XB…|} form is the
-      // same command but is NOT verified for B-EX4 / B-FV4 / B-EP4.
-      pattern: /^XB(\d+);(\d+),(\d+),([23B]),(.*)$/,
-      handle(m, cmd, ctx) {
-        const ref = 'XB' + m[1];
-        const symbology = symbologyOf(m[4]);
-        const [e, ff, gg, hh, ii, jj, k, height, readable, ...optional] = m[5].split(',');
-        const dots = [ff, gg, hh, ii, jj];
-        const validWidths = dots.every(v => DIGITS.test(v)) && +ff > 0;
-        const [narrowBar, narrowSpace, wideBar, wideSpace, interCharGap] = dots.map(v => +v * ctx.dot);
-        const startStop = optional.find(v => /^[TPN]$/.test(v)) ?? null;
-        if (!validWidths) ctx.report(diag.warning(`${ref}: anchos de barra y espacio no válidos, se dibuja con el módulo y relación 3:1`));
-        if (m[4] === 'B') ctx.report(diag.warning(`${ref}: Code39 con todo el ASCII (tipo B) no soportado por el visor: solo se dibujan los caracteres del Code39 estándar`));
-        if (startStop) ctx.report(diag.warning(`${ref}: opción de inicio/parada "${startStop}" no verificada por el visor, se dibuja con * automático`));
-        ctx.addField(ref, {
-          kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-          symbology, module: (+ff || 2) * ctx.dot, rotation: ROTATIONS[k] ?? 0, height: +height || 100,
-          ...(validWidths && { widths: { narrowBar, narrowSpace, wideBar, wideSpace }, interCharGap }),
-          check: CHECK_OPTIONS[symbology][e] ?? 'unsupported',
-          native: {
-            type: m[4], checkDigit: e, narrowBar: +ff, narrowSpace: +gg, wideBar: +hh, wideSpace: +ii, interCharGap: +jj,
-            startStop, zeroSuppression: optional.find(v => DIGITS.test(v)) ?? null,
-            ...(symbology === 'code39' && { fullAscii: m[4] === 'B' }),
-          },
-          humanReadable: readable === '1', data: null,
-        });
-      },
-    },
-    {
-      // 1D barcode: XBnn;x,y,<type>,<check digit>,<module>,<rotation>,<height>,<increment>,<000>,<human readable text>,<00>
-      pattern: /^XB(\d+);(\d+),(\d+),([^,]),(.*)$/,
-      handle(m, cmd, ctx) {
-        const ref = 'XB' + m[1];
-        const p = m[5].split(',');
-        ctx.addField(ref, {
-          kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-          symbology: symbologyOf(m[4]), module: (+p[1] || 2) * ctx.dot, rotation: ROTATIONS[p[2]] ?? 0, height: +p[3] || 100,
-          native: { type: m[4], module: +p[1] || 2 },
-          humanReadable: p[6] === '1', data: null,
         });
       },
     },
@@ -275,7 +223,6 @@
    * js/components/registry.js): COMPONENTS interleaves both by it.
    */
   const LEGACY_COMPONENTS = Object.freeze([
-    { kind: 'barcode', label: 'Código de barras', order: 20 },
     { kind: 'qr', label: 'QR', order: 30 },
   ]);
 
@@ -305,7 +252,6 @@
 
   /** Kinds that carry a variable: format/data command names, placeholder name and format options ({rot2}/{rot1}: rotation). */
   const VARIABLE_COMPONENTS = Object.freeze({
-    barcode: { format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,{rot1},0080,+0000000000,000,0,00' },
     qr: { format: 'XB', data: 'RB', name: 'QR', tail: 'T,H,04,A,0,M2' },
   });
 
@@ -338,7 +284,7 @@
     { pattern: /^\{XB\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
     { pattern: /^\{SG;(\d+)(D?),(\d+)(D?),/d, fields: [[1, 2, 'x'], [3, 4, 'y']] },
   ];
-  const MOVABLE = ['barcode', 'qr', 'image'];
+  const MOVABLE = ['qr', 'image'];
 
   /**
    * Moves an item by (dx, dy) in 0.1 mm: only the coordinate digits of its command are rewritten (same width, clamped
@@ -396,12 +342,6 @@
     read: raw => ROTATIONS[raw],
     write: (v, width) => (ROTATION_STEPS.includes(v) ? (width === 2 ? ROTATION_CODES[v] : String(ROTATION_STEPS.indexOf(v))) : null),
   });
-  const humanReadableField = group => ({
-    key: 'humanReadable', label: 'Texto legible', type: 'checkbox', group, model: item => item.humanReadable,
-    read: raw => (raw === '1' ? true : raw === '0' ? false : undefined),
-    write: v => (typeof v === 'boolean' ? (v ? '1' : '0') : null),
-  });
-  const barcodeHeight = group => numberField('height', 'Alto (0,1 mm)', group, 1, MAX_COORD, item => item.height);
   const ECC_OPTIONS = Object.freeze([['L', 'L - Baja'], ['M', 'M - Media'], ['Q', 'Q - Alta'], ['H', 'H - Máxima']]
     .map(([value, label]) => ({ value, label })));
 
@@ -420,19 +360,6 @@
         },
       ],
     },
-    { // Code 39 / ITF: …,<type>,e,ff,gg,hh,ii,jj,<rotation>,<height>,<human readable> (module widths not editable)
-      applies: item => item.kind === 'barcode' && ['2', '3', 'B'].includes(item.native && item.native.type),
-      pattern: /^\{XB\d+;\d+,\d+,[23B],(?:[^,]*,){6}(\d+),(\d+),([^,|]*)/d,
-      fields: [barcodeHeight(2), rotationField(1), humanReadableField(3)],
-    },
-    { // Other 1D barcodes: …,<type>,<check>,<module>,<rotation>,<height>,<increment>,<000>,<human readable>
-      applies: item => item.kind === 'barcode',
-      pattern: /^\{XB\d+;\d+,\d+,[^,],[^,]*,(\d+),(\d+),(\d+),[^,]*,[^,]*,([^,|]*)/d,
-      fields: [
-        numberField('module', 'Módulo (puntos)', 1, 1, 99, item => item.native.module),
-        barcodeHeight(3), rotationField(2), humanReadableField(4),
-      ],
-    },
   ];
 
   /**
@@ -441,7 +368,7 @@
    */
   const SLICE_HELPERS = Object.freeze({
     sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
-    ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD,
+    ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
   });
 
   /** Slices that provide TPCL hooks (js/components/*), with their hooks built from SLICE_HELPERS, in `order`. */
