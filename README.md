@@ -1,6 +1,6 @@
 # PrintBridge
 
-Tool to see how a label (for now, TPCL for TEC/Toshiba printers) looks **without printing it**, while it is being created or
+Tool to see how a label (TPCL for TEC/Toshiba printers, TSPL for TSC TTP printers) looks **without printing it**, while it is being created or
 modified. It warns about overlapping texts, items that go outside the label and wrong measures.
 
 **Live app: <https://danielvl1982.github.io/PrintBridge/>**
@@ -29,7 +29,10 @@ from scratch with the example label.
 | `js/core/` | Part common to all languages, one file per module: diagnostics, units, sources, variables, language registry, validation and sizes |
 | `js/components/registry.js` | `PB.components`: the registry where each label component registers itself |
 | `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
+| `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL reads, builds, moves and edits; TSPL only reads (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`) |
+| `js/components/compose.js` | `PB.composeSlices`: builds a language's handler table from the slices that registered for it |
 | `js/languages/tpcl.js` | TPCL reading (fonts and commands of the TEC/Toshiba printers) |
+| `js/languages/tspl.js` | TSPL reading (tokenizer, label setup commands and language registration; the drawing commands come from the component slices) |
 | `js/view.js` | Preview rotation (pure coordinate mapping) |
 | `js/drawing.js` | Label drawing and overlap detection |
 | `js/ui.js` | Screen panels |
@@ -46,7 +49,7 @@ Any of these ways:
 - Paste the label content into the **Código de etiqueta** box.
 - Drag the file (`.ter`, `.txt`, `.zpl`, `.prn`, `.tspl` or `.tpcl`) onto that box.
 - **Abrir archivo…** button.
-- **Cargar ejemplo** button: loads the reference 99×55 spool label with sample data.
+- **Cargar ejemplo** button: loads the reference 99×55 spool label with sample data, a barcode example (TPCL) or a 100×60 TSPL label.
 
 The drawing updates immediately while typing in the code, so coordinates and sizes can be tried directly.
 
@@ -142,6 +145,36 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 | `LC` | Lines and rectangles |
 | `SG` | Graphic (nibble data, modes 0 and 4); not verified on a printer |
 | `D`, `AX`, `C`, `XS`, `XQ` | Configuration: not drawn |
+
+## TSPL support (TSC TTP)
+
+The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`BITMAP`/`BAR`/`BOX`
+followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. It is **read only**: the label is drawn
+and clicking an item selects its line, but nothing is written back.
+
+| Command | What it is |
+|---|---|
+| `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SHIFT` | Label setup (size in inches, mm or dots; coordinates in dots) |
+| `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
+| `BARCODE` | Code128 (also `128M` and `EAN128`), Code39 and ITF / `25` are generated for real; EAN13 and the other types are drawn approximately and reported |
+| `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
+| `BAR`, `BOX` | Filled bar and rectangle outline (with thickness) |
+| `BITMAP` | Raw binary graphic (mode 0 overwrite; bit 0 = black, MSB first) |
+| `CLS`, `PRINT`, `DENSITY`, `SPEED`, `SET`, `CODEPAGE`, `FEED`... | Configuration: not drawn |
+
+Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
+(images stored in the printer). Also not supported:
+
+- **Editing:** moving items, the **Propiedades** panel, the component palette (it stays hidden), writing the size
+  (**Aplicar a la etiqueta**) and **Insertar en el código** for the preview image. A preview image can still be overlaid to check positions.
+- `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
+  information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), the `BOX` radius and the
+  text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.
+- **Resolución:** the dots-per-mm of a TSPL label are not in the file, so the **Resolución** selector (203 or 300 dpi) must match
+  the printer: coordinates are in dots, so the same label is drawn smaller at 300 dpi.
+- **Files with a `BITMAP`:** files opened or dragged (`.prn`, `.tspl`...) are read as bytes, so the graphic data survives. Pasted
+  text cannot carry arbitrary bytes, and the code box converts line breaks to a single LF, so a graphic byte `0x0D` is altered; for exact graphics open the file.
+- The viewer imitates the printer fonts (as with TPCL): text widths are approximate.
 
 ## Limitations
 

@@ -154,6 +154,41 @@
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
 
 /**
+ * File bytes -> editor text (PB.ui.decodeFile).
+ * UTF-8 is the default, as before. TSPL BITMAP data is raw binary: decoding it as UTF-8 turns every invalid sequence into
+ * U+FFFD and loses the bytes, while the TSPL tokenizer expects one character per byte (latin1). So when the bytes are not
+ * plain UTF-8 text of another language, the latin1 text is used if it is TSPL and it either failed to decode as UTF-8 or
+ * carries a BITMAP (whose bytes may form valid UTF-8 sequences by chance).
+ * Limits: pasted text (textarea) cannot carry arbitrary bytes, only files can; and the textarea itself normalizes
+ * CR / CRLF to LF, so a payload byte 0x0D is still altered once the text is in the editor.
+ */
+(function (PB) {
+  'use strict';
+
+  const BITMAP_LINE = /^[ \t]*BITMAP[ \t]+\d/im;
+  const CHUNK = 8192;
+
+  /** One character per byte (code points 0-255). */
+  function latin1(bytes) {
+    let text = '';
+    for (let i = 0; i < bytes.length; i += CHUNK) text += String.fromCharCode.apply(null, bytes.subarray(i, i + CHUNK));
+    return text;
+  }
+
+  function decodeFile(bytes) {
+    const utf8 = new TextDecoder('utf-8').decode(bytes);
+    if (!bytes.some(b => b > 127)) return utf8;
+    const raw = latin1(bytes);
+    const language = PB.languages.detect(raw);
+    if (language && language.id === 'tspl' && (utf8.includes('\uFFFD') || BITMAP_LINE.test(raw))) return raw;
+    return utf8;
+  }
+
+  PB.ui = PB.ui || {};
+  PB.ui.decodeFile = decodeFile;
+})(globalThis.PrintBridge = globalThis.PrintBridge || {});
+
+/**
  * Label code editor: type, paste, drag a file or open it with the button.
  *  - onEdit(): the user changed the text by typing (notified after a short delay).
  *  - onOpen(text): a whole label arrives (pasted, dragged or opened from a file).
@@ -166,7 +201,8 @@
 
   function createEditor(textarea, { openButton, fileInput }, { onEdit, onOpen }) {
     let timer;
-    const readFile = file => file.text().then(onOpen);
+    // Files are read as bytes so that binary payloads (TSPL BITMAP) survive; see PB.ui.decodeFile
+    const readFile = file => file.arrayBuffer().then(buffer => onOpen(PB.ui.decodeFile(new Uint8Array(buffer))));
 
     textarea.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(onEdit, EDIT_DELAY_MS); });
     // After pasting, the text is already in the textarea: it is treated as a new label (to choose its size)

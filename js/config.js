@@ -110,5 +110,27 @@
 
 {XS;I,0001,0002C4100|}`,
     },
+    {
+      id: 'tspl-label-100x60',
+      name: 'Etiqueta TSPL (TSC) — ejemplo 100×60 a 203 dpi',
+      language: 'tspl',
+      values: {},
+      // 100 x 60 mm = 800 x 480 dots at 203 dpi (8 dots/mm); ASCII only: TSPL text depends on the printer code page
+      source: `SIZE 100 mm,60 mm
+GAP 3 mm,0 mm
+DIRECTION 1
+REFERENCE 0,0
+CLS
+BOX 20,10,780,470,4
+TEXT 40,30,"4",0,1,1,"ETIQUETA TSPL"
+TEXT 40,90,"3",0,1,1,"Producto: Muestra 100"
+TEXT 40,130,"2",0,1,1,"Lote: 200001"
+TEXT 40,165,"1",0,1,1,"Cant: 400 mts"
+TEXT 420,40,"0",0,10,10,"Fuente escalable"
+BAR 20,205,760,3
+BARCODE 40,230,"128",100,1,0,2,2,"100001200001"
+QRCODE 560,240,L,6,A,0,"https://example.com/100001"
+PRINT 1,1`,
+    },
   ]);
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

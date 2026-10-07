@@ -244,8 +244,13 @@
       imagePicker.pick(x, y, { dropped });
       return;
     }
+    // Only an unrecognized (e.g. empty) text falls back to TPCL; a recognized language without the hook never gets TPCL commands
     const language = languages.detect(editor.text()) || languages.get('tpcl');
-    if (!language || !language.buildComponent) return;
+    if (!language) return;
+    if (!language.buildComponent) {
+      refresh({ notices: [diag.warning(`El lenguaje de la etiqueta (${language.name}) no admite insertar componentes`)] });
+      return;
+    }
     const text = editor.text();
     const built = language.buildComponent(text, kind, { x, y }, { dpi: Number($('dpi').value), viewRotation: Number($('rotation').value) });
     if (built === text) {
@@ -418,9 +423,10 @@
   function insertImage() {
     const image = state.image;
     if (!image) return;
+    // Only an unrecognized (e.g. empty) text falls back to TPCL; a recognized language without insertCommand is never written to
     const language = languages.detect(editor.text()) || languages.get('tpcl');
     if (!language.insertCommand) {
-      refresh({ notices: [diag.warning('El lenguaje de la etiqueta no admite insertar imágenes en el código')] });
+      refresh({ notices: [diag.warning(`El lenguaje de la etiqueta (${language.name}) no admite insertar imágenes en el código: la imagen es solo una vista previa`)] });
       return;
     }
     const placement = imagePanel.placement();

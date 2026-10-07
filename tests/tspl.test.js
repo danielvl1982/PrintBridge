@@ -199,7 +199,7 @@ test('detect: TSPL text yes; TPCL, ZPL-like, plain and empty text no', () => {
 });
 
 test('detect: the TPCL examples stay TPCL and TSPL text is not claimed by TPCL', () => {
-  for (const example of PB.examples) assert.equal(PB.languages.detect(example.source).id, 'tpcl');
+  for (const example of PB.examples.filter(e => e.language === 'tpcl')) assert.equal(PB.languages.detect(example.source).id, 'tpcl');
   assert.equal(PB.languages.detect('SIZE 100 mm,60 mm\r\nCLS\r\n').id, 'tspl');
   assert.equal(tpcl.detect('SIZE 100 mm,60 mm\r\nCLS\r\n'), false);
 });
