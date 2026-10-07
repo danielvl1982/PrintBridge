@@ -10,6 +10,8 @@
   --accent: #0a66c2;
   --warn: #b54708;
   --err: #c4320a;
+  --brand-dark: #143a49;
+  --brand-accent: #e88a23;
 }
 
 * { box-sizing: border-box; }
@@ -21,7 +23,9 @@ body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14p
 
 /* Toolbars */
 .toolbar { padding: 10px 16px; background: var(--panel); border-bottom: 1px solid var(--line); display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
-.toolbar h1 { font-size: 16px; margin: 0 12px 0 0; }
+.brand { font-size: 20px; font-weight: 800; letter-spacing: -.01em; line-height: 1; margin: 0 12px 0 0; }
+.brand-print { color: var(--brand-dark); }
+.brand-bridge { color: var(--brand-accent); }
 .toolbar .logo { width: 28px; height: 28px; margin-right: -6px; }
 .toolbar label, .view-row label, .size-row label, .panel-actions label, .panel-foot label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .panel-actions select, .panel-foot select { font: inherit; padding: 2px 4px; }
@@ -109,7 +113,8 @@ textarea.drag { outline: 2px dashed var(--accent); }
    P1h: the Avisos list no longer has a 96px maximum, so only the panel's MINIMUM footprint is subtracted now: h2 16 + h2 margin 4
    + vertical padding 12 + borders 2 + list at two lines (2 x (18 line + 4 li margins) = 44) = 78, plus one 12px stage gap = 90.
    360 + 90 = 450px. The floor of 240px keeps the drawing usable on short windows. With many warnings the panel grows past
-   that minimum and the PAGE scrolls (there is no inner scrollbar), the drawing size is unaffected. */
+   that minimum and the PAGE scrolls (there is no inner scrollbar), the drawing size is unaffected.
+   Brand header: the 28px logo still sets the header height (the 20px .brand wordmark with line-height 1 is shorter), so the arithmetic above is unchanged. */
 #svgwrap svg { width: 100%; height: auto; max-height: max(240px, calc(100vh - 450px)); display: block; background: #f4f5f7; }
 
 /* Properties bar: ONE compact row (title + fields inline), wrapping on narrow widths.

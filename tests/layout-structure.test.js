@@ -7,6 +7,8 @@ const path = require('node:path');
 
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+const css = fs.readFileSync(path.join(ROOT, 'css', 'viewer.css'), 'utf8');
+const BRAND_H1 = '<h1 class="brand"><span class="brand-print">Print</span><span class="brand-bridge">Bridge</span></h1>';
 
 const REQUIRED_IDS = [
   'palette', 'propsPanel', 'propsKind', 'propsEmpty', 'propsForm', 'propsOverlay',
@@ -116,7 +118,17 @@ test('no secondary toolbar remains and the header holds none of the size control
 
 test('the app is called "Print Bridge" in the title and the header', () => {
   assert.match(html, /<title>Print Bridge<\/title>/);
-  assert.match(html, /<h1>Print Bridge<\/h1>/);
+  assert.ok(html.includes(BRAND_H1), 'two-span brand wordmark');
+  const text = BRAND_H1.replace(/<[^>]+>/g, '');
+  assert.equal(text, 'PrintBridge');
+});
+
+test('the brand colours are CSS tokens and the two wordmark spans use them', () => {
+  assert.match(css, /--brand-dark:\s*#143a49\s*;/);
+  assert.match(css, /--brand-accent:\s*#e88a23\s*;/);
+  assert.match(css, /\.brand-print\s*\{[^}]*color:\s*var\(--brand-dark\)/);
+  assert.match(css, /\.brand-bridge\s*\{[^}]*color:\s*var\(--brand-accent\)/);
+  assert.match(css, /\.brand\s*\{[^}]*font-size:\s*20px/);
 });
 
 test('the logo is used in the header and as favicon, and the file is a safe SVG', () => {
@@ -126,7 +138,7 @@ test('the logo is used in the header and as favicon, and the file is a safe SVG'
   assert.ok(link, 'favicon link');
   assert.equal(img[1], 'img/logo.svg');
   assert.equal(link[1], 'img/logo.svg');
-  assert.ok(at('class="logo"') > at('<header class="toolbar">') && at('class="logo"') < at('<h1>'));
+  assert.ok(at('class="logo"') > at('<header class="toolbar">') && at('class="logo"') < at('<h1 class="brand">'));
   const file = path.join(ROOT, img[1]);
   assert.ok(fs.existsSync(file), 'logo file exists');
   const svg = fs.readFileSync(file, 'utf8');
@@ -135,6 +147,10 @@ test('the logo is used in the header and as favicon, and the file is a safe SVG'
   assert.doesNotMatch(svg, /<script/i);
   assert.doesNotMatch(svg, /\b(?:xlink:)?href\s*=/i);
   assert.doesNotMatch(svg, /url\(\s*['"]?https?:/i);
+  assert.doesNotMatch(svg, /<text[\s>]/i);
+  assert.match(svg, /#143a49/i);
+  assert.match(svg, /#e88a23/i);
+  assert.doesNotMatch(svg, /#0a66c2/i);
 });
 
 const FILE_IDS = ['btnOpen', 'file', 'example'];
@@ -223,7 +239,7 @@ test('the header holds only the logo and the title', () => {
   assert.doesNotMatch(header, /<(?:button|select|input|label|textarea)\b/);
   for (const id of FILE_IDS) assert.ok(!header.includes('id="' + id + '"'), id + ' still in the header');
   assert.match(header, /<img class="logo"/);
-  assert.match(header, /<h1>Print Bridge<\/h1>/);
+  assert.ok(header.includes(BRAND_H1));
 });
 
 test('the hidden image input stays outside the header and the rows, exactly once', () => {
