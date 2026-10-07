@@ -20,7 +20,7 @@ Before adding ZPL/TSPL (multi-printer-language-support T3+), each component must
 
 ## Tasks
 - [x] T1 Foundation: `PB.components` registry + shared file manifest for `index.html` and `tests/helpers/load.js` (tests use it). No code moved yet.
-- [ ] T2 `line` + `box` slices (render, parse LC, build, move, edit, validate).
+- [x] T2 `line` + `box` slices (render, parse LC, build, move, edit, validate).
 - [ ] T3 `text` slice (PC/PV).
 - [ ] T4 `barcode` slice (encoders from `barcodes.js`, render, parse, build, move, edit).
 - [ ] T5 `qr` slice (matrix, render, parse, build, move, edit).
@@ -40,4 +40,5 @@ Before adding ZPL/TSPL (multi-printer-language-support T3+), each component must
 ## Progress
 - Baseline: 201/201 tests pass on `main` (a12e6e4).
 - T1 done: RED observed (registry file missing), then GREEN; `node --test`: 206/206 pass (201 + 5 new). Added `js/components/registry.js`, `js/manifest.json`, `loadUpTo`/`loadApp`/`manifest` helpers; all tests migrated to `loadUpTo`; manifest-sync test covers index.html. Not yet committed.
-- Next: T2.
+- T2 done: RED observed (4/5 new slice tests failing before registration), then GREEN; `node --test`: 212/212 pass (206 + 5 slice tests + 1 forItem registry test), existing tests unchanged. Slices `js/components/line/{render,tpcl,index}.js` and `box/{tpcl,index}.js`; `PB.components.forItem`; tpcl.js/drawing.js/core.js validator/palette.js compose from the registry. Pattern: `<id>/render.js` and `<id>/<language>.js` publish on `PB.slices.<id>`, `<id>/index.js` registers; language hooks are `languages.tpcl = helpers => ({handlers, build, coordinates, editable})`. Not yet committed.
+- Next: T3.

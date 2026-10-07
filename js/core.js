@@ -371,10 +371,14 @@
   const EXACT_SYMBOLOGIES = Object.freeze(['code128', 'code39', 'itf']);
 
   const RULES = [
-    // Fields without content (lines and images carry no data by design)
-    item => (item.kind !== 'line' && item.kind !== 'image' && item.data == null
-      ? [diag.warning(`${item.ref}: sin texto ni comando de datos asociado`)]
-      : []),
+    // Fields without content (images and the slices declared with carriesData: false, like lines, carry no data by design)
+    item => {
+      const slice = PB.components.forItem(item);
+      const carriesData = slice ? slice.carriesData !== false : item.kind !== 'image';
+      return carriesData && item.data == null
+        ? [diag.warning(`${item.ref}: sin texto ni comando de datos asociado`)]
+        : [];
+    },
 
     // Barcodes the viewer does not generate exactly
     item => (item.kind === 'barcode' && !EXACT_SYMBOLOGIES.includes(item.symbology)

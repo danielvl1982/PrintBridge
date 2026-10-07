@@ -25,6 +25,17 @@ test('kinds keeps registration order and all returns the definitions', () => {
   assert.deepEqual(PB.components.all().map((d) => d.kind), kinds);
 });
 
+test('forItem picks the slice by model kind and matches predicate', () => {
+  PB.components.register({ kind: 'fi-plain' });
+  PB.components.register({ kind: 'fi-a', modelKind: 'fi-shared', matches: (i) => !i.flag });
+  PB.components.register({ kind: 'fi-b', modelKind: 'fi-shared', matches: (i) => !!i.flag });
+  assert.equal(PB.components.forItem({ kind: 'fi-plain' }).kind, 'fi-plain');
+  assert.equal(PB.components.forItem({ kind: 'fi-shared', flag: false }).kind, 'fi-a');
+  assert.equal(PB.components.forItem({ kind: 'fi-shared', flag: true }).kind, 'fi-b');
+  assert.equal(PB.components.forItem({ kind: 'none' }), undefined);
+  assert.equal(PB.components.forItem(undefined), undefined);
+});
+
 test('duplicate kind throws', () => {
   PB.components.register({ kind: 'reg-dup' });
   assert.throws(() => PB.components.register({ kind: 'reg-dup' }), /reg-dup/);

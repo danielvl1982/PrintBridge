@@ -10,8 +10,10 @@
   /** Drag data type carrying the component kind. */
   const COMPONENT_MIME = 'application/x-printbridge-component';
 
-  /** Short text glyph per component kind; unknown kinds get a generic one. */
-  const GLYPHS = Object.freeze({ text: 'Aa', barcode: '|||', qr: '▦', line: '─', box: '▭', image: '🖼' });
+  /** Short text glyph of the kinds not migrated to a slice yet; a slice declares its own `glyph`. Unknown kinds get a generic one. */
+  const GLYPHS = Object.freeze({ text: 'Aa', barcode: '|||', qr: '▦', image: '🖼' });
+
+  const glyphOf = kind => (PB.components.get(kind) || {}).glyph || GLYPHS[kind] || '+';
 
   function createPalette(container, { onInsert }) {
     return Object.freeze({
@@ -24,7 +26,7 @@
           item.tabIndex = 0;
           item.dataset.kind = kind;
           item.title = 'Arrastra a la etiqueta (o pulsa Intro) para insertarlo';
-          const glyph = Object.assign(document.createElement('span'), { className: 'palette-glyph', textContent: GLYPHS[kind] || '+' });
+          const glyph = Object.assign(document.createElement('span'), { className: 'palette-glyph', textContent: glyphOf(kind) });
           glyph.setAttribute('aria-hidden', 'true');
           item.append(glyph, label);
           item.addEventListener('dragstart', e => {

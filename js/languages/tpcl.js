@@ -5,7 +5,9 @@
  * to 0.1 mm with the resolution (dpi) and the original value is kept in item.native.
  *
  * To support a new command: add a handler to HANDLERS (pattern + function) and, if it draws something,
- * a renderer for its "kind" in RENDERERS of drawing.js. Nothing else needs to be touched.
+ * a renderer for its "kind" in RENDERERS of drawing.js. Components migrated to a slice (js/components/<id>/, see
+ * js/components/registry.js) bring their own TPCL handlers, build template, move coordinates and editable fields in
+ * `languages.tpcl`; this file composes them with its tables (ALL_*) and shares its helpers with them (SLICE_HELPERS).
  *
  * The model is the neutral one described in js/core.js. The items also carry kind and raw
  * (values as they were written, only for the TPCL format rules); size.native = { dRaw, axRaw }.
@@ -193,15 +195,6 @@
       },
     },
     {
-      // Line or rectangle: LC;x1,y1,x2,y2,<0 line | 1 rectangle>,<thickness in dots>
-      pattern: /^LC;(\d+),(\d+),(\d+),(\d+),(\d),(\d+)/,
-      handle(m, cmd, ctx) {
-        ctx.model.items.push({
-          kind: 'line', ref: 'LC', source: sourceOf(cmd), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4], rect: m[5] !== '0', width: +m[6] * ctx.dot, native: { width: +m[6] },
-        });
-      },
-    },
-    {
       // Graphic: SG;<x>[D],<y>[D],<width dots>,<height dots>,<e data mode>,<data>. x/y in 0.1 mm (dots with the D suffix).
       // Everything after the 5th comma is raw data up to the closing |}: nibble chars include ";" and ":" so it is never split.
       // Modes: e=0 overwrite, e=4 OR (both nibble data). Verified only against the B-SX4T manual: the {SG…|} framing is
@@ -269,7 +262,7 @@
       addField(ref, item) { this.fields[ref] = item; model.items.push(item); },
     };
     for (const cmd of commands(src)) {
-      const handler = HANDLERS.find(h => h.pattern.test(cmd.raw));
+      const handler = ALL_HANDLERS.find(h => h.pattern.test(cmd.raw));
       if (handler) handler.handle(cmd.raw.match(handler.pattern), cmd, ctx);
       else ctx.report(diag.warning(`Comando no soportado por el visor: {${cmd.raw.slice(0, 40)}|}`));
     }
@@ -342,20 +335,15 @@
     return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
   }
 
-  /** Component kinds of the palette (neutral), in display order. */
-  const COMPONENTS = Object.freeze([
+  /** Palette kinds not migrated to a slice yet, in display order (the slices' entries follow, see COMPONENTS). */
+  const LEGACY_COMPONENTS = Object.freeze([
     { kind: 'text', label: 'Texto' },
     { kind: 'barcode', label: 'Código de barras' },
     { kind: 'qr', label: 'QR' },
-    { kind: 'line', label: 'Línea' },
-    { kind: 'box', label: 'Caja' },
   ]);
 
   const MAX_COORD = 9999;
   const clampCoord = n => Math.min(MAX_COORD, Math.max(0, Math.round(n)));
-
-  /** Line and box sizes in 0.1 mm: [width, height]. */
-  const LINE_SIZE = Object.freeze({ line: [400, 0], box: [300, 200] });
 
   /**
    * Next free number of a format command (PV, XB) and its data command (RV, RB): the max of both plus one, with the
@@ -393,12 +381,8 @@
    */
   function buildComponent(text, kind, point, options) {
     if (!COMPONENTS.some(c => c.kind === kind) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
-    if (kind in LINE_SIZE) {
-      const [w, h] = LINE_SIZE[kind];
-      const x = Math.min(clampCoord(point.x), MAX_COORD - w);
-      const y = Math.min(clampCoord(point.y), MAX_COORD - h);
-      return insertCommand(text, `{LC;${pad4(x)},${pad4(y)},${pad4(x + w)},${pad4(y + h)},${kind === 'box' ? 1 : 0},03|}`);
-    }
+    const slice = SLICES.find(s => s.id === kind);
+    if (slice && slice.hooks.build) return slice.hooks.build(text, point, options);
     const { format, data, name } = VARIABLE_COMPONENTS[kind];
     // Rotated items extend from the anchor in the rotated direction, so near the label edges they can leave the label:
     // only the coordinate clamp above applies, the item is not shifted to fit.
@@ -416,21 +400,20 @@
   // stripped before matching (like commands()), so the groups are mapped back to the original text.
   const COORDINATES = [
     { pattern: /^\{(?:PC|PV|XB)\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
-    { pattern: /^\{LC;(\d+),(\d+),(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y'], [3, null, 'x'], [4, null, 'y']] },
     { pattern: /^\{SG;(\d+)(D?),(\d+)(D?),/d, fields: [[1, 2, 'x'], [3, 4, 'y']] },
   ];
-  const MOVABLE = ['text', 'barcode', 'qr', 'line', 'image'];
+  const MOVABLE = ['text', 'barcode', 'qr', 'image'];
 
   /**
    * Moves an item by (dx, dy) in 0.1 mm: only the coordinate digits of its command are rewritten (same width, clamped
    * to 0..9999, SG with the D suffix in dots). Items without a source or of an unknown kind leave the text unchanged.
    */
   function moveItem(text, item, dx, dy, { dpi }) {
-    const span = item && MOVABLE.includes(item.kind) && item.source && item.source.spans && item.source.spans[0];
+    const span = item && ALL_MOVABLE.includes(item.kind) && item.source && item.source.spans && item.source.spans[0];
     if (!span) return text;
     const original = text.slice(span.start, span.end);
     const { stripped, map } = stripNewlines(original);
-    for (const { pattern, fields } of COORDINATES) {
+    for (const { pattern, fields } of ALL_COORDINATES) {
       const m = pattern.exec(stripped);
       if (!m) continue;
       const delta = { x: dx, y: dy };
@@ -532,26 +515,30 @@
         barcodeHeight(3), rotationField(2), humanReadableField(4),
       ],
     },
-    { // Line / box: LC;x1,y1,<x2>,<y2>,<0 line | 1 box>,<thickness in dots>
-      applies: item => item.kind === 'line',
-      pattern: /^\{LC;\d+,\d+,(\d+),(\d+),(\d),(\d+)/d,
-      fields: [
-        numberField('x2', 'Final X (0,1 mm)', 1, 0, MAX_COORD, item => item.x2),
-        numberField('y2', 'Final Y (0,1 mm)', 2, 0, MAX_COORD, item => item.y2),
-        numberField('width', 'Grosor (puntos)', 4, 1, 99, item => item.native.width),
-        {
-          key: 'rect', label: 'Tipo', type: 'select', group: 3, model: item => (item.rect ? 'box' : 'line'),
-          options: [{ value: 'line', label: 'Línea' }, { value: 'box', label: 'Caja' }],
-          read: raw => (raw === '0' ? 'line' : 'box'),
-          write: v => (v === 'line' ? '0' : v === 'box' ? '1' : null),
-        },
-      ],
-    },
   ];
+
+  /**
+   * Helpers the slices' TPCL hooks share with this file (they stay here because other kinds use them too).
+   * Passed once to each slice's `languages.tpcl` factory.
+   */
+  const SLICE_HELPERS = Object.freeze({ sourceOf, insertCommand, pad4, clampCoord, numberField, MAX_COORD });
+
+  /** Slices that provide TPCL hooks (js/components/*), with their hooks built from SLICE_HELPERS, in registration order. */
+  const SLICES = PB.components.all()
+    .filter(def => def.languages && def.languages.tpcl)
+    .map(def => ({ id: def.kind, modelKind: def.modelKind || def.kind, label: def.label, hooks: def.languages.tpcl(SLICE_HELPERS) }));
+
+  // The tables above hold the kinds not migrated to a slice yet; each ALL_* adds the slices' entries after them.
+  const ALL_HANDLERS = [...HANDLERS, ...SLICES.flatMap(s => s.hooks.handlers || [])];
+  const ALL_COORDINATES = [...COORDINATES, ...SLICES.flatMap(s => s.hooks.coordinates || [])];
+  const ALL_MOVABLE = [...MOVABLE, ...SLICES.filter(s => s.hooks.coordinates).map(s => s.modelKind)];
+  const ALL_EDITABLE = [...EDITABLE, ...SLICES.flatMap(s => s.hooks.editable || [])];
+  /** Component kinds of the palette (neutral), in display order. */
+  const COMPONENTS = Object.freeze([...LEGACY_COMPONENTS, ...SLICES.map(({ id, label }) => ({ kind: id, label }))]);
 
   /** Editable shape of an item (null: not editable) and, with a text and a source, its match over the command. */
   function editableOf(item, text) {
-    const shape = item && EDITABLE.find(s => s.applies(item));
+    const shape = item && ALL_EDITABLE.find(s => s.applies(item));
     if (!shape) return null;
     const span = item.source && item.source.spans && item.source.spans[0];
     if (typeof text !== 'string' || !span) return { shape, match: null };

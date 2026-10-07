@@ -5,7 +5,8 @@
 /**
  * Draws the model as SVG (text). It does not touch the DOM: it returns the markup and the information of each item.
  *
- * To draw a new item type: add a function to RENDERERS with its "kind".
+ * To draw a new item type: register a slice with a `render` (js/components/registry.js; the line and box slices are the
+ * pattern) or, for the kinds not migrated yet, add a function to RENDERERS with its "kind".
  * Each renderer receives (item, ctx) and returns { markup, info?, warnings?, anchor? }. The model measures are already in 0.1 mm.
  * An item of a type without a renderer is not drawn and a warning is reported.
  */
@@ -84,17 +85,6 @@
           `<rect class="hit" x="${item.x}" y="${item.y}" width="${item.width}" height="${item.height}"/>`,
         info: `imagen ${units.formatMm(item.width)} × ${units.formatMm(item.height)} mm`,
         anchor: [item.x, item.y],
-      };
-    },
-
-    line(item, ctx) {
-      // The thickness comes from the label, which is why it is not in the CSS
-      const stroke = `class="stroke" stroke-width="${n(Math.max(item.width, 1))}"`;
-      const flat = item.x1 === item.x2 || item.y1 === item.y2;
-      return {
-        markup: item.rect && !flat
-          ? `<rect x="${Math.min(item.x1, item.x2)}" y="${Math.min(item.y1, item.y2)}" width="${Math.abs(item.x2 - item.x1)}" height="${Math.abs(item.y2 - item.y1)}" ${stroke}/>`
-          : `<line x1="${item.x1}" y1="${item.y1}" x2="${item.x2}" y2="${item.y2}" ${stroke}/>`,
       };
     },
   };
@@ -183,6 +173,7 @@
   function render(model, area, opts) {
     const ctx = {
       textScale: opts.textScale,
+      n,
       value: data => variables.substitute(data, opts.values),
     };
     const { width, height } = area;
@@ -191,7 +182,8 @@
     const anchors = [];
     let body = '';
     model.items.forEach((item, index) => {
-      const renderer = RENDERERS[item.kind];
+      const slice = PB.components.forItem(item);
+      const renderer = (slice && slice.render) || RENDERERS[item.kind];
       if (!renderer) {
         info.push(diag.warning(`${item.ref || 'Elemento'}: tipo "${item.kind}" desconocido, no se dibuja`));
         return;
