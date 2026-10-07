@@ -10,6 +10,7 @@
 
   PB.components.register({
     kind: 'line',
+    order: 40,
     modelKind: 'line',
     matches: item => !item.rect,
     label: 'Línea',

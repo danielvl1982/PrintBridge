@@ -6,7 +6,13 @@
  * are added by each slice as it is migrated:
  *   {
  *     kind,                      component id: 'line', 'box', ...
- *     modelKind,                 kind of the neutral model items it draws (default: kind). Box is its own slice but
+ *     order,                     number that fixes the palette position and the order in which the slices' hooks are
+ *                                composed (all(), kinds(), the languages' handler/coordinate/editable tables). Lower
+ *                                first, ties and definitions without one keep registration order (after the rest), so
+ *                                the result never depends on which file loads first. Slices set it explicitly: text 10,
+ *                                line 40, box 50; the not yet migrated kinds hold the gaps (barcode 20, qr 30, see
+ *                                LEGACY_COMPONENTS in js/languages/tpcl.js)
+ *     modelKind,                kind of the neutral model items it draws (default: kind). Box is its own slice but
  *                                its items are { kind: 'line', rect: true }
  *     matches(item),             picks the slice among those sharing a modelKind (line: !rect, box: rect)
  *     label, glyph,              palette entry (name and short text glyph)
@@ -36,6 +42,9 @@
     if (definitions.has(def.kind)) {
       throw new Error('Component already registered: ' + def.kind);
     }
+    if (def.order !== undefined && !Number.isFinite(def.order)) {
+      throw new Error('Component "order" must be a finite number: ' + def.kind);
+    }
     const stored = Object.freeze({ ...def });
     definitions.set(def.kind, stored);
     return stored;
@@ -46,11 +55,15 @@
   }
 
   function kinds() {
-    return [...definitions.keys()];
+    return all().map(def => def.kind);
   }
 
+  /** Definitions sorted by `order` (ties and definitions without one: registration order, the latter after the rest). */
   function all() {
-    return [...definitions.values()];
+    return [...definitions.values()]
+      .map((def, index) => ({ def, index }))
+      .sort((a, b) => (a.def.order ?? Infinity) - (b.def.order ?? Infinity) || a.index - b.index)
+      .map(({ def }) => def);
   }
 
   /**

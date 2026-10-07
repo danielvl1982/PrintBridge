@@ -18,9 +18,6 @@
 
   const { units, barcodeData, diagnostics: diag } = PB;
 
-  /** TPCL magnification: "08" -> 0.8 ; "14" -> 1.4 ; "1" -> 1. */
-  const magnification = s => (s.length >= 2 ? Number(s) / 10 : Number(s));
-
   /** Number with 4 digits, as TPCL requires ("610" -> "0610"). */
   const pad4 = n => String(n).padStart(4, '0');
 
@@ -30,21 +27,6 @@
   /** QR error correction level: TPCL letter -> neutral level. */
   const ECC_LEVELS = Object.freeze({ L: 'L', M: 'M', Q: 'Q', H: 'H' });
   const DEFAULT_ECC = 'M';
-
-  /**
-   * TEC bitmap fonts of the PC command: size in points, family, weight and style they are simulated with.
-   * The family (serif/sans/mono) is the "font-…" class of css/label.css.
-   */
-  const BITMAP_FONTS = Object.freeze({
-    A: [8, 'serif', 400], B: [10, 'serif', 400], C: [10, 'serif', 700], D: [12, 'serif', 700], E: [14, 'serif', 700],
-    F: [12, 'serif', 400, 'italic'], G: [6, 'sans', 400], H: [10, 'sans', 400], I: [12, 'sans', 400], J: [12, 'sans', 700],
-    K: [14, 'sans', 700], L: [12, 'sans', 400, 'italic'], M: [18, 'sans', 700], N: [9.5, 'mono', 400], O: [7, 'mono', 400],
-    P: [10, 'mono', 700], Q: [10, 'mono', 400], R: [12, 'mono', 700], S: [12, 'mono', 400], T: [12, 'mono', 400],
-  });
-  const DEFAULT_BITMAP_FONT = 'J';
-
-  /** Outline font (PV command): always simulated with this family and weight. */
-  const OUTLINE_FONT = Object.freeze({ family: 'sans', weight: 700 });
 
   /** Control commands that draw nothing. */
   const CONTROL_COMMANDS = Object.freeze(['C', 'XS', 'AX', 'XQ']);
@@ -64,26 +46,6 @@
   /** Data commands (RC, RV, RB) and the format command they fill in. */
   const DATA_TARGET = Object.freeze({ C: 'PC', V: 'PV', B: 'XB' });
 
-  // Options common to PC and PV after the font type: [spacing adjustment,]rotation,attribute[,…][=text]
-  const TEXT_TAIL = String.raw`([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWF])[^=]*(?:=([\s\S]*))?$`;
-
-  function textAttributes(ctx, ref, rotationCode, attribute) {
-    if (!(rotationCode in ROTATIONS)) ctx.report(diag.warning(`${ref}: rotación "${rotationCode}" desconocida, se dibuja sin rotar`));
-    if (attribute !== 'B') ctx.report(diag.warning(`${ref}: atributo "${attribute}" no soportado por el visor, se dibuja en negro`));
-    return ROTATIONS[rotationCode] ?? 0;
-  }
-
-  function bitmapFont(ctx, ref, code, hMag, vMag) {
-    let spec = BITMAP_FONTS[code];
-    if (!spec) {
-      ctx.report(diag.warning(`${ref}: fuente "${code}" desconocida, se dibuja como ${DEFAULT_BITMAP_FONT}`));
-      spec = BITMAP_FONTS[DEFAULT_BITMAP_FONT];
-    }
-    const [points, family, weight, style = 'normal'] = spec;
-    const v = magnification(vMag);
-    return { size: points * units.UNITS_PER_POINT * v, scaleX: magnification(hMag) / v, family, weight, style };
-  }
-
   /** Item -> position of the command in the source text (a single span: the format command). */
   const sourceOf = cmd => ({ spans: [{ start: cmd.start, end: cmd.end }], label: `{${cmd.raw}|}` });
 
@@ -99,33 +61,6 @@
     {
       pattern: /^AX;/,
       handle(m, cmd, ctx) { ctx.model.size.native.axRaw = cmd.raw; },
-    },
-    {
-      // Text with a bitmap font
-      pattern: new RegExp(String.raw`^PC(\d+);(\d+),(\d+),(\d+),(\d+),` + TEXT_TAIL),
-      handle(m, cmd, ctx) {
-        const ref = 'PC' + m[1];
-        ctx.addField(ref, {
-          kind: 'text', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-          font: bitmapFont(ctx, ref, m[6].toUpperCase(), m[4], m[5]),
-          rotation: textAttributes(ctx, ref, m[7], m[8]),
-          data: m[9] ?? null,
-        });
-      },
-    },
-    {
-      // Text with an outline font: character width and height in 0.1 mm
-      pattern: new RegExp(String.raw`^PV(\d+);(\d+),(\d+),(\d+),(\d+),` + TEXT_TAIL),
-      handle(m, cmd, ctx) {
-        const ref = 'PV' + m[1];
-        const { family, weight } = OUTLINE_FONT;
-        ctx.addField(ref, {
-          kind: 'text', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-          font: { size: +m[5], scaleX: +m[4] / +m[5], family, weight, style: 'normal' },
-          rotation: textAttributes(ctx, ref, m[7], m[8]),
-          data: m[9] ?? null,
-        });
-      },
     },
     {
       // QR code: XBnn;x,y,T,<correction>,<module size>,…
@@ -335,11 +270,13 @@
     return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
   }
 
-  /** Palette kinds not migrated to a slice yet, in display order (the slices' entries follow, see COMPONENTS). */
+  /**
+   * Palette kinds not migrated to a slice yet. `order` is on the same scale as the slices' `order` (see
+   * js/components/registry.js): COMPONENTS interleaves both by it.
+   */
   const LEGACY_COMPONENTS = Object.freeze([
-    { kind: 'text', label: 'Texto' },
-    { kind: 'barcode', label: 'Código de barras' },
-    { kind: 'qr', label: 'QR' },
+    { kind: 'barcode', label: 'Código de barras', order: 20 },
+    { kind: 'qr', label: 'QR', order: 30 },
   ]);
 
   const MAX_COORD = 9999;
@@ -368,7 +305,6 @@
 
   /** Kinds that carry a variable: format/data command names, placeholder name and format options ({rot2}/{rot1}: rotation). */
   const VARIABLE_COMPONENTS = Object.freeze({
-    text: { format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,{rot2},B' },
     barcode: { format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,{rot1},0080,+0000000000,000,0,00' },
     qr: { format: 'XB', data: 'RB', name: 'QR', tail: 'T,H,04,A,0,M2' },
   });
@@ -399,10 +335,10 @@
   // Coordinate fields of each command, as capture groups: [value group, D suffix group | null, axis]. Newlines are
   // stripped before matching (like commands()), so the groups are mapped back to the original text.
   const COORDINATES = [
-    { pattern: /^\{(?:PC|PV|XB)\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
+    { pattern: /^\{XB\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
     { pattern: /^\{SG;(\d+)(D?),(\d+)(D?),/d, fields: [[1, 2, 'x'], [3, 4, 'y']] },
   ];
-  const MOVABLE = ['text', 'barcode', 'qr', 'image'];
+  const MOVABLE = ['barcode', 'qr', 'image'];
 
   /**
    * Moves an item by (dx, dy) in 0.1 mm: only the coordinate digits of its command are rewritten (same width, clamped
@@ -472,24 +408,6 @@
   // Editable shapes of the commands, in the order of the parser's patterns. pattern: match indices (d flag) over the
   // command without newlines; group of each field: capture group with its digits.
   const EDITABLE = [
-    { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
-      applies: item => item.kind === 'text' && /^PV/.test(item.ref),
-      pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),[A-Za-z0-9],(?:[+-]\d+,)?(\d{2}),[BWF]/d,
-      fields: [
-        numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
-        numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
-        rotationField(3),
-      ],
-    },
-    { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
-      applies: item => item.kind === 'text' && /^PC/.test(item.ref),
-      pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),[A-Za-z0-9],(?:[+-]\d+,)?(\d{2}),[BWF]/d,
-      fields: [
-        numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
-        numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
-        rotationField(3),
-      ],
-    },
     { // QR: XBnn;x,y,T,<correction>,<module size>,… (the field after the module size is deliberately not exposed)
       applies: item => item.kind === 'qr',
       pattern: /^\{XB\d+;\d+,\d+,T,(\w),(\d+)/d,
@@ -521,12 +439,15 @@
    * Helpers the slices' TPCL hooks share with this file (they stay here because other kinds use them too).
    * Passed once to each slice's `languages.tpcl` factory.
    */
-  const SLICE_HELPERS = Object.freeze({ sourceOf, insertCommand, pad4, clampCoord, numberField, MAX_COORD });
+  const SLICE_HELPERS = Object.freeze({
+    sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
+    ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD,
+  });
 
-  /** Slices that provide TPCL hooks (js/components/*), with their hooks built from SLICE_HELPERS, in registration order. */
+  /** Slices that provide TPCL hooks (js/components/*), with their hooks built from SLICE_HELPERS, in `order`. */
   const SLICES = PB.components.all()
     .filter(def => def.languages && def.languages.tpcl)
-    .map(def => ({ id: def.kind, modelKind: def.modelKind || def.kind, label: def.label, hooks: def.languages.tpcl(SLICE_HELPERS) }));
+    .map(def => ({ id: def.kind, order: def.order, modelKind: def.modelKind || def.kind, label: def.label, hooks: def.languages.tpcl(SLICE_HELPERS) }));
 
   // The tables above hold the kinds not migrated to a slice yet; each ALL_* adds the slices' entries after them.
   const ALL_HANDLERS = [...HANDLERS, ...SLICES.flatMap(s => s.hooks.handlers || [])];
@@ -534,7 +455,11 @@
   const ALL_MOVABLE = [...MOVABLE, ...SLICES.filter(s => s.hooks.coordinates).map(s => s.modelKind)];
   const ALL_EDITABLE = [...EDITABLE, ...SLICES.flatMap(s => s.hooks.editable || [])];
   /** Component kinds of the palette (neutral), in display order. */
-  const COMPONENTS = Object.freeze([...LEGACY_COMPONENTS, ...SLICES.map(({ id, label }) => ({ kind: id, label }))]);
+  const COMPONENTS = Object.freeze(
+    [...LEGACY_COMPONENTS, ...SLICES.map(({ id, label, order }) => ({ kind: id, label, order }))]
+      .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
+      .map(({ kind, label }) => ({ kind, label })),
+  );
 
   /** Editable shape of an item (null: not editable) and, with a text and a source, its match over the command. */
   function editableOf(item, text) {

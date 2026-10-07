@@ -5,7 +5,7 @@
 /**
  * Draws the model as SVG (text). It does not touch the DOM: it returns the markup and the information of each item.
  *
- * To draw a new item type: register a slice with a `render` (js/components/registry.js; the line and box slices are the
+ * To draw a new item type: register a slice with a `render` (js/components/registry.js; the text, line and box slices are the
  * pattern) or, for the kinds not migrated yet, add a function to RENDERERS with its "kind".
  * Each renderer receives (item, ctx) and returns { markup, info?, warnings?, anchor? }. The model measures are already in 0.1 mm.
  * An item of a type without a renderer is not drawn and a warning is reported.
@@ -24,20 +24,7 @@
   /** Rectangles [x, y, width, height] -> a single path (much lighter than one <rect> per module). */
   const rectsPath = rects => rects.map(([x, y, w, h]) => `M${n(x)} ${n(y)}h${n(w)}v${n(h)}h${n(-w)}z`).join('');
 
-  /** CSS classes (css/label.css) that imitate the printer font. */
-  const fontClasses = f => [`font-${f.family}`, f.weight >= 700 && 'bold', f.style === 'italic' && 'italic'].filter(Boolean).join(' ');
-
   const RENDERERS = {
-    text(item, ctx) {
-      const f = item.font;
-      return {
-        // .hit is sized after measuring the real text (PB.layout, below)
-        markup: `<rect class="hit"/><text class="${fontClasses(f)}" transform="translate(${item.x} ${item.y}) rotate(${item.rotation}) scale(${n(f.scaleX)} 1)" ` +
-          `font-size="${n(f.size * ctx.textScale)}" xml:space="preserve">${esc(ctx.value(item.data))}</text>`,
-        anchor: [item.x, item.y],
-      };
-    },
-
     qr(item, ctx) {
       const m = qr.matrix(ctx.value(item.data), item.ecc);
       const cell = item.cell;
@@ -174,6 +161,7 @@
     const ctx = {
       textScale: opts.textScale,
       n,
+      esc,
       value: data => variables.substitute(data, opts.values),
     };
     const { width, height } = area;

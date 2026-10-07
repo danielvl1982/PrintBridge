@@ -21,7 +21,7 @@ Before adding ZPL/TSPL (multi-printer-language-support T3+), each component must
 ## Tasks
 - [x] T1 Foundation: `PB.components` registry + shared file manifest for `index.html` and `tests/helpers/load.js` (tests use it). No code moved yet.
 - [x] T2 `line` + `box` slices (render, parse LC, build, move, edit, validate).
-- [ ] T3 `text` slice (PC/PV).
+- [x] T3 `text` slice (PC/PV).
 - [ ] T4 `barcode` slice (encoders from `barcodes.js`, render, parse, build, move, edit).
 - [ ] T5 `qr` slice (matrix, render, parse, build, move, edit).
 - [ ] T6 `image` slice (codec from `PB.images`, overlay, SG parse, render).
@@ -41,4 +41,5 @@ Before adding ZPL/TSPL (multi-printer-language-support T3+), each component must
 - Baseline: 201/201 tests pass on `main` (a12e6e4).
 - T1 done: RED observed (registry file missing), then GREEN; `node --test`: 206/206 pass (201 + 5 new). Added `js/components/registry.js`, `js/manifest.json`, `loadUpTo`/`loadApp`/`manifest` helpers; all tests migrated to `loadUpTo`; manifest-sync test covers index.html. Not yet committed.
 - T2 done: RED observed (4/5 new slice tests failing before registration), then GREEN; `node --test`: 212/212 pass (206 + 5 slice tests + 1 forItem registry test), existing tests unchanged. Slices `js/components/line/{render,tpcl,index}.js` and `box/{tpcl,index}.js`; `PB.components.forItem`; tpcl.js/drawing.js/core.js validator/palette.js compose from the registry. Pattern: `<id>/render.js` and `<id>/<language>.js` publish on `PB.slices.<id>`, `<id>/index.js` registers; language hooks are `languages.tpcl = helpers => ({handlers, build, coordinates, editable})`. Not yet committed.
-- Next: T3.
+- T3 done: RED observed (4/4 new tests failing before wiring), then GREEN; `node --test`: 216/216 pass (212 + 4 in tests/text-slice.test.js). Slice `js/components/text/{render,tpcl,index}.js` (PC/PV parse, fonts, build, move, edit, glyph). New contract field `order` (number): registry `all()`/`kinds()` sort by it and `COMPONENTS` in tpcl.js interleaves legacy kinds (barcode 20, qr 30) with slices (text 10, line 40, box 50), keeping palette text, barcode, qr, line, box. SLICE_HELPERS extended (rotationField, nextId, freePlaceholder, ROTATIONS, ROTATION_STEPS, ROTATION_CODES); drawing ctx gains `esc`. One existing assertion adjusted (line-box-slice test: forItem undefined now checked with `qr`, since text is a slice). Not yet committed.
+- Next: T4.

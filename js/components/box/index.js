@@ -7,6 +7,7 @@
 
   PB.components.register({
     kind: 'box',
+    order: 50,
     modelKind: 'line',
     matches: item => !!item.rect,
     label: 'Caja',
