@@ -20,8 +20,11 @@ Open `index.html` in a browser to try the app. There is nothing to install.
 - `README.md`: what the app does and what each file contains.
 - `odd/tasks/multi-printer-language-support.md`: the development plan, the task list and what is done, with the evidence for
   each step. Check it before starting something new, and update it when you finish a task.
-- `js/core.js`: the neutral label model and the language registry. A printer language (TPCL, and soon ZPL and TSPL) lives in
+- `js/core/`: the neutral label model (documented in `js/core/model.js`) and the language registry. A printer language (TPCL, and soon ZPL and TSPL) lives in
   `js/languages/` and registers itself with the registry. The drawing code only knows the neutral model.
+- `js/components/`: vertical slices, one folder per label component. Each slice owns its constants, drawing, validation and, per language,
+  its parse, build, move and edit pieces (`<name>/tpcl.js`), and registers in `PB.components` from `<name>/index.js`. See the contract at the top of
+  `js/components/registry.js`. To add a component, create its folder, then list its files in `js/manifest.json` and `index.html` (same order).
 
 ## Workflow
 

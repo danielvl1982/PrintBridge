@@ -25,9 +25,11 @@ from scratch with the example label.
 | `css/viewer.css` | Look of the page: toolbars, panels and messages |
 | `css/label.css` | Look of the label drawing: colors, grid and typefaces |
 | `js/config.js` | Known label sizes and the example label |
-| `js/core.js` | Part common to all languages: diagnostics, units, variables, language registry, validation and sizes |
+| `js/manifest.json` | Ordered list of every script (same order as `index.html`; the tests load from it) |
+| `js/core/` | Part common to all languages, one file per module: diagnostics, units, sources, variables, language registry, validation and sizes |
+| `js/components/registry.js` | `PB.components`: the registry where each label component registers itself |
+| `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
 | `js/languages/tpcl.js` | TPCL reading (fonts and commands of the TEC/Toshiba printers) |
-| `js/barcodes.js` | Code128, Code39, ITF and QR generation |
 | `js/view.js` | Preview rotation (pure coordinate mapping) |
 | `js/drawing.js` | Label drawing and overlap detection |
 | `js/ui.js` | Screen panels |
