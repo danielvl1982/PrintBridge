@@ -14,7 +14,7 @@
   PB.slices = PB.slices || {};
   PB.slices.barcode = PB.slices.barcode || {};
 
-  const { diagnostics: diag } = PB;
+  const { diagnostics: diag, barcodeData } = PB;
 
   /** Neutral symbology of each TPCL barcode type (the other types are 'unknown'). */
   const SYMBOLOGIES = Object.freeze({ 2: 'itf', 3: 'code39', B: 'code39', 9: 'code128', A: 'code128', T: 'qr' });
@@ -23,13 +23,28 @@
   /** Check digit option (field e of Code 39 / ITF) -> neutral check; the options not listed are 'unsupported'. */
   const CHECK_OPTIONS = Object.freeze({ code39: { 1: 'none', 3: 'mod43' }, itf: { 1: 'none' } });
 
+  /** TPCL barcode type of each emittable neutral symbology (the inverse of SYMBOLOGIES). */
+  const TYPE_CODES = Object.freeze({ itf: '2', code39: '3', code128: '9' });
+
+  /** Check digit option (field e) of each neutral check: the inverse of CHECK_OPTIONS, per wide/narrow symbology. */
+  const CHECK_CODES = Object.freeze({ code39: { none: '1', mod43: '3' }, itf: { none: '1' } });
+
+  /** Code 39 / ITF without explicit widths: wide elements are this many narrow ones (the renderer's default ratio). */
+  const DEFAULT_RATIO = 3;
+
+  /** TPCL notation of FNC1 in the data of a barcode. */
+  const FNC1_NOTATION = '>8';
+
+  /** Largest value of the 2-digit dot fields (module, bar and space widths). */
+  const MAX_DOTS = 99;
+
   /** Format options of a freshly inserted Code128 barcode; {rot1} is the 1-digit rotation code. */
   const VARIABLE = Object.freeze({ format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,{rot1},0080,+0000000000,000,0,00' });
 
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
-      ROTATIONS, ROTATION_STEPS, MAX_COORD, DIGITS,
+      ROTATIONS, ROTATION_STEPS, MAX_COORD, DIGITS, wrap, safeData, coordText, allocId,
     } = helpers;
 
     const humanReadableField = group => ({
@@ -54,6 +69,74 @@
       const placeholder = freePlaceholder(text, name);
       const withFormat = insertCommand(text, `{${format}${id};${pad4(clampCoord(point.x))},${pad4(clampCoord(point.y))},${tail}|}`);
       return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
+    }
+
+    /** Width in dots (0.1 mm -> dots at the resolution) as 2 digits, at least `min`, at most 99 (warns once if it was clamped). */
+    function dotsText(ctx, value, min) {
+      const raw = Number.isFinite(value) ? ctx.dot(value) : min;
+      const dots = Math.min(MAX_DOTS, Math.max(min, raw));
+      if (dots !== raw) ctx.once('tpcl-barcode-dots', () => diag.warning(`Hay códigos de barras con módulo o anchos fuera de ${min}..${MAX_DOTS} puntos: se ajustan al límite de TPCL`));
+      return String(dots).padStart(2, '0');
+    }
+
+    /** Rotation digit 0..3: the nearest quarter turn, with a warning once if the item was not on one. */
+    function rotationDigit(ctx, rotation) {
+      const turns = Number.isFinite(rotation) ? Math.round(rotation / 90) : 0;
+      const degrees = (((turns * 90) % 360) + 360) % 360;
+      if (degrees !== rotation && !(rotation == null && degrees === 0)) {
+        ctx.once('tpcl-barcode-rotation', () => diag.warning('Hay códigos de barras con una rotación que no es múltiplo de 90°: se ajustan al giro más cercano'));
+      }
+      return String(ROTATION_STEPS.indexOf(degrees));
+    }
+
+    /** Check digit option of a wide/narrow barcode; a check TPCL cannot express is written as none, with a warning. */
+    function checkCode(ctx, symbology, check) {
+      const code = CHECK_CODES[symbology][check ?? 'none'];
+      if (code) return code;
+      ctx.once(`tpcl-check-${symbology}`, () => diag.warning(`Código de barras ${symbology}: dígito de control "${check}" sin equivalente en TPCL, se escribe sin dígito de control`));
+      return CHECK_CODES[symbology].none;
+    }
+
+    /** Data of an RB command: framing-safe, with FNC1 in the TPCL notation (a literal ">8" would read back as FNC1). */
+    function barcodeText(ctx, data) {
+      const value = safeData(ctx, data);
+      if (value.includes(FNC1_NOTATION)) {
+        ctx.once('tpcl-fnc1-literal', () => diag.warning('Hay datos de código de barras con ">8", que TPCL lee como FNC1: no se puede escribir literalmente'));
+      }
+      return value.replaceAll(barcodeData.FNC1, FNC1_NOTATION);
+    }
+
+    /**
+     * XB command of a 1D barcode + its RB data command. Code 128 uses the generic form (type 9, module, rotation, height);
+     * Code 39 and ITF the widths form (check option, narrow/wide bars and spaces and inter-character gap in dots). Without
+     * explicit widths the wide elements are 3 x module (info). Symbologies TPCL has no type for (EAN13, unknown...) are
+     * skipped with a warning. Only neutral fields are read: native (e.g. the TSPL type) is ignored.
+     */
+    function emit(item, ctx) {
+      const type = TYPE_CODES[item.symbology];
+      if (!type) {
+        ctx.report(diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
+        return [];
+      }
+      const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
+      const rotation = rotationDigit(ctx, item.rotation);
+      const height = pad4(Math.max(1, clampCoord(Number.isFinite(item.height) ? item.height : 0)));
+      const readable = item.humanReadable ? '1' : '0';
+      const id = allocId(ctx, 'XB');
+      const module = dotsText(ctx, item.module, 1);
+      const head = `XB${id};${x},${y},${type}`;
+      const data = wrap(`RB${id};${barcodeText(ctx, item.data)}`);
+      if (item.symbology === 'code128') return [wrap(`${head},0,${module},${rotation},${height},0,000,${readable},00`), data];
+      const w = item.widths;
+      if (!w) ctx.once('tpcl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
+      const wide = w ? null : dotsText(ctx, item.module * DEFAULT_RATIO, 1);
+      const [narrowBar, narrowSpace, wideBar, wideSpace] = w
+        ? [dotsText(ctx, w.narrowBar, 1), dotsText(ctx, w.narrowSpace, 0), dotsText(ctx, w.wideBar, 0), dotsText(ctx, w.wideSpace, 0)]
+        : [module, module, wide, wide];
+      // Code 39 gap defaults to the module, ITF has none
+      const gap = dotsText(ctx, item.interCharGap ?? (item.symbology === 'itf' ? 0 : item.module), 0);
+      const check = checkCode(ctx, item.symbology, item.check);
+      return [wrap(`${head},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpace},${gap},${rotation},${height},${readable}`), data];
     }
 
     return {
@@ -109,6 +192,8 @@
       ],
       // build(text, point, options) -> text with the new component
       build,
+      // emit(item, ctx) -> the XB command and its RB data command
+      emit,
       // Coordinate fields moved by moveItem (see COORDINATES in js/languages/tpcl.js)
       coordinates: [
         { pattern: /^\{XB\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },

@@ -71,7 +71,12 @@
      */
     buildSG({ xMm, yMm, w, h, data }) {
       const at = mm => mmOrNull(mm) ?? 0;
-      return `{SG;${pad4(at(xMm))},${pad4(at(yMm))},${pad4(w)},${pad4(h)},0,${data}|}`;
+      return PB.images.buildSGAt({ x: at(xMm), y: at(yMm), w, h, data });
+    },
+
+    /** Same command as buildSG with the position already in 0.1 mm (what the emitter and the model hold). */
+    buildSGAt({ x, y, w, h, data }) {
+      return `{SG;${pad4(x)},${pad4(y)},${pad4(w)},${pad4(h)},0,${data}|}`;
     },
 
     /**

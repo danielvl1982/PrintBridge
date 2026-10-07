@@ -139,9 +139,9 @@ test('line coordinates are clamped too', () => {
   assert.equal(body(model([line({ x2: 99999 })]))[0], '{LC;0050,0060,9999,0060,0,30|}');
 });
 
-test('items without an emitter yet (barcode, qr, image) are reported as a Spanish warning', () => {
-  const out = emit(model([{ kind: 'barcode', x: 1, y: 1 }, text()]));
-  assert.ok(out.diagnostics.some(d => d.level === 'warning' && /barcode/.test(d.text) && /sin emisor/.test(d.text)));
+test('items of a kind without an emitter are reported as a Spanish warning', () => {
+  const out = emit(model([{ kind: 'hologram', x: 1, y: 1 }, text()]));
+  assert.ok(out.diagnostics.some(d => d.level === 'warning' && /hologram/.test(d.text) && /sin emisor/.test(d.text)));
   assert.ok(out.text.includes('{PC00;'));
 });
 
@@ -160,7 +160,7 @@ test('PB.languages.emit returns { text, diagnostics } with LF lines and no trail
 });
 
 for (const example of [spool, barcodes]) {
-  test(`round trip on the "${example.id}" example keeps text/line/box items`, () => {
+  test(`round trip on the "${example.id}" example keeps the text/line/box items`, () => {
     const first = tpcl.parse(example.source);
     const out = emit(first);
     const second = tpcl.parse(out.text);
@@ -170,8 +170,7 @@ for (const example of [spool, barcodes]) {
     assert.deepEqual([second.size.width, second.size.height, second.size.pitch], [first.size.width, first.size.height, first.size.pitch]);
     assert.equal(second.size.native.dRaw, first.size.native.dRaw);
     assert.equal(second.size.native.axRaw, first.size.native.axRaw);
-    // The kinds emitted in T3 appear as "sin emisor" warnings until then
-    const missing = first.items.filter(i => !['text', 'line'].includes(i.kind)).length;
-    assert.equal(out.diagnostics.filter(d => /sin emisor/.test(d.text)).length, missing);
+    // Every kind has an emitter since T3 (barcode, qr, image)
+    assert.equal(out.diagnostics.filter(d => /sin emisor/.test(d.text)).length, 0);
   });
 }

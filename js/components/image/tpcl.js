@@ -13,7 +13,33 @@
 
   const { diagnostics: diag } = PB;
 
-  function tpcl() {
+  /** Largest width/height the 4-digit size fields of SG hold (the parser refuses more). */
+  const MAX_DOTS = 9999;
+
+  function tpcl(helpers) {
+    const { coordText } = helpers;
+
+    /**
+     * SG command of an image with a bitmap: x, y in 0.1 mm, width and height in dots, nibble data from the bitmap
+     * (1 = black). Data rows are padded to a multiple of 8 dots with white, so the data holds ((w+7)>>3)*h*2 chars while
+     * the command keeps the exact w and h: parsing it back drops the padding and gives the identical bitmap. Overlay
+     * images without a bitmap (preview only) and bitmaps with inconsistent data or size are skipped with a warning.
+     */
+    function emit(item, ctx) {
+      const bm = item.bitmap;
+      if (!bm) {
+        ctx.once('tpcl-image-overlay', () => diag.warning('Hay imágenes solo de vista previa (sin bitmap): no se pueden exportar a TPCL'));
+        return [];
+      }
+      const valid = Number.isInteger(bm.w) && Number.isInteger(bm.h) && bm.w >= 1 && bm.h >= 1 && bm.w <= MAX_DOTS && bm.h <= MAX_DOTS;
+      if (!valid || !bm.data || bm.data.length !== bm.w * bm.h) {
+        ctx.once('tpcl-image-invalid', () => diag.warning(`Hay imágenes con un bitmap no válido (tamaño 1..${MAX_DOTS} puntos y datos de w×h): no se exportan`));
+        return [];
+      }
+      const [x, y] = [+coordText(ctx, item.x), +coordText(ctx, item.y)];
+      return [PB.images.buildSGAt({ x, y, w: bm.w, h: bm.h, data: PB.images.bitmapToNibble(bm.data, bm.w, bm.h) })];
+    }
+
     return {
       // Parse handlers: { pattern, handle(match, cmd, ctx) }
       handlers: [
@@ -56,6 +82,8 @@
           },
         },
       ],
+      // emit(item, ctx) -> the SG command
+      emit,
       // Coordinate fields moved by moveItem, as capture groups: [value group, D suffix group | null, axis]
       // (see COORDINATES in js/languages/tpcl.js)
       coordinates: [

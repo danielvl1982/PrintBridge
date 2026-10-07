@@ -20,12 +20,15 @@
   const ECC_OPTIONS = Object.freeze([['L', 'L - Baja'], ['M', 'M - Media'], ['Q', 'Q - Alta'], ['H', 'H - Máxima']]
     .map(([value, label]) => ({ value, label })));
 
+  /** Largest module size the 2-digit cell field of TPCL holds. */
+  const MAX_CELL_DOTS = 99;
+
   /** Format options of a freshly inserted QR. */
   const VARIABLE = Object.freeze({ format: 'XB', data: 'RB', name: 'QR', tail: 'T,H,04,A,0,M2' });
 
   function tpcl(helpers) {
     const {
-      sourceOf, insertCommand, pad4, clampCoord, numberField, nextId, freePlaceholder,
+      sourceOf, insertCommand, pad4, clampCoord, numberField, nextId, freePlaceholder, wrap, safeData, coordText, allocId,
     } = helpers;
 
     /** Adds a QR XB format command plus its RB data command with a unique <#QR{k}#> variable (rotation does not apply). */
@@ -35,6 +38,21 @@
       const placeholder = freePlaceholder(text, name);
       const withFormat = insertCommand(text, `{${format}${id};${pad4(clampCoord(point.x))},${pad4(clampCoord(point.y))},${tail}|}`);
       return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
+    }
+
+    /**
+     * XB command of type T (QR: ecc letter, cell in dots as 2 digits, fixed tail A,0,M2) + its RB data command. The cell
+     * is converted from 0.1 mm at the resolution and clamped to 1..99 (warning once); an ecc outside L/M/Q/H becomes M.
+     */
+    function emit(item, ctx) {
+      const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
+      if (!(item.ecc in ECC_LEVELS)) ctx.once('tpcl-qr-ecc', () => diag.warning(`Hay QR con una corrección de errores desconocida ("${item.ecc}"): se escribe ${DEFAULT_ECC}`));
+      const ecc = item.ecc in ECC_LEVELS ? item.ecc : DEFAULT_ECC;
+      const raw = Number.isFinite(item.cell) ? ctx.dot(item.cell) : 0;
+      const cell = Math.min(MAX_CELL_DOTS, Math.max(1, raw));
+      if (cell !== raw) ctx.once('tpcl-qr-cell', () => diag.warning(`Hay QR con un módulo fuera de 1..${MAX_CELL_DOTS} puntos: se ajusta al límite de TPCL`));
+      const id = allocId(ctx, 'XB');
+      return [wrap(`XB${id};${x},${y},T,${ecc},${String(cell).padStart(2, '0')},A,0,M2`), wrap(`RB${id};${safeData(ctx, item.data)}`)];
     }
 
     return {
@@ -55,6 +73,8 @@
       ],
       // build(text, point, options) -> text with the new component
       build,
+      // emit(item, ctx) -> the XB command and its RB data command
+      emit,
       // Coordinate fields moved by moveItem (see COORDINATES in js/languages/tpcl.js)
       coordinates: [
         { pattern: /^\{XB\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
