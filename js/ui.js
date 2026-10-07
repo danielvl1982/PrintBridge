@@ -166,8 +166,10 @@
  * U+FFFD and loses the bytes, while the TSPL tokenizer expects one character per byte (latin1). So when the bytes are not
  * plain UTF-8 text of another language, the latin1 text is used if it is TSPL and it either failed to decode as UTF-8 or
  * carries a BITMAP (whose bytes may form valid UTF-8 sequences by chance).
- * Limits: pasted text (textarea) cannot carry arbitrary bytes, only files can; and the textarea itself normalizes
- * CR / CRLF to LF, so a payload byte 0x0D is still altered once the text is in the editor.
+ * The textarea normalizes CR / CRLF to LF in its value, which would alter a payload byte 0x0D (and shrink the payload for a
+ * CRLF pair). So the 0x0D bytes inside BITMAP payloads become PB.tspl.CR_PLACEHOLDER here (the tokenizer finds the payload
+ * spans in the faithful text); the file's own line endings are left alone. The readers of payload chars map it back.
+ * Limits: pasted text (textarea) cannot carry arbitrary bytes, only files can.
  */
 (function (PB) {
   'use strict';
@@ -182,12 +184,28 @@
     return text;
   }
 
+  const isTspl = text => { const language = PB.languages.detect(text); return !!language && language.id === 'tspl'; };
+
+  /** The 0x0D chars inside BITMAP payloads replaced by the placeholder; the rest of the text is untouched. */
+  function protectCr(text) {
+    if (!text.includes('\r')) return text;
+    let out = '';
+    let from = 0;
+    for (const cmd of PB.tspl.commands(text)) {
+      if (cmd.name !== 'BITMAP' || cmd.data === undefined) continue;
+      const start = cmd.end - cmd.data.length;
+      out += text.slice(from, start) + text.slice(start, cmd.end).replace(/\r/g, PB.tspl.CR_PLACEHOLDER);
+      from = cmd.end;
+    }
+    return out + text.slice(from);
+  }
+
   function decodeFile(bytes) {
     const utf8 = new TextDecoder('utf-8').decode(bytes);
-    if (!bytes.some(b => b > 127)) return utf8;
+    // ASCII only: the UTF-8 text is the latin1 text, and a BITMAP payload may still hold 0x0D
+    if (!bytes.some(b => b > 127)) return BITMAP_LINE.test(utf8) && isTspl(utf8) ? protectCr(utf8) : utf8;
     const raw = latin1(bytes);
-    const language = PB.languages.detect(raw);
-    if (language && language.id === 'tspl' && (utf8.includes('\uFFFD') || BITMAP_LINE.test(raw))) return raw;
+    if (isTspl(raw) && (utf8.includes('\uFFFD') || BITMAP_LINE.test(raw))) return protectCr(raw);
     return utf8;
   }
 

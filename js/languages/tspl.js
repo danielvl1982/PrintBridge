@@ -79,8 +79,16 @@
     return { args, next: -1 };
   }
 
+  /**
+   * Stands for a 0x0D byte of a BITMAP payload while the text lives in the editor: the textarea turns CR / CRLF into LF,
+   * which would alter the payload. PB.ui.decodeFile writes it (private-use code point, never in latin1 text); everything
+   * that turns payload chars back into bytes maps it to 0x0D (this tokenizer, PB.convert.toBytes). One char, like the CR it
+   * replaces, so the length-based reading of the payload is unchanged.
+   */
+  const CR_PLACEHOLDER = String.fromCharCode(0xE00D);
+
   /** Bytes of a BITMAP: each source char is one byte (the app reads files as text, see the note in commands()). */
-  const toBytes = text => String.fromCharCode(...Array.from(text, ch => ch.charCodeAt(0) & 0xFF));
+  const toBytes = text => String.fromCharCode(...Array.from(text, ch => (ch === CR_PLACEHOLDER ? 0x0D : ch.charCodeAt(0) & 0xFF)));
 
   /**
    * Walks the commands of the text, one per non-empty line (CR, LF or CRLF), with their position:
@@ -453,7 +461,7 @@
   }
 
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
-  PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS });
+  PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CR_PLACEHOLDER });
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize,
