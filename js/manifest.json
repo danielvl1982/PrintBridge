@@ -23,6 +23,7 @@
   "js/components/barcode/itf.js",
   "js/components/barcode/render.js",
   "js/components/barcode/tpcl.js",
+  "js/components/barcode/tspl.js",
   "js/components/barcode/validate.js",
   "js/components/barcode/index.js",
   "js/components/qr/matrix.js",

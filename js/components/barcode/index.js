@@ -5,7 +5,7 @@
 (function (PB) {
   'use strict';
 
-  const { render, validate, tpcl } = PB.slices.barcode;
+  const { render, validate, tpcl, tspl } =PB.slices.barcode;
 
   PB.components.register({
     kind: 'barcode',
@@ -15,6 +15,6 @@
     glyph: '|||',
     render,
     validate,
-    languages: { tpcl },
+    languages: { tpcl, tspl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
