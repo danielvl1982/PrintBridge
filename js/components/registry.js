@@ -10,7 +10,8 @@
  *                                composed (all(), kinds(), the languages' handler/coordinate/editable tables). Lower
  *                                first, ties and definitions without one keep registration order (after the rest), so
  *                                the result never depends on which file loads first. Slices set it explicitly: text 10,
- *                                barcode 20, qr 30, line 40, box 50
+ *                                barcode 20, qr 30, line 40, box 50, image 60
+ *                                (the image has no `build` hook, so languages do not list it as a template)
  *     modelKind,                kind of the neutral model items it draws (default: kind). Box is its own slice but
  *                                its items are { kind: 'line', rect: true }
  *     matches(item),             picks the slice among those sharing a modelKind (line: !rect, box: rect)

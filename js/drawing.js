@@ -5,53 +5,21 @@
 /**
  * Draws the model as SVG (text). It does not touch the DOM: it returns the markup and the information of each item.
  *
- * To draw a new item type: register a slice with a `render` (js/components/registry.js; the text, barcode, qr, line and box slices are
- * the pattern) or, for the kinds not migrated yet (image), add a function to RENDERERS with its "kind".
+ * To draw a new item type: register a slice with a `render` (js/components/registry.js; the text, barcode, qr, line, box and image
+ * slices are the pattern).
  * Each renderer receives (item, ctx) and returns { markup, info?, warnings?, anchor? }. The model measures are already in 0.1 mm.
  * An item of a type without a renderer is not drawn and a warning is reported.
  */
 (function (PB) {
   'use strict';
 
-  const { units, variables, sources, viewRotation, diagnostics: diag } = PB;
+  const { variables, sources, viewRotation, diagnostics: diag } = PB;
 
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const n = v => Number(v.toFixed(2));
 
   /** Rectangles [x, y, width, height] -> a single path (much lighter than one <rect> per module). */
   const rectsPath = rects => rects.map(([x, y, w, h]) => `M${n(x)} ${n(y)}h${n(w)}v${n(h)}h${n(-w)}z`).join('');
-
-  const RENDERERS = {
-    image(item) {
-      return {
-        // .hit goes after the picture so the hover/selection highlight is painted over it
-        markup: (item.bitmap ? bitmapMarkup(item) : `<image href="${esc(item.href)}" x="${item.x}" y="${item.y}" width="${item.width}" height="${item.height}" preserveAspectRatio="none"/>`) +
-          `<rect class="hit" x="${item.x}" y="${item.y}" width="${item.width}" height="${item.height}"/>`,
-        info: `imagen ${units.formatMm(item.width)} × ${units.formatMm(item.height)} mm`,
-        anchor: [item.x, item.y],
-      };
-    },
-  };
-
-  /**
-   * Bitmap of an image item (flat 0/1 array, 1 = black) as a single path of black row runs, in bitmap dots, inside a group
-   * that places it at item.x/y and scales a dot to item.width / bitmap.w by item.height / bitmap.h (0.1 mm).
-   */
-  function bitmapMarkup({ x, y, width, height, bitmap: { w, h, data } }) {
-    let d = '';
-    for (let row = 0; row < h; row++) {
-      for (let col = 0; col < w; col++) {
-        if (!data[row * w + col]) continue;
-        const start = col;
-        while (col + 1 < w && data[row * w + col + 1]) col++;
-        const run = col - start + 1;
-        d += `M${start} ${row}h${run}v1h${-run}z`;
-      }
-    }
-    const scale = v => Number(v.toFixed(4));
-    return `<g transform="translate(${x} ${y}) scale(${scale(width / w)} ${scale(height / h)})">` +
-      (d ? `<path d="${d}" shape-rendering="crispEdges"/>` : '') + `</g>`;
-  }
 
   function grid(width, height) {
     // The size of the numbers adapts to the label size so they read the same on a small label as on a large one
@@ -82,7 +50,7 @@
     let body = '';
     model.items.forEach((item, index) => {
       const slice = PB.components.forItem(item);
-      const renderer = (slice && slice.render) || RENDERERS[item.kind];
+      const renderer = slice && slice.render;
       if (!renderer) {
         info.push(diag.warning(`${item.ref || 'Elemento'}: tipo "${item.kind}" desconocido, no se dibuja`));
         return;

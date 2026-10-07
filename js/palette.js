@@ -10,10 +10,8 @@
   /** Drag data type carrying the component kind. */
   const COMPONENT_MIME = 'application/x-printbridge-component';
 
-  /** Short text glyph of the kinds not migrated to a slice yet; a slice declares its own `glyph`. Unknown kinds get a generic one. */
-  const GLYPHS = Object.freeze({ image: '🖼' });
-
-  const glyphOf = kind => (PB.components.get(kind) || {}).glyph || GLYPHS[kind] || '+';
+  /** Short text glyph: each slice declares its own `glyph`; unknown kinds get a generic one. */
+  const glyphOf = kind => (PB.components.get(kind) || {}).glyph || '+';
 
   function createPalette(container, { onInsert }) {
     return Object.freeze({

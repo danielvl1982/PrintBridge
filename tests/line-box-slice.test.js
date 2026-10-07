@@ -17,7 +17,7 @@ test('forItem resolves a model item to its slice', () => {
   assert.equal(PB.components.forItem({ kind: 'line', rect: false }).kind, 'line');
   assert.equal(PB.components.forItem({ kind: 'line', rect: true }).kind, 'box');
   assert.equal(PB.components.forItem({ kind: 'line' }).kind, 'line');
-  assert.equal(PB.components.forItem({ kind: 'image' }), undefined);
+  assert.equal(PB.components.forItem({ kind: 'unknown' }), undefined);
   assert.equal(PB.components.forItem(null), undefined);
 });
 
