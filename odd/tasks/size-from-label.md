@@ -28,6 +28,9 @@ label declares, editing them (or picking a standard size) writes the label, like
 - [x] T1 Size model: new catalog, no `required`/`native.tpcl.ax`/forced size in sizes.view; tpcl/tspl matchesSize and AX removed.
 - [x] T2 Size panel + app wiring: fields reflect the label, write on change, combo writes standards, no #btnApply; index.html,
       tests, README/CONTRIBUTING.
+- [x] T3 TSPL size writing (user confirmed): TSPL language gets sizeCommands/applySize: `SIZE w mm,h mm` and, when pitch > height,
+      `GAP (pitch-height) mm,0 mm`; replaces existing SIZE/GAP lines, else inserts; pitch == height leaves an existing GAP untouched;
+      BLINE/BITMAP bytes and line endings preserved; tests (incl. round trip with the parser) and README note updated.
 
 ## Route declaration
 Delegated direct: one writer (2+ non-trivial files across ui/app/sizes/languages/tests/docs).
@@ -45,5 +48,11 @@ out rewrites `{D…|}` / `SIZE`; picking a standard rewrites the label; opening 
   (empty Paso = height, invalid reverts), picking a standard writes it, Personalizado writes nothing, showArea skips the field being edited; app wires
   selectFor on every refresh, drops `fresh`/`sizeId`/current(); #btnApply removed from index.html and the structure tests; README (Formato section) and
   CONTRIBUTING updated. New tests/size-panel.test.js (9 tests, all failed before the panel change). Suite 626 green.
-- Open: TSPL has no applySize, so editing the Formato row on a TSPL label shows the existing "no se puede escribir el tamaño" warning (unchanged limitation).
+- T3 done: tspl.js gets sizeCommands/applySize (SIZE always, GAP = pitch - height only when pitch > height; replaces the first SIZE/GAP command found with the
+  parser's tokenizer, else inserts SIZE at the top and GAP after it; keeps line ending/trailing newline; BITMAP/BLINE/quoted text untouched; pitch == height keeps an
+  existing GAP). New tests/tspl-size.test.js (11 tests, all failed before: no hooks); tspl-app tests updated; README/CONTRIBUTING no longer say TSPL cannot write the size.
+  Suite 637 green.
+- Open: the TSPL parser reports the separation as size.gap and leaves size.pitch null (deriving it changed the TSPL -> TPCL conversion and 6 cross-conversion tests,
+  and the README says the pitch is not converted), so the Paso field of a TSPL label stays empty and the combo shows "Personalizado…" even after writing a standard
+  size. Decide whether the parser should expose pitch = height + gap (and the TSPL -> TPCL conversion then carries it).
   Browser checks pending (see Verification).
