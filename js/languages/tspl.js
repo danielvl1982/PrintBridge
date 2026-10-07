@@ -58,8 +58,11 @@
     let commas = 0;
     let quoted = false;
     const push = end => {
-      const raw = src.slice(tokenStart, end).trim();
-      args.push({ raw, value: unquote(raw) });
+      const text = src.slice(tokenStart, end);
+      const raw = text.trim();
+      // start/end: where the raw text sits in src (an empty argument sits at the end of its blanks)
+      const start = tokenStart + (raw ? text.length - text.trimStart().length : text.length);
+      args.push({ raw, value: unquote(raw), start, end: start + raw.length });
     };
     for (let i = from; i < to; i++) {
       const c = src[i];
@@ -187,6 +190,7 @@
   const SLICE_HELPERS = Object.freeze({
     sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
     quoted, roundDots, exactDots, toDots, safeData,
+    numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField,
   });
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -316,6 +320,8 @@
 
   const COMPOSED = PB.composeSlices('tspl', SLICE_HELPERS, { handlers: HANDLERS });
   const ALL_HANDLERS = COMPOSED.handlers;
+  // Move / describe / update engines (js/languages/tspl-edit.js) driven by the slices' coordinates and editable definitions
+  const EDITING = PB.tsplEdit.createTsplEditing({ coordinates: COMPOSED.coordinates, editable: COMPOSED.editable, commands });
 
   /** Lines that only TSPL writes: SIZE <n>, CLS, or a drawing command followed by a number. TPCL text ({…|}) is never TSPL. */
   const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|BITMAP|BAR|BOX)[ \t]+\d)/im;
@@ -393,9 +399,27 @@
     return out;
   }
 
+  /**
+   * Adds a command to the text: right before the PRINT line or, without one, at the end. Uses the line ending of the
+   * file (CRLF if it has any, else LF) and keeps its trailing newline (or lack of it). PRINT is found with the
+   * tokenizer, so the word inside a quoted string or a BITMAP payload never matches.
+   */
+  function insertCommand(text, command) {
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    for (const cmd of commands(text)) {
+      if (cmd.name !== 'PRINT') continue;
+      const head = text.slice(0, cmd.start);
+      const lineStart = Math.max(head.lastIndexOf('\n'), head.lastIndexOf('\r')) + 1;
+      return `${text.slice(0, lineStart)}${command}${eol}${text.slice(lineStart)}`;
+    }
+    if (text === '') return `${command}${eol}`;
+    return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
+  }
+
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS });
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
-  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize });
+  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize,
+    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
