@@ -10,8 +10,7 @@
  *                                composed (all(), kinds(), the languages' handler/coordinate/editable tables). Lower
  *                                first, ties and definitions without one keep registration order (after the rest), so
  *                                the result never depends on which file loads first. Slices set it explicitly: text 10,
- *                                line 40, box 50; the not yet migrated kinds hold the gaps (barcode 20, qr 30, see
- *                                LEGACY_COMPONENTS in js/languages/tpcl.js)
+ *                                barcode 20, qr 30, line 40, box 50
  *     modelKind,                kind of the neutral model items it draws (default: kind). Box is its own slice but
  *                                its items are { kind: 'line', rect: true }
  *     matches(item),             picks the slice among those sharing a modelKind (line: !rect, box: rect)
@@ -19,9 +18,12 @@
  *     carriesData,               false when the component has no data command (skipped by the "no content" rule)
  *     render(item, ctx),         SVG: returns { markup, info?, warnings?, anchor? } (ctx: see drawing.js)
  *     languages: {
- *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable? })
+ *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable?, rules? })
  *     }
  *   }
+ * Parse handlers are tried in slice `order` and the first whose pattern matches wins, so patterns of different slices
+ * must not overlap: a generic pattern excludes what a more specific slice owns (the barcode XB handler skips well-formed
+ * QR commands with a negative lookahead) instead of relying on registration or `order`.
  * A language hook is a factory because the helpers shared by every component (insertCommand, pad4, clampCoord,
  * numberField, sourceOf...) are owned by the language file, which loads after the slices: the language calls the
  * factory once with its helpers object and composes the result with the kinds that are not migrated yet.

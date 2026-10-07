@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadUpTo } = require('./helpers/load');
 
 // TPCL component palette hooks (tpcl.js): componentTemplates + buildComponent.
-const PB = loadUpTo('js/barcodes.js');
+const PB = loadUpTo('js/languages/tpcl.js');
 const tpcl = PB.languages.get('tpcl');
 
 const XS = '{XS;I,0001,0000C6000|}';

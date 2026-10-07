@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadUpTo } = require('./helpers/load');
 
-const PB = loadUpTo('js/barcodes.js');
+const PB = loadUpTo('js/languages/tpcl.js');
 const example = PB.examples[0];
 const tpcl = PB.languages.get('tpcl');
 

@@ -6,7 +6,7 @@
  *   1D barcode: XBnn;x,y,<type>,<check digit>,<module>,<rotation>,<height>,<increment>,<000>,<human readable text>,<00>
  * The hooks are built by a factory because they need the shared helpers of js/languages/tpcl.js, which loads after
  * this file: factory(helpers) -> { handlers, build, coordinates, editable } (see js/components/registry.js).
- * The RB data handler and the XB QR command are shared with the QR kind and stay in js/languages/tpcl.js.
+ * The RB data handler is shared with the other kinds and stays in js/languages/tpcl.js; the XB QR command is the qr slice's.
  */
 (function (PB) {
   'use strict';
@@ -92,7 +92,9 @@
         },
         {
           // 1D barcode: XBnn;x,y,<type>,<check digit>,<module>,<rotation>,<height>,<increment>,<000>,<human readable text>,<00>
-          pattern: /^XB(\d+);(\d+),(\d+),([^,]),(.*)$/,
+          // Skips well-formed QR commands (T,<ecc>,<cell>…), which the qr slice parses: handler order never decides between
+          // them. A malformed type T command still ends up here (symbology 'qr').
+          pattern: /^XB(\d+);(\d+),(\d+),(?!T,\w,\d)([^,]),(.*)$/,
           handle(m, cmd, ctx) {
             const ref = 'XB' + m[1];
             const p = m[5].split(',');

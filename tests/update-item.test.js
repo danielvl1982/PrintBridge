@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadUpTo } = require('./helpers/load');
 
 // TPCL updateItem / describeItem (tpcl.js): rewrite only the requested fields of one item's command.
-const PB = loadUpTo('js/barcodes.js');
+const PB = loadUpTo('js/languages/tpcl.js');
 const tpcl = PB.languages.get('tpcl');
 
 /** Parses the text, applies the changes to one item and returns { out, before, after, diagnostics }. */

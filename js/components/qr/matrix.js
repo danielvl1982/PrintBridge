@@ -1,6 +1,6 @@
 /**
- * QR generation. Wraps the qrcode-generator library (js/lib/) so that the rest of the viewer
- * does not depend on its API. The 1D barcode encoders live in js/components/barcode/.
+ * QR slice: QR matrix generation, published as PB.qr. Wraps the qrcode-generator library (js/lib/, loaded before the
+ * slices) so that the rest of the viewer does not depend on its API.
  */
 (function (PB) {
   'use strict';

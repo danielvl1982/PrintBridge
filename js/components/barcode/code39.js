@@ -11,7 +11,7 @@
 (function (PB) {
   'use strict';
 
-  const UNSUPPORTED_CHECK = 'opción de dígito de control no soportada por el visor, se dibuja sin dígito de control';
+  const { UNSUPPORTED_CHECK } = PB.slices.barcode;
 
   /** 'n' / 'w' pattern -> elements; the first one is a bar. */
   const toElements = pattern => [...pattern].map((c, i) => ({ bar: i % 2 === 0, wide: c === 'w' }));

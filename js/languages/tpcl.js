@@ -24,10 +24,6 @@
   /** FNC1 in the TPCL notation of a barcode's data. */
   const FNC1_NOTATION = />8/g;
 
-  /** QR error correction level: TPCL letter -> neutral level. */
-  const ECC_LEVELS = Object.freeze({ L: 'L', M: 'M', Q: 'Q', H: 'H' });
-  const DEFAULT_ECC = 'M';
-
   /** Control commands that draw nothing. */
   const CONTROL_COMMANDS = Object.freeze(['C', 'XS', 'AX', 'XQ']);
 
@@ -54,18 +50,6 @@
     {
       pattern: /^AX;/,
       handle(m, cmd, ctx) { ctx.model.size.native.axRaw = cmd.raw; },
-    },
-    {
-      // QR code: XBnn;x,y,T,<correction>,<module size>,…
-      pattern: /^XB(\d+);(\d+),(\d+),T,(\w),(\d+)/,
-      handle(m, cmd, ctx) {
-        const ref = 'XB' + m[1];
-        if (!(m[4] in ECC_LEVELS)) ctx.report(diag.warning(`${ref}: corrección de errores "${m[4]}" desconocida, se dibuja con ${DEFAULT_ECC}`));
-        ctx.addField(ref, {
-          kind: 'qr', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3], cell: m[5] },
-          ecc: ECC_LEVELS[m[4]] ?? DEFAULT_ECC, cell: +m[5] * ctx.dot, symbology: 'qr', native: { type: 'T', cell: +m[5] }, data: null,
-        });
-      },
     },
     {
       // Data of a field: RCnn (bitmap text), RVnn (outline text), RBnn (barcode / QR)
@@ -159,11 +143,6 @@
     item => ['x', 'y']
       .filter(k => item.raw && item.raw[k] != null && item.raw[k].length !== 4)
       .map(k => diag.warning(`${item.ref}: ${k}="${item.raw[k]}" no tiene 4 dígitos (la impresora puede no aceptarlo)`)),
-
-    // QR module size with 2 digits
-    item => (item.kind === 'qr' && item.raw.cell.length !== 2
-      ? [diag.warning(`${item.ref}: tamaño de módulo "${item.raw.cell}" no tiene 2 dígitos`)]
-      : []),
   ];
 
   /** D command (without braces) matching a resolved size: D<pitch>,<width>,<length>. */
@@ -218,14 +197,6 @@
     return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
   }
 
-  /**
-   * Palette kinds not migrated to a slice yet. `order` is on the same scale as the slices' `order` (see
-   * js/components/registry.js): COMPONENTS interleaves both by it.
-   */
-  const LEGACY_COMPONENTS = Object.freeze([
-    { kind: 'qr', label: 'QR', order: 30 },
-  ]);
-
   const MAX_COORD = 9999;
   const clampCoord = n => Math.min(MAX_COORD, Math.max(0, Math.round(n)));
 
@@ -250,41 +221,23 @@
   const ROTATION_STEPS = Object.freeze([0, 90, 180, 270]);
   const ROTATION_CODES = Object.freeze({ 0: '00', 90: '11', 180: '22', 270: '33' });
 
-  /** Kinds that carry a variable: format/data command names, placeholder name and format options ({rot2}/{rot1}: rotation). */
-  const VARIABLE_COMPONENTS = Object.freeze({
-    qr: { format: 'XB', data: 'RB', name: 'QR', tail: 'T,H,04,A,0,M2' },
-  });
-
   /**
-   * Adds a palette component with its top-left corner at (x, y) in 0.1 mm (rounded, clamped to 0..9999). Text and
-   * barcodes get a format command plus a data command with a unique <#NAME{k}#> variable, rotated
-   * (360 - options.viewRotation) % 360 to look upright in the view (missing/invalid = 0). Unknown kind or invalid
-   * point: the text unchanged.
+   * Adds a palette component with its top-left corner at (x, y) in 0.1 mm (rounded, clamped to 0..9999) using the
+   * slice's `build` hook (each slice owns its template; options.viewRotation makes rotated items look upright in the
+   * view). Unknown kind or invalid point: the text unchanged.
    */
   function buildComponent(text, kind, point, options) {
-    if (!COMPONENTS.some(c => c.kind === kind) || !point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
     const slice = SLICES.find(s => s.id === kind);
-    if (slice && slice.hooks.build) return slice.hooks.build(text, point, options);
-    const { format, data, name } = VARIABLE_COMPONENTS[kind];
-    // Rotated items extend from the anchor in the rotated direction, so near the label edges they can leave the label:
-    // only the coordinate clamp above applies, the item is not shifted to fit.
-    const view = options && ROTATION_STEPS.includes(options.viewRotation) ? options.viewRotation : 0;
-    const itemRotation = (360 - view) % 360; // clockwise, so that item + view = 0 (upright)
-    const tail = VARIABLE_COMPONENTS[kind].tail
-      .replace('{rot2}', ROTATION_CODES[itemRotation]).replace('{rot1}', String(ROTATION_STEPS.indexOf(itemRotation)));
-    const id = nextId(text, format, data);
-    const placeholder = freePlaceholder(text, name);
-    const withFormat = insertCommand(text, `{${format}${id};${pad4(clampCoord(point.x))},${pad4(clampCoord(point.y))},${tail}|}`);
-    return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
+    return slice && slice.hooks.build ? slice.hooks.build(text, point, options) : text;
   }
 
-  // Coordinate fields of each command, as capture groups: [value group, D suffix group | null, axis]. Newlines are
-  // stripped before matching (like commands()), so the groups are mapped back to the original text.
+  // Coordinate fields of the kinds not migrated to a slice (image), as capture groups: [value group, D suffix group | null,
+  // axis]. Newlines are stripped before matching (like commands()), so the groups are mapped back to the original text.
   const COORDINATES = [
-    { pattern: /^\{XB\d+;(\d+),(\d+)/d, fields: [[1, null, 'x'], [2, null, 'y']] },
     { pattern: /^\{SG;(\d+)(D?),(\d+)(D?),/d, fields: [[1, 2, 'x'], [3, 4, 'y']] },
   ];
-  const MOVABLE = ['qr', 'image'];
+  const MOVABLE = ['image'];
 
   /**
    * Moves an item by (dx, dy) in 0.1 mm: only the coordinate digits of its command are rewritten (same width, clamped
@@ -342,25 +295,10 @@
     read: raw => ROTATIONS[raw],
     write: (v, width) => (ROTATION_STEPS.includes(v) ? (width === 2 ? ROTATION_CODES[v] : String(ROTATION_STEPS.indexOf(v))) : null),
   });
-  const ECC_OPTIONS = Object.freeze([['L', 'L - Baja'], ['M', 'M - Media'], ['Q', 'Q - Alta'], ['H', 'H - Máxima']]
-    .map(([value, label]) => ({ value, label })));
 
-  // Editable shapes of the commands, in the order of the parser's patterns. pattern: match indices (d flag) over the
-  // command without newlines; group of each field: capture group with its digits.
-  const EDITABLE = [
-    { // QR: XBnn;x,y,T,<correction>,<module size>,… (the field after the module size is deliberately not exposed)
-      applies: item => item.kind === 'qr',
-      pattern: /^\{XB\d+;\d+,\d+,T,(\w),(\d+)/d,
-      fields: [
-        numberField('cell', 'Tamaño de módulo (puntos)', 2, 1, 99, item => item.native.cell),
-        {
-          key: 'ecc', label: 'Corrección de errores', type: 'select', group: 1, options: ECC_OPTIONS, model: item => item.ecc,
-          read: raw => (raw in ECC_LEVELS ? raw : undefined),
-          write: v => (typeof v === 'string' && v in ECC_LEVELS ? v : null),
-        },
-      ],
-    },
-  ];
+  // Editable shapes of the kinds not migrated to a slice (none: the image has no editable fields). Each shape:
+  // pattern: match indices (d flag) over the command without newlines; group of each field: capture group with its digits.
+  const EDITABLE = [];
 
   /**
    * Helpers the slices' TPCL hooks share with this file (they stay here because other kinds use them too).
@@ -381,12 +319,9 @@
   const ALL_COORDINATES = [...COORDINATES, ...SLICES.flatMap(s => s.hooks.coordinates || [])];
   const ALL_MOVABLE = [...MOVABLE, ...SLICES.filter(s => s.hooks.coordinates).map(s => s.modelKind)];
   const ALL_EDITABLE = [...EDITABLE, ...SLICES.flatMap(s => s.hooks.editable || [])];
-  /** Component kinds of the palette (neutral), in display order. */
-  const COMPONENTS = Object.freeze(
-    [...LEGACY_COMPONENTS, ...SLICES.map(({ id, label, order }) => ({ kind: id, label, order }))]
-      .sort((a, b) => (a.order ?? Infinity) - (b.order ?? Infinity))
-      .map(({ kind, label }) => ({ kind, label })),
-  );
+  const ALL_RULES = [...RULES, ...SLICES.flatMap(s => s.hooks.rules || [])];
+  /** Component kinds of the palette (neutral), in display order (SLICES are already sorted by `order`). */
+  const COMPONENTS = Object.freeze(SLICES.map(({ id, label }) => ({ kind: id, label })));
 
   /** Editable shape of an item (null: not editable) and, with a text and a source, its match over the command. */
   function editableOf(item, text) {
@@ -449,7 +384,7 @@
     name: 'TPCL (Toshiba TEC)',
     detect: src => /\{[\s\S]*?\|\}/.test(src),
     parse,
-    validate: model => model.items.flatMap(item => RULES.flatMap(rule => rule(item))),
+    validate: model => model.items.flatMap(item => ALL_RULES.flatMap(rule => rule(item))),
     sizeCommands,
     matchesSize,
     applySize,

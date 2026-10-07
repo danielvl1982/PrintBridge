@@ -12,9 +12,9 @@ test('barcode registers as a slice with palette entry, renderer and a TPCL hook 
   assert.equal(typeof barcode.languages.tpcl, 'function');
 });
 
-test('forItem resolves barcode items to the barcode slice; qr is not a slice yet', () => {
+test('forItem resolves barcode items to the barcode slice; qr to its own slice', () => {
   assert.equal(PB.components.forItem({ kind: 'barcode', ref: 'XB01' }).kind, 'barcode');
-  assert.equal(PB.components.forItem({ kind: 'qr', ref: 'XB02' }), undefined);
+  assert.equal(PB.components.forItem({ kind: 'qr', ref: 'XB02' }).kind, 'qr');
 });
 
 test('the 1D encoders keep their public PB names and live in the slice', () => {
@@ -35,6 +35,6 @@ test('TPCL hooks of barcode: two parse handlers, move, two edit shapes and build
 });
 
 test('barcode keeps the second palette position', () => {
-  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'line', 'box']);
+  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box']);
   assert.deepEqual(PB.languages.get('tpcl').componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box']);
 });

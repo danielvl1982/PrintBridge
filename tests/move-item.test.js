@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadUpTo } = require('./helpers/load');
 
 // TPCL moveItem (tpcl.js): rewrites only the coordinate fields of one item's command.
-const PB = loadUpTo('js/barcodes.js');
+const PB = loadUpTo('js/languages/tpcl.js');
 const tpcl = PB.languages.get('tpcl');
 
 /** Parses the text, moves its first item and returns { out, before, after } (items before and after the move). */

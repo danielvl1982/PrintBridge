@@ -34,6 +34,6 @@ test('slice order is a number that sorts the registry and the palette determinis
   assert.equal(typeof PB.components.get('text').order, 'number');
   const orders = PB.components.all().map(def => def.order);
   assert.deepEqual(orders, [...orders].sort((a, b) => a - b));
-  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'line', 'box']);
+  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box']);
   assert.deepEqual(PB.languages.get('tpcl').componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box']);
 });

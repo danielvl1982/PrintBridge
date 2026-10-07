@@ -5,15 +5,15 @@
 /**
  * Draws the model as SVG (text). It does not touch the DOM: it returns the markup and the information of each item.
  *
- * To draw a new item type: register a slice with a `render` (js/components/registry.js; the text, barcode, line and box slices are the
- * pattern) or, for the kinds not migrated yet, add a function to RENDERERS with its "kind".
+ * To draw a new item type: register a slice with a `render` (js/components/registry.js; the text, barcode, qr, line and box slices are
+ * the pattern) or, for the kinds not migrated yet (image), add a function to RENDERERS with its "kind".
  * Each renderer receives (item, ctx) and returns { markup, info?, warnings?, anchor? }. The model measures are already in 0.1 mm.
  * An item of a type without a renderer is not drawn and a warning is reported.
  */
 (function (PB) {
   'use strict';
 
-  const { units, variables, qr, sources, viewRotation, diagnostics: diag } = PB;
+  const { units, variables, sources, viewRotation, diagnostics: diag } = PB;
 
   const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const n = v => Number(v.toFixed(2));
@@ -22,21 +22,6 @@
   const rectsPath = rects => rects.map(([x, y, w, h]) => `M${n(x)} ${n(y)}h${n(w)}v${n(h)}h${n(-w)}z`).join('');
 
   const RENDERERS = {
-    qr(item, ctx) {
-      const m = qr.matrix(ctx.value(item.data), item.ecc);
-      const cell = item.cell;
-      const size = m ? m.size : 21;
-      const rects = [];
-      if (m) for (let r = 0; r < size; r++) for (let c = 0; c < size; c++) if (m.isDark(r, c)) rects.push([item.x + c * cell, item.y + r * cell, cell + 0.3, cell + 0.3]);
-      const side = size * cell;
-      return {
-        markup: `<rect class="hit" x="${item.x}" y="${item.y}" width="${n(side)}" height="${n(side)}"/>` +
-          (m ? `<path d="${rectsPath(rects)}"/>` : `<rect class="not-generated" x="${item.x}" y="${item.y}" width="${n(side)}" height="${n(side)}"/>`),
-        info: m ? `QR ${size}×${size} módulos = ${units.formatMm(side)} mm` : 'no se ha podido generar el QR con estos datos',
-        anchor: [item.x, item.y],
-      };
-    },
-
     image(item) {
       return {
         // .hit goes after the picture so the hover/selection highlight is painted over it
