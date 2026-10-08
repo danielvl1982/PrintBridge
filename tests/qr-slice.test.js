@@ -19,8 +19,8 @@ test('PB.qr keeps its public name and lives in the slice', () => {
 });
 
 test('palette order is text, barcode, qr, line, box and every palette kind is a slice', () => {
-  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'ellipse', 'circle', 'image']);
-  assert.deepEqual(tpcl.componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box']);
+  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'ellipse', 'circle', 'area', 'image']);
+  assert.deepEqual(tpcl.componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box', 'area']);
 });
 
 test('a QR command is parsed as QR and a 1D barcode as barcode (handler order does not matter)', () => {

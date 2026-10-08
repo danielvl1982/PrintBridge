@@ -92,10 +92,6 @@ test('ELLIPSE and CIRCLE are no longer unsupported commands', () => {
   for (const line of ['ELLIPSE 10,10,100,50,3', 'CIRCLE 10,10,80,3']) {
     assert.doesNotMatch(parse(doc(line)).diagnostics.map(d => d.text).join('|'), /no soportado/, line);
   }
-  // ERASE and REVERSE still are (task A3)
-  for (const line of ['ERASE 10,10,100,50', 'REVERSE 10,10,100,50']) {
-    assert.match(warnings(parse(doc(line)))[0], /^Comando no soportado por el visor: /, line);
-  }
 });
 
 test('the other items of the label are untouched next to an ellipse, in command order', () => {
@@ -283,11 +279,11 @@ test('an edited circle parses back as the same circle with the new diameter', ()
 
 test('TSPL offers Elipse and Círculo after Caja; TPCL offers neither', () => {
   const tsplKinds = tspl.componentTemplates();
-  assert.deepEqual(tsplKinds.slice(-2), [{ kind: 'ellipse', label: 'Elipse' }, { kind: 'circle', label: 'Círculo' }]);
-  assert.equal(tsplKinds[tsplKinds.length - 3].kind, 'box');
+  assert.deepEqual(tsplKinds.slice(-3, -1), [{ kind: 'ellipse', label: 'Elipse' }, { kind: 'circle', label: 'Círculo' }]);
+  assert.equal(tsplKinds[tsplKinds.length - 4].kind, 'box');
   assert.ok(!tpcl.componentTemplates().some(c => /ellipse|circle/.test(c.kind)));
   const entries = PB.ui.paletteEntries(tspl, { kind: 'image', label: 'Imagen' });
-  assert.deepEqual(entries.slice(-3).map(e => e.kind), ['ellipse', 'circle', 'image']);
+  assert.deepEqual(entries.slice(-4).map(e => e.kind), ['ellipse', 'circle', 'area', 'image']);
   assert.equal(tpcl.buildComponent('{D0100,0100,0100|}\r\n', 'ellipse', { x: 100, y: 100 }, { dpi: 203 }), '{D0100,0100,0100|}\r\n');
 });
 

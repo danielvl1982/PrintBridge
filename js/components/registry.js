@@ -15,6 +15,8 @@
  *                                ellipse 55 and circle 56 (TSPL only: a circle is an ellipse with ref CIRCLE, so the two slices share
  *                                the model kind `ellipse` the way line and box share `line`; their TPCL hook only has an emit that
  *                                skips the item with one warning and, with no `build`, adds no TPCL palette entry)
+ *                                area 58 (inverted / cleared area, TPCL XR and TSPL REVERSE / ERASE: one model kind `area` with a mode; one palette
+ *                                entry in both languages; the drawing order of the items is the command order, so it acts on what precedes it)
  *     modelKind,                kind of the neutral model items it draws (default: kind). Box is its own slice but
  *                                its items are { kind: 'line', rect: true }
  *     matches(item),             picks the slice among those sharing a modelKind (line: !rect, box: rect)

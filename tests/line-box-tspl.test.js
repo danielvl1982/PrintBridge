@@ -164,8 +164,8 @@ test('rendering: a vertical BAR and a BOX go through the line renderer', () => {
   assert.match(svg, /<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" class="stroke"/);
 });
 
-test('ERASE and REVERSE are still unsupported with the existing warning (ELLIPSE and CIRCLE are read since A2)', () => {
-  for (const src of ['ERASE 10,10,100,50', 'REVERSE 10,10,100,50']) {
+test('DMATRIX and PDF417 are still unsupported with the existing warning (ELLIPSE, CIRCLE since A2 and ERASE, REVERSE since A3 are read)', () => {
+  for (const src of ['DMATRIX 10,10,100,50', 'PDF417 10,10,100,50']) {
     const model = parse(src);
     assert.equal(model.items.length, 0, src);
     assert.equal(model.diagnostics.length, 1, src);

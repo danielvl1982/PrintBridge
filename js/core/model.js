@@ -49,7 +49,14 @@
  *               A circle is an ellipse with equal axes that keeps ref 'CIRCLE' (emit writes CIRCLE back; ref 'ELLIPSE' otherwise).
  *               native = the dots of the command: { width, height, thickness, kind: 'ELLIPSE' } or { diameter, thickness, kind: 'CIRCLE' }.
  *               NOT VERIFIED ON A PRINTER: ELLIPSE / CIRCLE come from the TSC TSPL2 manual v3.0, which is not available locally.
- *       image   { ref, x, y, width, height, href?, bitmap?, data:null }
+ *       area    { ref, mode, x, y, width, height, native:{ ... } }
+              Inverted / cleared area (TPCL XR, TSPL REVERSE and ERASE). mode = 'reverse' (inverts the white/black dots already drawn:
+              XR type B, REVERSE) or 'clear' (blots them out to white: XR type A, ERASE). x, y = top-left corner and width, height = size,
+              all in 0.1 mm (TPCL corners in any order are normalised). The item only affects what comes BEFORE it in the items list,
+              which is the command order: the parsers add the items as they read them and the renderer paints them in that order.
+              native = TPCL { x1, y1, x2, y2, type: 'A' | 'B' } (0.1 mm, as written) or TSPL { width, height, kind: 'REVERSE' | 'ERASE' } (dots).
+              The TSPL commands are from the B-442/443 manual and are not verified on a printer.
+      image   { ref, x, y, width, height, href?, bitmap?, data:null }
  *               width/height = size in 0.1 mm. It has no data. Two origins:
  *               - preview overlay added by the viewer (PB.images.makeItem): href = data URL (or URL) of the picture.
  *               - graphic command of the code (TPCL SG): bitmap = { w, h, data } in printer dots, data = flat
