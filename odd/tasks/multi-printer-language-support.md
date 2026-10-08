@@ -54,11 +54,11 @@ Project name is now PrintBridge (done in T10).
       namespace (`Ter` -> `PrintBridge`, `index.html`, `js/core.js`, `js/config.js`, `js/drawing.js`, `js/ui.js`, `js/barcodes.js`, `js/view.js`, `js/languages/`, `css/viewer.css`, `css/label.css`), identifiers, CSS classes/ids, comments, tests and technical docs to English;
       user-visible strings stay Spanish. Must be behavior-neutral (tests green, rendered SVG equal modulo renames).
       Runs BEFORE T9 by user request.
-- [ ] T3 ZPL parser (`^XA ^PW ^LL ^FO ^FT ^A ^FD ^FV ^BC ^BQ ^GB ^FR ^FB basic`) + tests.
-- [ ] T4 TSPL parser (`SIZE GAP TEXT BARCODE QRCODE BAR BOX REVERSE PRINT`) + tests.
-- [ ] T5 Emitters model -> TPCL / ZPL / TSPL with fidelity warnings (font mapping, unsupported barcode types, rotation).
-- [ ] T6 UI: language selector with auto-detect, "Convertir a…" panel with copy/download, adapt open/drag file types.
-- [ ] T7 Round-trip tests (TPCL->ZPL->model equals), README update, final regression of the reference spool example.
+- [ ] T3 ZPL parser (`^XA ^PW ^LL ^FO ^FT ^A ^FD ^FV ^BC ^BQ ^GB ^FR ^FB basic`) + tests. ON HOLD by the user; the only open item of this plan.
+- [x] T4 TSPL parser. Done in odd/tasks/tspl-parser.md (372 tests at the time; editing in tspl-edit.md, BITMAP CR fix in tspl-bitmap-cr.md).
+- [~] T5 Emitters. TPCL and TSPL done in odd/tasks/emitters.md; the ZPL emitter waits for T3.
+- [x] T6 UI: "Convertir a…" panel with copy/download. Done in odd/tasks/emitters.md (T7 there, js/convert-panel.js); the placement is tracked in layout-redesign.md.
+- [~] T7 Round-trip tests TPCL <-> TSPL exist (tests/convert.test.js and the emit tests); the ZPL round trip waits for T3.
 
 ## Acceptance criteria
 - Pasting valid TPCL, ZPL or TSPL draws the label and reports unknown commands as warnings.
@@ -94,4 +94,4 @@ Per task, delegated direct (one writer, 2+ non-trivial files each); the parent r
   Manual checks: open index.html, load "Códigos de barras — Code39, ITF y Code128", check the three barcodes and the Avisos panel (3 info lines, no warnings), switch Giro and the resolution, edit a type/data to see the warnings (lowercase in Code39, odd ITF), scan each with a phone/scanner app.
 
 ## Next step
-T6a/T3 decision pending (ZPL on hold by user).
+Reconciled 2026-10-08: only T3 (ZPL) is open and on hold by the user; T5/T7 finish with it. Everything else is done in the sibling feature documents.

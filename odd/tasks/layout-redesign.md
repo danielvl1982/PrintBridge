@@ -27,7 +27,7 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
 - [x] P1g (structure verified by tests; visual check pending in the browser) File actions moved into the Código de etiqueta panel header (title left; Abrir archivo… and the joined Ejemplo [select][Cargar ejemplo] group right); the separate file row is removed.
 - [x] P1h (structure and CSS rule removal verified by tests; visual check pending in the browser) Avisos grows freely (no inner scroll, page scrolls); the Ejemplo select + Cargar ejemplo row moved under the help text of the Código panel.
 - [ ] P2 Left column tabs: Código / Variables / Avisos (+ badge count), viewport-height column.
-- [ ] P3 "Convertir…" dialog from the top bar (reuse js/convert-panel.js unchanged where possible).
+- [x] P3 (superseded 2026-10-08, kept as a note) "Convertir…" dialog: replaced by P1e, the Convertir panel lives in the left column under Variables; the user has not asked for the dialog since.
 - [ ] P4 Top bar merge and grouping, sticky preview, final polish and README screenshots/notes.
 
 ## Acceptance
