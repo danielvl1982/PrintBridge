@@ -252,11 +252,11 @@ test('unknown commands are one warning each, and ^FX comments and the tolerated 
   assert.match(model.diagnostics[1].text, /\^YY/);
 });
 
-test('a field whose command has no handler yet (Z3 onwards) reports it once and draws nothing; the text (Z2) is drawn', () => {
-  const model = parse('^XA^FO10,10^A0N,30,30^FDHi^FS^FO10,60^GB100,50,3^FS^XZ');
+test('a field whose command has no handler yet (^GF: Z6) reports it once and draws nothing; the text (Z2) is drawn', () => {
+  const model = parse('^XA^FO10,10^A0N,30,30^FDHi^FS^FO10,60^GFA,8,8,1,FF^FS^XZ');
   assert.deepEqual(model.items.map(i => [i.kind, i.data]), [['text', 'Hi']]);
   assert.equal(model.diagnostics.filter(d => d.level === 'warning').length, 1);
-  assert.match(model.diagnostics[0].text, /\^GB100,50,3/);
+  assert.match(model.diagnostics[0].text, /\^GFA,8,8,1,FF/);
 });
 
 test('several formats: the first one is shown and an info says how many there are', () => {
@@ -322,7 +322,7 @@ test('emit writes ^XA, ^PW, ^LL and ^XZ with CRLF and a trailing line break, in 
 });
 
 test('emit without a declared size writes no ^PW / ^LL and warns; an item without a ZPL emitter is skipped with a warning', () => {
-  const model = { language: 'tspl', size: { width: null, height: null, pitch: null, gap: null, native: {} }, items: [{ kind: 'line', x1: 0, y1: 0, x2: 10, y2: 0, width: 3, rect: false }], diagnostics: [] };
+  const model = { language: 'tspl', size: { width: null, height: null, pitch: null, gap: null, native: {} }, items: [{ kind: 'image', x: 0, y: 0, width: 10, height: 10, href: 'x', data: null }], diagnostics: [] };
   const out = PB.languages.emit('zpl', model, { dpi: 203 });
   assert.equal(out.text, '^XA\r\n^XZ\r\n');
   assert.equal(out.diagnostics.filter(d => d.level === 'warning').length, 2);

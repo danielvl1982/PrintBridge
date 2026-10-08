@@ -403,7 +403,8 @@ test('componentTemplates lists the slices with a build hook, in slice order', ()
   // the fake slice has order 5 so that its handlers come before the real text slice (order 10), whose ^A / ^FD handlers it shadows here
   assert.deepEqual(zpl.componentTemplates(), [
     { kind: 'zfake', label: 'Fake' }, { kind: 'text', label: 'Texto' }, { kind: 'barcode', label: 'Código de barras' },
-    { kind: 'qr', label: 'QR' }, { kind: 'datamatrix', label: 'Data Matrix' },
+    { kind: 'qr', label: 'QR' }, { kind: 'datamatrix', label: 'Data Matrix' }, { kind: 'line', label: 'Línea' }, { kind: 'box', label: 'Caja' },
+    { kind: 'ellipse', label: 'Elipse' }, { kind: 'circle', label: 'Círculo' }, { kind: 'area', label: 'Área invertida' },
   ]);
 });
 

@@ -40,6 +40,8 @@
   function emitLC(helpers) {
     const { wrap, coordText } = helpers;
     return (item, ctx) => {
+      if (item.white === true) ctx.once('tpcl-shape-white', () => PB.diagnostics.warning('Hay líneas o cajas en blanco (color W de ZPL): TPCL no tiene color de trazo, se escriben en negro'));
+      else if (item.reverse === true) ctx.once('tpcl-shape-reverse', () => PB.diagnostics.warning('Hay líneas o cajas con impresión inversa (^FR o ^LR de ZPL): TPCL no la tiene en estas formas, se escriben normales'));
       const dots = Number.isFinite(item.width) ? Math.max(1, ctx.dot(item.width)) : 1;
       if (dots > MAX_THICKNESS) {
         ctx.once('tpcl-thickness', () => PB.diagnostics.warning(`Hay grosores de línea de más de ${MAX_THICKNESS} puntos: se ajustan al máximo de TPCL`));

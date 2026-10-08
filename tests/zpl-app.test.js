@@ -34,10 +34,11 @@ test('the Formato row: sizes.apply writes ^PW / ^LL with the resolution the app 
   assert.deepEqual([model.size.pitch, model.size.gap], [null, null]);
 });
 
-test('the palette: ZPL offers the components its slices provide (Texto, Código de barras, QR and Data Matrix so far) and no Imagen entry; an unrecognised text is not ZPL', () => {
+test('the palette: ZPL offers the components its slices provide (text, bar codes, QR, Data Matrix and the shapes so far) and no Imagen entry; an unrecognised text is not ZPL', () => {
   const image = { kind: 'image', label: 'Imagen' };
   assert.deepEqual(PB.ui.paletteEntries(zpl, image), [
     { kind: 'text', label: 'Texto' }, { kind: 'barcode', label: 'Código de barras' }, { kind: 'qr', label: 'QR' }, { kind: 'datamatrix', label: 'Data Matrix' },
+    { kind: 'line', label: 'Línea' }, { kind: 'box', label: 'Caja' }, { kind: 'ellipse', label: 'Elipse' }, { kind: 'circle', label: 'Círculo' }, { kind: 'area', label: 'Área invertida' },
   ]);
   assert.deepEqual(PB.ui.paletteEntries(PB.languages.get('tspl'), image).at(-1), image);
   assert.equal(PB.languages.detect(''), null);
@@ -63,8 +64,9 @@ test('Convertir: ZPL is a target and a source; converting a TSPL label writes th
   assert.equal(toZpl.target, 'zpl');
   assert.ok(toZpl.text.startsWith('^XA\r\n^PW799\r\n^LL480\r\n'));
   assert.ok(toZpl.text.endsWith('^XZ\r\n'));
-  // no component writes ZPL yet (Z2 onwards): the items are reported, not lost silently
-  assert.ok(toZpl.diagnostics.some(d => d.level === 'warning' && /zpl/.test(d.text)));
+  // text, bar code, QR and the box of the example are written (Z2..Z5); only the font simulation is reported
+  assert.match(toZpl.text, /\^GB764,464,4\^FS/);
+  assert.deepEqual(toZpl.diagnostics.filter(d => d.level !== 'info'), []);
   const fromZpl = PB.convert.run(ZPL_LABEL, 'tspl', { dpi: 203 });
   assert.equal(fromZpl.source, 'zpl');
   assert.match(fromZpl.text, /^SIZE 101\.6 mm,152\.4 mm\r\n/);
