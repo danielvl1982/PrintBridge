@@ -36,4 +36,4 @@ bitmap in TPCL and TSPL; the preview shows the same dots that get inserted; chan
 `node --test`; Chrome check by the assistant (puppeteer-core outside the repo) of the preview and the panel; user check with a real 270 label.
 
 ## Progress
-Plan created. T1 done: rotateBitmap, Rotación select, rotated preview and insertion, tests, README (commit id below).
+Plan created. T1 done: rotateBitmap, Rotación select, rotated preview and insertion, tests, README (commit 2536f77).
