@@ -26,9 +26,9 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
 - [x] P1d (structure verified by tests; visual check pending in the browser) File actions (Abrir archivo, Ejemplo, Cargar ejemplo) moved from the header into the size row as a leading group; the header keeps only logo and title.
 - [x] P1g (structure verified by tests; visual check pending in the browser) File actions moved into the Código de etiqueta panel header (title left; Abrir archivo… and the joined Ejemplo [select][Cargar ejemplo] group right); the separate file row is removed.
 - [x] P1h (structure and CSS rule removal verified by tests; visual check pending in the browser) Avisos grows freely (no inner scroll, page scrolls); the Ejemplo select + Cargar ejemplo row moved under the help text of the Código panel.
-- [ ] P2 Left column tabs: Código / Variables / Avisos (+ badge count), viewport-height column.
+- [x] P2 (dropped 2026-10-08, user decision) Left column tabs: the collapsible sections (js/collapse.js) cover the vertical-space problem; Avisos also left the column in P1f.
 - [x] P3 (superseded 2026-10-08, kept as a note) "Convertir…" dialog: replaced by P1e, the Convertir panel lives in the left column under Variables; the user has not asked for the dialog since.
-- [ ] P4 Top bar merge and grouping, sticky preview, final polish and README screenshots/notes.
+- [x] P4 (written on feat/layout-tabs; browser check pending) Sticky stage on wide windows, README note. Top bar merge and grouping were already done in P1-P1j.
 
 ## Acceptance
 - No vertical scroll of the page in a normal desktop window with the TPCL and TSPL examples; palette, properties, code, variables, warnings and convert are all reachable in <= 1 click; all existing behaviors (select, drag, edit, image overlay, convert, open/drop file) still work; all tests pass.
@@ -86,6 +86,12 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
   - css/viewer.css:26-27: toolbar-control look extended with .panel-foot; :52 new .panel-foot (flex, wrap, left aligned, margin-top 6px, min-width 0); :55-57 .btn-group rules re-scoped from .panel-actions to .panel-foot; :73-76 .msgs-panel comment updated and the list max-height/overflow removed (level colors unchanged); :104-115 SVG max-height is now max(240px, calc(100vh - 450px)): minimum Avisos footprint 16 + 4 + 12 + 2 + 44 (two list lines) = 78 + 12 gap = 90, so 360 + 90 = 450 (was 500 with the 96px list maximum); 240px floor.
   - Tests: no max-height/overflow in any CSS rule whose selector mentions msgs (comments stripped); Código panel DOM order; example pair outside .panel-actions.
   - Browser checklist: Avisos grows with many warnings (try an invalid label) and the page scrolls, no inner scrollbar; Ejemplo select + Cargar ejemplo sit under the help text, joined, left aligned, and load the example; Abrir archivo... still in the header on the right and opens the dialog; narrow 340px column: the example row wraps without overflow; the drawing size at your usual window height (tell me if the 450px offset is too small or large).
+
+- P4 written (branch feat/layout-tabs; user chose "variant B", whole stage sticky, accepting an inner scroll when there are many warnings): node --test 755/755 (754 + 1 new test); RED observed first. No JS change.
+  - css/viewer.css: `@media (min-width: 901px) { .stage { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; } }` (901 = where the max-width: 900px one-column layout ends). The SVG max-height arithmetic is unchanged (it already keeps the usual content within the viewport).
+  - Changed behaviour vs P1h: with many warnings Avisos no longer makes the PAGE scroll on wide windows, the stage scrolls inside itself. The P1h test still holds (no max-height/overflow on .msgs rules; the bound lives on .stage).
+  - tests/layout-structure.test.js: media query exists, starts at 901px, sticky + align-self start + max-height calc(100vh - Npx) + overflow-y auto, and .stage outside the media query is not sticky. README: "Collapsible sections" and "Sticky drawing area" bullets.
+  - Browser checklist: with Código and Variables expanded and a tall page, scroll: the drawing stays in view next to the column; select an item and edit in Propiedades while scrolled; many warnings (invalid label): Avisos scrolls inside the stage, no page jump; collapse/expand sections: stage height follows; rotate 90/270: tall label fits or the stage scrolls; narrow window (< 901px): one column, nothing sticky; Ctrl+wheel zoom 150%: the stage scrolls inside instead of being cut off.
 
 ## Open ideas
 - Optional: load the example on select and drop the button.

@@ -45,6 +45,11 @@ main { display: grid; grid-template-columns: minmax(340px, 440px) 1fr; gap: 16px
 .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 12px; }
 /* Right-hand stage: size row, view row, action strip, properties bar and the label preview, top to bottom */
 .stage { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+/* Sticky stage (P4): on wide windows (two columns) the stage stays in view while the page scrolls through the left column,
+   so the drawing is visible while editing code or variables. It never exceeds the viewport (16px margins top and bottom): if it
+   is taller (many warnings, tall rotated label) it scrolls inside itself. The SVG max-height below already keeps the usual
+   content within that height. 901px = right where the max-width: 900px one-column layout ends. */
+@media (min-width: 901px) { .stage { position: sticky; top: 16px; align-self: start; max-height: calc(100vh - 32px); overflow-y: auto; } }
 /* Label-size row (first row of the stage) and view options row below it: same panel row, same controls look as the toolbar */
 .size-row, .view-row { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; padding: 6px 12px; min-height: 38px; box-sizing: border-box; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
 /* Code panel header (P1g): title on the left, file actions on the right, wrapping inside the narrow column.
