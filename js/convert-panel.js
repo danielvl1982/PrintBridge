@@ -1,6 +1,8 @@
 /**
  * "Convertir a..." panel (PB.ui.createConvertPanel): converts the label in the editor to another printer language with
- * PB.convert and shows the result, the fidelity diagnostics, and Copiar / Descargar for the output.
+ * PB.convert and shows the result, the fidelity diagnostics (those of the target, plus the warnings and errors the source parser gave: what it
+ * could not read is missing from the output), and Copiar / Descargar for the output. The targets are the registered languages that can emit
+ * (TPCL, TSPL and ZPL); the output of a language with binary data (TSPL images) carries the note about Copiar, ZPL text never does.
  * It builds its own controls inside `root` and reads the label through callbacks, so it knows nothing about the editor.
  *   createConvertPanel({ root, getText, getDpi, getSourceName?, onMessage? })
  *     getText():        label text to convert
@@ -19,6 +21,7 @@
   const COPIED = 'Copiado al portapapeles';
   const COPY_FAILED = 'No se pudo copiar: seleccione el texto y use Ctrl+C';
   const NO_DIAGNOSTICS = 'Sin avisos de conversión';
+  const SOURCE_PREFIX = 'Origen: ';
 
   function createConvertPanel({ root, getText, getDpi, getSourceName = () => undefined, onMessage = () => {} }) {
     const make = (tag, props = {}) => Object.assign(document.createElement(tag), props);
@@ -59,7 +62,10 @@
       const name = id => (PB.languages.get(id) || { name: id }).name;
       els.summary.textContent = `Convertido de ${name(result.source)} a ${name(result.target)}`;
       els.output.value = result.text;
-      const shown = result.diagnostics.length ? PB.diagnostics.sort(result.diagnostics) : [PB.diagnostics.info(NO_DIAGNOSTICS)];
+      // What the source parser could not read is not in the output either: its warnings and errors come with the ones of the target
+      const unread = (result.parseDiagnostics || []).filter(d => d.level === 'warning' || d.level === 'error').map(d => ({ ...d, text: SOURCE_PREFIX + d.text }));
+      const all = [...result.diagnostics, ...unread];
+      const shown = all.length ? PB.diagnostics.sort(all) : [PB.diagnostics.info(NO_DIAGNOSTICS)];
       els.diagnostics.replaceChildren(...shown.map(d => make('li', { className: d.level, textContent: d.text })));
       const binary = BINARY.test(result.text);
       els.note.hidden = !binary;

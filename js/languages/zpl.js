@@ -393,6 +393,7 @@
         const w = int(cmd.args[0]);
         if (w === null || w < 2 || w > 32000) { invalid(ctx, '^PW', cmd); return; }
         ctx.model.size.width = toTenthMm(w, ctx.dot);
+        ctx.model.size.tolerance = ctx.dot;
         ctx.model.size.native.pw = w;
         ctx.model.size.native.pwRaw = cmd.raw;
       },
@@ -405,6 +406,7 @@
         const l = int(cmd.args[0]);
         if (l === null || l < 1 || l > 32000) { invalid(ctx, '^LL', cmd); return; }
         ctx.model.size.height = toTenthMm(l, ctx.dot);
+        ctx.model.size.tolerance = ctx.dot;
         ctx.model.size.native.ll = l;
         ctx.model.size.native.llRaw = cmd.raw;
       },

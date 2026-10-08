@@ -21,10 +21,16 @@
     return Object.freeze({
       all: () => list,
       get: id => list.find(s => s.id === id) || null,
-      /** Size with the same pitch, width and height (0.1 mm) as the model's neutral size, or null. */
+      /**
+       * Size with the same pitch, width and height (0.1 mm) as the model's neutral size, or null. A size that is only known to within
+       * `size.tolerance` (0.1 mm; ZPL declares whole dots, so 100 x 60 mm reads back as 100.0 x 60.1) matches a standard one when the width
+       * and the height are that close, and its missing pitch (ZPL has none) is not compared. Without a tolerance the match is exact.
+       */
       findBySize: size => list.find(s => {
         const r = resolve(s);
-        return r.p === size.pitch && r.w === size.width && r.h === size.height;
+        const tolerance = Number.isFinite(size.tolerance) && size.tolerance > 0 ? size.tolerance : 0;
+        const pitchOk = tolerance > 0 && size.pitch == null ? true : r.p === size.pitch;
+        return pitchOk && Math.abs(r.w - size.width) <= tolerance && Math.abs(r.h - size.height) <= tolerance;
       }) || null,
     });
   }

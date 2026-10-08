@@ -137,3 +137,14 @@ test('selectFor does not touch the fields', () => {
     assert.deepEqual([els.width.value, els.height.value, els.pitch.value], [99, '7', 61]);
   });
 });
+
+test('selectFor marks the standard size for a size known to within a dot (ZPL 100.0 x 60.1 mm, no pitch), and only then', () => {
+  withPanel(({ panel, els }) => {
+    panel.selectFor({ width: 1000, height: 601, pitch: null, tolerance: 1.25 });
+    assert.equal(els.select.value, '100x60');
+    panel.selectFor({ width: 1000, height: 601, pitch: null });
+    assert.equal(els.select.value, 'custom', 'an exact size does not get the tolerance');
+    panel.selectFor({ width: 1000, height: 603, pitch: null, tolerance: 1.25 });
+    assert.equal(els.select.value, 'custom');
+  });
+});
