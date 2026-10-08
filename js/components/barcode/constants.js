@@ -1,5 +1,5 @@
 /**
- * Barcode slice: constants shared by the encoders (code39.js, itf.js), published on PB.slices.barcode. Loads before them.
+ * Barcode slice: constants shared by the encoders (code39.js, itf.js, code93.js, codabar.js, msi.js, industrial25.js), published on PB.slices.barcode. Loads before them.
  */
 (function (PB) {
   'use strict';
@@ -16,8 +16,16 @@
    * table (CHECK_CODES) lists it for that symbology. A later symbology only adds rows to those tables and a label here.
    * The order of the options is the order of LABELS.
    */
-  const LABELS = Object.freeze({ code128: 'Code 128', code39: 'Code 39', itf: 'ITF (2 de 5 intercalado)' });
-  const CHECK_LABELS = Object.freeze({ none: 'Sin dígito de control', mod43: 'Módulo 43' });
+  const LABELS = Object.freeze({
+    code128: 'Code 128', code39: 'Code 39', itf: 'ITF (2 de 5 intercalado)', code93: 'Code 93', codabar: 'NW7 (Codabar)', msi: 'MSI',
+    industrial25: '2 de 5 industrial', ean13: 'EAN-13', ean8: 'EAN-8', upca: 'UPC-A', upce: 'UPC-E',
+  });
+  const CHECK_LABELS = Object.freeze({
+    none: 'Sin dígito de control', mod43: 'Módulo 43', check: 'Comprobar el dígito de control', auto: 'Añadir el dígito de control (automático)',
+    mod1010: 'Añadir módulo 10 + módulo 10 (IBM)', mod1110: 'Añadir módulo 11 + módulo 10 (IBM)',
+  });
+  /** Add-on of the EAN / UPC symbologies (the digits that follow the data): the value is the number of digits. */
+  const ADDON_LABELS = Object.freeze({ 0: 'Sin complemento', 2: 'Complemento de 2 dígitos (+2)', 5: 'Complemento de 5 dígitos (+5)' });
 
   /** [{ value, label }] of the symbologies that have a row in typeCodes (an object keyed by symbology) and a label. */
   const symbologyOptions = (typeCodes, labels = LABELS) => Object.keys(labels)
@@ -28,5 +36,8 @@
   const checkOptions = (checkCodes, symbology, labels = CHECK_LABELS) => Object.keys(Object.hasOwn(checkCodes, symbology) ? checkCodes[symbology] : {})
     .map(check => ({ value: check, label: labels[check] || check }));
 
-  PB.slices.barcode.selector = Object.freeze({ LABELS, CHECK_LABELS, symbologyOptions, checkOptions });
+  /** [{ value, label }] of the add-ons (0, 2, 5 digits). */
+  const addonOptions = (labels = ADDON_LABELS) => Object.keys(labels).map(addon => ({ value: Number(addon), label: labels[addon] }));
+
+  PB.slices.barcode.selector = Object.freeze({ LABELS, CHECK_LABELS, ADDON_LABELS, symbologyOptions, checkOptions, addonOptions });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

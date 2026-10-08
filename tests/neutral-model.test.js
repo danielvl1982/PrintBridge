@@ -27,7 +27,7 @@ test('neutral model: label without size commands', () => {
 
 test('neutral model: symbology and native.type', () => {
   const bars = type => parse(`{XB01;0010,0010,${type},0,02,0,0100,0,000,0,00|}{RB01;a|}`).items[0];
-  for (const [type, symbology] of [['9', 'code128'], ['A', 'code128'], ['Z', 'unknown'], ['0', 'unknown']]) {
+  for (const [type, symbology] of [['9', 'code128'], ['A', 'code128'], ['Z', 'unknown'], ['Y', 'unknown']]) {
     assert.equal(bars(type).symbology, symbology, type);
     assert.deepEqual(bars(type).native, { type, module: 2 }, type);
   }
@@ -64,6 +64,6 @@ test('neutral validator: uses symbology', () => {
   const messages = model => PB.validator.validate(model).map(d => d.text);
   const item = symbology => ({ kind: 'barcode', ref: 'X1', data: 'a', symbology, native: { type: 'Z' } });
   assert.deepEqual(messages({ items: [item('code128')] }), []);
-  assert.ok(messages({ items: [item('ean13')] }).some(t => /aproximado/.test(t)));
+  assert.deepEqual(messages({ items: [item('ean13')] }), [], 'EAN-13 is drawn for real since task C1');
   assert.ok(messages({ items: [item('unknown')] }).some(t => /aproximado/.test(t)));
 });

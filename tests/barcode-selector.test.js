@@ -17,6 +17,10 @@ const tspl = PB.languages.get('tspl');
 const { selector } = PB.slices.barcode;
 
 const SYMBOLOGIES = ['code128', 'code39', 'itf'];
+// All the symbologies the selector offers once tasks C1 (EAN / UPC) and C2 (Code 93, NW7, MSI, Industrial 2 of 5) added their rows (the
+// pairwise tests below use the first three). TSPL has no MSI and no Industrial 2 of 5 type.
+const OFFERED = [...SYMBOLOGIES, 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce'];
+const OFFERED_TSPL = OFFERED.filter(s => !['msi', 'industrial25'].includes(s));
 const DPI = 203;
 
 // --- TPCL fixtures: x 0100, y 0200, rotation 90 (digit 1), height 0120, human readable, 3 dots
@@ -72,7 +76,7 @@ test('selector: adding a row to the tables (and a label) adds an option, with no
   assert.deepEqual(options.map(o => o.value), [...SYMBOLOGIES, 'ean13']);
   assert.equal(options.at(-1).label, 'EAN-13');
   // a row without a label is not offered (it has no name to show)
-  assert.deepEqual(selector.symbologyOptions({ ...typeCodes, ean8: '0' }, labels).map(o => o.value), [...SYMBOLOGIES, 'ean13']);
+  assert.deepEqual(selector.symbologyOptions({ ...typeCodes, pdf417: 'P' }, labels).map(o => o.value), [...SYMBOLOGIES, 'ean13']);
   const checks = selector.checkOptions({ ean13: { none: '1', auto: '3' } }, 'ean13', { ...selector.CHECK_LABELS, auto: 'Automático' });
   assert.deepEqual(checks, [{ value: 'none', label: selector.CHECK_LABELS.none }, { value: 'auto', label: 'Automático' }]);
 });
@@ -83,7 +87,7 @@ test('describeItem TPCL: Tipo de código lists the registered symbologies and D�
   for (const withText of [true, false]) {
     const c128 = describeT(tpclText('code128'), withText);
     assert.deepEqual(c128.fields.slice(0, 1).map(f => [f.key, f.label, f.type, f.value]), [['symbology', 'Tipo de código', 'select', 'code128']], String(withText));
-    assert.deepEqual(optionsOf(c128, 'symbology'), SYMBOLOGIES);
+    assert.deepEqual(optionsOf(c128, 'symbology'), OFFERED);
     assert.equal(valueOf(c128, 'check'), undefined, 'Code 128: the viewer models no check digit');
 
     const c39 = describeT(tpclText('code39'), withText);
@@ -112,7 +116,7 @@ test('describeItem TPCL: a check option the viewer does not know is listed as th
   const odd = describeT(tpclText('itf', '\n', XB.itf.replace('2,1,03', '2,2,03')));
   assert.equal(valueOf(odd, 'check'), 'unsupported');
   assert.deepEqual(optionsOf(odd, 'check'), ['none', 'unsupported']);
-  const ean = tpclText('code128', '\n', '{XB01;0100,0200,5,1,03,1,0120,0,000,1,00|}');
+  const ean = tpclText('code128', '\n', '{XB01;0100,0200,Z,1,03,1,0120,0,000,1,00|}');
   assert.deepEqual(describeT(ean).fields.map(f => f.key).filter(k => ['symbology', 'check'].includes(k)), []);
   assert.deepEqual(describeT(ean, false).fields.map(f => f.key).filter(k => ['symbology', 'check'].includes(k)), []);
 });
@@ -121,7 +125,7 @@ test('describeItem TSPL: Tipo de código and Dígito de control, with and withou
   for (const withText of [true, false]) {
     const c128 = describeS(tsplText(BARCODE.code128), withText);
     assert.deepEqual(c128.fields.slice(0, 1).map(f => [f.key, f.label, f.type, f.value]), [['symbology', 'Tipo de código', 'select', 'code128']], String(withText));
-    assert.deepEqual(optionsOf(c128, 'symbology'), SYMBOLOGIES);
+    assert.deepEqual(optionsOf(c128, 'symbology'), OFFERED_TSPL);
     assert.equal(valueOf(c128, 'check'), undefined);
     const c39 = describeS(tsplText(BARCODE.code39), withText);
     assert.deepEqual([valueOf(c39, 'symbology'), valueOf(c39, 'check')], ['code39', 'none']);
@@ -131,8 +135,9 @@ test('describeItem TSPL: Tipo de código and Dígito de control, with and withou
     assert.deepEqual([valueOf(itf, 'symbology'), valueOf(itf, 'check')], ['itf', 'none']);
     assert.deepEqual(optionsOf(itf, 'check'), ['none']);
     assert.equal(valueOf(describeS(tsplText(BARCODE.itf.replace('"25"', '"25C"')), withText), 'check'), 'unsupported');
-    assert.equal(valueOf(describeS(tsplText(BARCODE.code128.replace('"128"', '"EAN13"')), withText), 'symbology'), undefined);
-    assert.equal(valueOf(describeS(tsplText(BARCODE.code128.replace('"128"', '"93"')), withText), 'symbology'), undefined);
+    assert.equal(valueOf(describeS(tsplText(BARCODE.code128.replace('"128"', '"EAN13"')), withText), 'symbology'), 'ean13', 'C1: EAN13 has a row now');
+    assert.equal(valueOf(describeS(tsplText(BARCODE.code128.replace('"128"', '"93"')), withText), 'symbology'), 'code93', 'C2: 93 has a row now');
+    assert.equal(valueOf(describeS(tsplText(BARCODE.code128.replace('"128"', '"POST"')), withText), 'symbology'), undefined);
   }
 });
 
@@ -241,11 +246,11 @@ test('TPCL updateItem: a start/stop option stays between Code 39 and ITF; leavin
   assert.equal(setT(guard, { symbology: 'code39' }), guard);
 });
 
-test('TPCL updateItem: types without a row (EAN13, QR), unknown symbologies and invalid values leave the text unchanged', () => {
-  const ean = tpclText('code128', '\n', '{XB01;0100,0200,5,1,03,1,0120,0,000,1,00|}');
+test('TPCL updateItem: types without a row (an unknown type, QR), unknown symbologies and invalid values leave the text unchanged', () => {
+  const ean = tpclText('code128', '\n', '{XB01;0100,0200,Z,1,03,1,0120,0,000,1,00|}');
   assert.equal(setT(ean, { symbology: 'code39' }), ean);
   const text = tpclText('code128');
-  for (const bad of ['ean13', 'qr', 'unknown', '', null, 3, undefined]) assert.equal(setT(text, { symbology: bad }), text, String(bad));
+  for (const bad of ['postnet', 'qr', 'unknown', '', null, 3, undefined]) assert.equal(setT(text, { symbology: bad }), text, String(bad));
   assert.equal(tpcl.updateItem(text, barcodeT(text), { symbology: 'itf' }, undefined), setT(text, { symbology: 'itf' }), 'without options the default resolution is used');
 });
 
@@ -360,13 +365,13 @@ test('TSPL updateItem: 128M / EAN128 content is rewritten by the parser: leaving
   }
 });
 
-test('TSPL updateItem: types without a row, add-ons, invalid values and an unparsable command leave the text unchanged', () => {
-  for (const type of ['EAN13', '93', 'EAN13+2', 'UPCA']) {
+test('TSPL updateItem: types without a row, add-ons of types that have none, invalid values and an unparsable command leave the text unchanged', () => {
+  for (const type of ['MSI', '2OF5', '39+2', 'POST']) {
     const text = tsplText(BARCODE.code128.replace('"128"', `"${type}"`));
     assert.equal(setS(text, { symbology: 'code39' }), text, type);
   }
   const text = tsplText(BARCODE.code128);
-  for (const bad of ['ean13', 'qr', '', null, 3]) assert.equal(setS(text, { symbology: bad }), text, String(bad));
+  for (const bad of ['msi', 'industrial25', 'qr', '', null, 3]) assert.equal(setS(text, { symbology: bad }), text, String(bad));
 });
 
 test('TSPL updateItem: after a type change the fields of the new type work (wide appears for Code 39 / ITF, goes for Code 128)', () => {

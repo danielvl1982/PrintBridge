@@ -35,10 +35,25 @@
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)
  *       barcode { ref, x, y, rotation, module, height, humanReadable, symbology, native:{ type, module }, data,
- *                 widths?, interCharGap?, check? }
+ *                 widths?, interCharGap?, check?, addon?, guard? }
  *               module = width of the narrowest module and height = height of the bars, both in 0.1 mm
- *               neutral symbology: code128 | code39 | itf | ean13 | qr | unknown; native.type = the language's code.
- *               Exact (generated for real): code128, code39, itf; the others are drawn approximately.
+ *               neutral symbology: code128 | code39 | itf | code93 | codabar | msi | industrial25 | ean13 | ean8 | upca | upce | qr | unknown;
+ *               native.type = the language's code.
+ *               Exact (generated for real): code128, code39, itf, code93, codabar, msi, industrial25, ean13, ean8, upca, upce; the others are drawn approximately.
+ *               code93: module based like code128 (widths of 1..4 modules); check = 'none' | 'check' | 'auto' (TPCL option e = 1 | 2 | 3; the two check
+ *                 characters C and K, modulo 47; TSPL "93" = 'auto'). Only the 43 standard characters are drawn (no full ASCII).
+ *               codabar (NW7; TPCL type 4, TSPL "CODA"), msi (TPCL 1), industrial25 (TPCL O): wide / narrow like code39 / itf (widths, interCharGap);
+ *                 codabar data may carry its start / stop letters A-D; msi digits, check = 'none' | 'check' | 'auto' (IBM modulus 10) | 'mod1010' |
+ *                 'mod1110' (TPCL options 1..5); industrial25 digits, check = 'none' | 'check' | 'auto' (modulus 10); codabar check = 'none'.
+ *                 native.startStop = the TPCL start/stop option T | P | N as written (widths form; not drawn). TSPL has no msi / industrial25 type.
+ *               EAN / UPC only (ean13, ean8, upca, upce; module based like Code 128):
+ *                 addon = 0 | 2 | 5 (the digits of the EAN-2 / EAN-5 add-on; TPCL types 7 8 I J L M G H, TSPL "EAN13+2"...). The data
+ *                 is the base digits followed by the add-on digits.
+ *                 check = 'none' | 'check' | 'auto' | 'unsupported' (TPCL option e = 1 | 2 | 3 | the price check digits 4, 5; the
+ *                 TSPL types have no option and read as 'auto'): auto attaches the check digit to data without it and validates data
+ *                 with it, check only validates, none draws the data as it is; unsupported is drawn as auto and reported. Default: auto.
+ *                 guard? = TPCL "WPC guard bar" length in 0.1 mm (000 = none; the digits are printed under the bars when humanReadable);
+ *                 absent (TSPL) = the standard guard bars when the digits are printed.
  *               Code 39 and ITF only (wide/narrow symbologies), all optional:
  *                 widths = { narrowBar, narrowSpace, wideBar, wideSpace } in 0.1 mm. Without them the renderer uses
  *                 module for the narrow elements and 3 x module for the wide ones (ratio 3:1).

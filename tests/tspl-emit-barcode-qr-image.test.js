@@ -87,12 +87,12 @@ test('itf becomes "25"; a check digit it cannot represent warns once in Spanish'
   assert.match(warnings[0].text, /dígito de control/);
 });
 
-test('ean13 becomes "EAN13"; data that is not 12 or 13 digits warns once', () => {
+test('ean13 becomes "EAN13"; data that cannot be encoded warns once (the encoder names the symbology)', () => {
   assert.equal(body([barcode({ symbology: 'ean13', data: '123456789012' })])[0], 'BARCODE 40,230,"EAN13",100,1,0,2,2,"123456789012"');
   assert.deepEqual(levels(emit(model([barcode({ symbology: 'ean13', data: '1234567890123' })])).diagnostics, 'warning'), []);
   const out = emit(model([barcode({ symbology: 'ean13', data: '12345' }), barcode({ symbology: 'ean13', data: 'ABCDEFGHIJKL' })]));
   assert.equal(levels(out.diagnostics, 'warning').length, 1);
-  assert.match(levels(out.diagnostics, 'warning')[0].text, /EAN13/);
+  assert.match(levels(out.diagnostics, 'warning')[0].text, /EAN-13/);
 });
 
 test('unknown / qr symbologies are skipped with a Spanish warning that names them', () => {
@@ -315,7 +315,7 @@ test('code39 / itf / ean13 / image items survive parse(emit()) within their docu
   ];
   const back = tspl.parse(emit(model(items)).text).items;
   assert.deepEqual(back.map(i => [i.symbology, i.check, i.data, i.rotation, i.humanReadable]), [
-    ['code39', 'mod43', 'AB-12', 0, true], ['itf', 'none', '1234', 0, true], ['ean13', undefined, '123456789012', 180, false],
+    ['code39', 'mod43', 'AB-12', 0, true], ['itf', 'none', '1234', 0, true], ['ean13', 'auto', '123456789012', 180, false],
   ]);
   assertClose(back[0].widths, items[0].widths, 'widths');
   // itf 3:8 is not a manual ratio: 8/3 = 2.67 is nearest to 2.5 (2:5), so the wide bar is round(3 * 2.5) = 8 (7.5 rounds up)
