@@ -19,7 +19,7 @@ test('PB.qr keeps its public name and lives in the slice', () => {
 });
 
 test('palette order is text, barcode, qr, line, box and every palette kind is a slice', () => {
-  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'image']);
+  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'ellipse', 'circle', 'image']);
   assert.deepEqual(tpcl.componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box']);
 });
 

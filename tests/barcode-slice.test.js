@@ -35,6 +35,6 @@ test('TPCL hooks of barcode: two parse handlers, move, two edit shapes and build
 });
 
 test('barcode keeps the second palette position', () => {
-  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'image']);
+  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'ellipse', 'circle', 'image']);
   assert.deepEqual(PB.languages.get('tpcl').componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box']);
 });

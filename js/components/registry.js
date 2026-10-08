@@ -12,6 +12,9 @@
  *                                the result never depends on which file loads first. Slices set it explicitly: text 10,
  *                                barcode 20, qr 30, line 40, box 50, image 60
  *                                (the image has no `build` hook, so languages do not list it as a template)
+ *                                ellipse 55 and circle 56 (TSPL only: a circle is an ellipse with ref CIRCLE, so the two slices share
+ *                                the model kind `ellipse` the way line and box share `line`; their TPCL hook only has an emit that
+ *                                skips the item with one warning and, with no `build`, adds no TPCL palette entry)
  *     modelKind,                kind of the neutral model items it draws (default: kind). Box is its own slice but
  *                                its items are { kind: 'line', rect: true }
  *     matches(item),             picks the slice among those sharing a modelKind (line: !rect, box: rect)

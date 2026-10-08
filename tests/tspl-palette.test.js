@@ -27,17 +27,19 @@ function cornerOf(item) {
 const newest = model => model.items[model.items.length - 1];
 const problems = model => model.diagnostics.filter(d => d.level === 'error' || d.level === 'warning');
 
-test('componentTemplates lists the five kinds in palette order with Spanish labels', () => {
+test('componentTemplates lists the seven kinds in palette order with Spanish labels', () => {
   assert.deepEqual(tspl.componentTemplates(), [
     { kind: 'text', label: 'Texto' },
     { kind: 'barcode', label: 'Código de barras' },
     { kind: 'qr', label: 'QR' },
     { kind: 'line', label: 'Línea' },
     { kind: 'box', label: 'Caja' },
+    { kind: 'ellipse', label: 'Elipse' },
+    { kind: 'circle', label: 'Círculo' },
   ]);
   // A copy: changing it does not change the next answer
   tspl.componentTemplates().pop();
-  assert.equal(tspl.componentTemplates().length, 5);
+  assert.equal(tspl.componentTemplates().length, 7);
 });
 
 test('each kind inserts exactly one command right before PRINT and leaves the rest of the label alone', () => {
@@ -195,7 +197,7 @@ test('the moved or edited result of a new component keeps working with the TSPL 
 test('the palette offers the image for the languages that can write it (TPCL and TSPL)', () => {
   const image = { kind: 'image', label: 'Imagen' };
   assert.equal(typeof PB.ui.paletteEntries, 'function');
-  assert.deepEqual(PB.ui.paletteEntries(tspl, image).map(e => e.kind), [...KINDS, 'image']);
+  assert.deepEqual(PB.ui.paletteEntries(tspl, image).map(e => e.kind), [...KINDS, 'ellipse', 'circle', 'image']);
   assert.deepEqual(PB.ui.paletteEntries(tpcl, image).map(e => e.kind), [...KINDS, 'image']);
   assert.deepEqual(PB.ui.paletteEntries(null, image), []);
   // Language capability, documented in js/core/languages.js

@@ -164,8 +164,8 @@ test('rendering: a vertical BAR and a BOX go through the line renderer', () => {
   assert.match(svg, /<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" class="stroke"/);
 });
 
-test('ELLIPSE, CIRCLE, ERASE and REVERSE are still unsupported with the existing warning', () => {
-  for (const src of ['ELLIPSE 10,10,100,50,3', 'CIRCLE 10,10,80,3', 'ERASE 10,10,100,50', 'REVERSE 10,10,100,50']) {
+test('ERASE and REVERSE are still unsupported with the existing warning (ELLIPSE and CIRCLE are read since A2)', () => {
+  for (const src of ['ERASE 10,10,100,50', 'REVERSE 10,10,100,50']) {
     const model = parse(src);
     assert.equal(model.items.length, 0, src);
     assert.equal(model.diagnostics.length, 1, src);
