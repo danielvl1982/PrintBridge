@@ -34,9 +34,11 @@ test('the Formato row: sizes.apply writes ^PW / ^LL with the resolution the app 
   assert.deepEqual([model.size.pitch, model.size.gap], [null, null]);
 });
 
-test('the palette: ZPL offers the components its slices provide (Texto and Código de barras so far) and no Imagen entry; an unrecognised text is not ZPL', () => {
+test('the palette: ZPL offers the components its slices provide (Texto, Código de barras, QR and Data Matrix so far) and no Imagen entry; an unrecognised text is not ZPL', () => {
   const image = { kind: 'image', label: 'Imagen' };
-  assert.deepEqual(PB.ui.paletteEntries(zpl, image), [{ kind: 'text', label: 'Texto' }, { kind: 'barcode', label: 'Código de barras' }]);
+  assert.deepEqual(PB.ui.paletteEntries(zpl, image), [
+    { kind: 'text', label: 'Texto' }, { kind: 'barcode', label: 'Código de barras' }, { kind: 'qr', label: 'QR' }, { kind: 'datamatrix', label: 'Data Matrix' },
+  ]);
   assert.deepEqual(PB.ui.paletteEntries(PB.languages.get('tspl'), image).at(-1), image);
   assert.equal(PB.languages.detect(''), null);
 });

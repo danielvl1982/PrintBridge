@@ -38,8 +38,10 @@
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)
+ *               ZPL ^BQ: ref 'BQ', no rotation (the orientation is fixed); the level is the first letter of the ^FD data, native = { type, model, cell
+ *               (the magnification), mode, mixed, origin, orientationArg, zplData } (see js/components/qr/zpl.js)
  *       datamatrix { ref, x, y, rotation, cell, size?, ecc, area?, symbology:'datamatrix', native, data }
- *               Data Matrix (TPCL XB type Q, TSPL DMATRIX). The viewer draws ECC200 with ASCII encodation and square symbols only.
+ *               Data Matrix (TPCL XB type Q, TSPL DMATRIX, ZPL ^BX; ecc = the ZPL quality 0..200, ZPL ref 'BX', see js/components/datamatrix/zpl.js). The viewer draws ECC200 with ASCII encodation and square symbols only.
  *               cell = side of each module in 0.1 mm; 0 = the printer draws nothing (TPCL cell width 00); null = no module (TSPL DMATRIX
  *               without the optional xm, row, col group): the symbol fits `area` = { width, height } in 0.1 mm (TSPL only; whole dots of
  *               min(width, height) / symbol side).

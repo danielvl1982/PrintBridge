@@ -51,9 +51,9 @@ const field = (c, o = 'N', origin = '^FO100,50') => `${origin}${c.cmd(o)}^FD${c.
 // ---------------------------------------------------------------------------------------------------------------
 // Registration and tables
 
-test('the barcode slice registers a zpl factory after tpcl and tspl; ZPL offers Texto and Código de barras in the palette', () => {
+test('the barcode slice registers a zpl factory after tpcl and tspl; ZPL offers Texto and Código de barras first in the palette (QR and Data Matrix follow, Z4)', () => {
   assert.deepEqual(Object.keys(PB.components.get('barcode').languages), ['tpcl', 'tspl', 'zpl']);
-  assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]), [['text', 'Texto'], ['barcode', 'Código de barras']]);
+  assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]).slice(0, 2), [['text', 'Texto'], ['barcode', 'Código de barras']]);
 });
 
 // ---------------------------------------------------------------------------------------------------------------

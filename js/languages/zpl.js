@@ -305,7 +305,7 @@
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     encodeData: zplEdit.encodeData, decodeData: zplEdit.decodeData,
     numberField: zplEdit.numberField, selectField: zplEdit.selectField, stringSelectField: zplEdit.stringSelectField,
-    checkboxField: zplEdit.checkboxField, textField: zplEdit.textField, contentField: zplEdit.contentField,
+    checkboxField: zplEdit.checkboxField, textField: zplEdit.textField, contentField: zplEdit.contentField, paramField: zplEdit.paramField,
   });
 
   // ---------------------------------------------------------------------------------------------------------------

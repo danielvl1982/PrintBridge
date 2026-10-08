@@ -401,7 +401,10 @@ test('fields flagged reemit are written by the shape hook and win over the edits
 
 test('componentTemplates lists the slices with a build hook, in slice order', () => {
   // the fake slice has order 5 so that its handlers come before the real text slice (order 10), whose ^A / ^FD handlers it shadows here
-  assert.deepEqual(zpl.componentTemplates(), [{ kind: 'zfake', label: 'Fake' }, { kind: 'text', label: 'Texto' }, { kind: 'barcode', label: 'Código de barras' }]);
+  assert.deepEqual(zpl.componentTemplates(), [
+    { kind: 'zfake', label: 'Fake' }, { kind: 'text', label: 'Texto' }, { kind: 'barcode', label: 'Código de barras' },
+    { kind: 'qr', label: 'QR' }, { kind: 'datamatrix', label: 'Data Matrix' },
+  ]);
 });
 
 test('buildComponent inserts a whole field before ^XZ at the drop point, rotated against the view rotation', () => {

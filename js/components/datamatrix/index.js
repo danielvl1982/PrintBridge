@@ -1,11 +1,11 @@
 /**
- * Data Matrix slice: registers the `datamatrix` component (TPCL XB type Q, TSPL DMATRIX). Loads after the other files of the slice
- * (sizes.js, reed-solomon.js, placement.js, matrix.js, render.js, validate.js, tpcl.js, tspl.js).
+ * Data Matrix slice: registers the `datamatrix` component (TPCL XB type Q, TSPL DMATRIX, ZPL ^BX). Loads after the other files of the slice
+ * (sizes.js, reed-solomon.js, placement.js, matrix.js, render.js, validate.js, tpcl.js, tspl.js, zpl.js).
  */
 (function (PB) {
   'use strict';
 
-  const { render, validate, tpcl, tspl } = PB.slices.datamatrix;
+  const { render, validate, tpcl, tspl, zpl } = PB.slices.datamatrix;
 
   PB.components.register({
     kind: 'datamatrix',
@@ -15,6 +15,6 @@
     glyph: '▩',
     render,
     validate,
-    languages: { tpcl, tspl },
+    languages: { tpcl, tspl, zpl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

@@ -32,6 +32,8 @@
  *       field has read(text, found, item) -> value | undefined (found = { field, offset }) and edits(text, found, item, value, opts) ->
  *       [{ start, end, value }] | null (null = refuse); opts.changes holds every key of the update. Without text, model(item) is used.
  *       argEdit(cmd, index, value) writes one argument of a command, filling the missing ones before it with empty arguments.
+ *       paramField({ key, label, type, cmd, arg, read(raw, cmd, item), write(value, cmd, item) }) builds the usual custom field over one
+ *       argument whose empty value stands for a default (QR model, Data Matrix module and orientation).
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so the other commands of the field, other fields,
  * comments and line endings stay byte for byte. An argument that is not a plain number is never moved. The coordinates of an item
@@ -156,6 +158,32 @@
       return encoded.hex && !cmd.hex ? { value: encoded.text, edits: [{ start: cmd.start, end: cmd.start, value: '^FH' }] } : encoded.text;
     },
   });
+
+  /**
+   * A custom field over ONE argument of a command of the field whose empty or missing value stands for a default the descriptor cannot see
+   * (the orientation follows ^FW, an omitted model is 2...): read(raw, cmd, item) -> value | undefined (raw = the argument as written, '' when
+   * empty or missing), write(value, cmd, item) -> the raw text | null (null refuses). Nothing is written when the value is the one in force.
+   * names: the command(s) of the field (the last one that matches is used); index: the argument.
+   */
+  function paramField({ key, label, type, cmd: names, arg: index, read, write, ...rest }) {
+    const locate = found => (found ? found.field.find(names) : undefined);
+    const valueOf = (found, item, text) => {
+      const cmd = locate(found);
+      if (!cmd) return undefined;
+      const a = cmd.args[index];
+      return read(a ? a.raw : '', cmd, item, text);
+    };
+    return {
+      key, label, type, custom: true, ...rest,
+      read: (text, found, item) => valueOf(found, item, text),
+      edits(text, found, item, value) {
+        const cmd = locate(found);
+        const raw = cmd ? write(value, cmd, item) : null;
+        if (raw === null || raw === undefined || valueOf(found, item, text) === value) return null;
+        return [argEdit(cmd, index, raw)];
+      },
+    };
+  }
 
   // ---------------------------------------------------------------------------------------------------------------
   // Fields and offsets
@@ -430,6 +458,6 @@
 
   PB.zplEdit = Object.freeze({
     createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA,
-    numberField, selectField, stringSelectField, checkboxField, textField, contentField,
+    numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
