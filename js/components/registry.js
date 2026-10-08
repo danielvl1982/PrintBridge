@@ -10,7 +10,7 @@
  *                                composed (all(), kinds(), the languages' handler/coordinate/editable tables). Lower
  *                                first, ties and definitions without one keep registration order (after the rest), so
  *                                the result never depends on which file loads first. Slices set it explicitly: text 10,
- *                                barcode 20, qr 30, line 40, box 50, image 60
+ *                                barcode 20, qr 30, datamatrix 35, line 40, box 50, image 60
  *                                (the image has no `build` hook, so languages do not list it as a template)
  *                                ellipse 55 and circle 56 (TSPL only: a circle is an ellipse with ref CIRCLE, so the two slices share
  *                                the model kind `ellipse` the way line and box share `line`; their TPCL hook only has an emit that

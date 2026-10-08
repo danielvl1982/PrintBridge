@@ -475,7 +475,7 @@
   }
 
   /** Lines that only TSPL writes: SIZE <n>, CLS, or a drawing command followed by a number. TPCL text ({…|}) is never TSPL. */
-  const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|BITMAP|BAR|BOX|ELLIPSE|CIRCLE)[ \t]+\d)/im;
+  const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|DMATRIX|BITMAP|BAR|BOX|ELLIPSE|CIRCLE)[ \t]+\d)/im;
   const detect = src => typeof src === 'string' && !/\{[\s\S]*?\|\}/.test(src) && TSPL_LINE.test(src);
 
   // ---------------------------------------------------------------------------------------------------------------

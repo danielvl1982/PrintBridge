@@ -34,6 +34,17 @@
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)
+ *       datamatrix { ref, x, y, rotation, cell, size?, ecc, area?, symbology:'datamatrix', native, data }
+ *               Data Matrix (TPCL XB type Q, TSPL DMATRIX). The viewer draws ECC200 with ASCII encodation and square symbols only.
+ *               cell = side of each module in 0.1 mm; 0 = the printer draws nothing (TPCL cell width 00); null = no module (TSPL DMATRIX
+ *               without the optional xm, row, col group): the symbol fits `area` = { width, height } in 0.1 mm (TSPL only; whole dots of
+ *               min(width, height) / symbol side).
+ *               size? = side in modules of a forced square symbol (10, 12, ... 144; TPCL "Ciiijjj" cells, TSPL row = col); absent = automatic
+ *               (the smallest that holds the data). rotation = 0 | 90 | 180 | 270 clockwise around the origin (TPCL only: TSPL has none).
+ *               ecc = the ECC level: 200 = ECC200 (drawn); 0..140 (TPCL types 00..14, which the printer ignores) are reported, not drawn.
+ *               native = TPCL { type:'Q', ecc, cell, formatId, rotation, cells?, connection? } (as written) or TSPL { width, height, xm, rows, cols }
+ *               (dots, null when absent). The TPCL connection setting (Jkkllmmmnnn) is kept in native only. TSPL DMATRIX is NOT VERIFIED
+ *               ON A PRINTER: the manual only gives the syntax and an example.
  *       barcode { ref, x, y, rotation, module, height, humanReadable, symbology, native:{ type, module }, data,
  *                 widths?, interCharGap?, check?, addon?, guard? }
  *               module = width of the narrowest module and height = height of the bars, both in 0.1 mm

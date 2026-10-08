@@ -9,7 +9,7 @@ const tpcl = PB.languages.get('tpcl');
 
 const PRINT = 'PRINT 1,1';
 const BASE = ['SIZE 100 mm,60 mm', 'GAP 3 mm,0 mm', 'DIRECTION 1', 'CLS', 'TEXT 10,10,"3",0,1,1,"hello"', PRINT, ''].join('\r\n');
-const KINDS = ['text', 'barcode', 'qr', 'line', 'box'];
+const KINDS = ['text', 'barcode', 'qr', 'datamatrix', 'line', 'box'];
 const dotOf = dpi => PB.units.dotSize(dpi);
 
 /** Builds a component; returns { out, model, added } where added is the one line the build put in. */
@@ -27,11 +27,12 @@ function cornerOf(item) {
 const newest = model => model.items[model.items.length - 1];
 const problems = model => model.diagnostics.filter(d => d.level === 'error' || d.level === 'warning');
 
-test('componentTemplates lists the eight kinds in palette order with Spanish labels', () => {
+test('componentTemplates lists the nine kinds in palette order with Spanish labels', () => {
   assert.deepEqual(tspl.componentTemplates(), [
     { kind: 'text', label: 'Texto' },
     { kind: 'barcode', label: 'Código de barras' },
     { kind: 'qr', label: 'QR' },
+    { kind: 'datamatrix', label: 'Data Matrix' },
     { kind: 'line', label: 'Línea' },
     { kind: 'box', label: 'Caja' },
     { kind: 'ellipse', label: 'Elipse' },
@@ -40,7 +41,7 @@ test('componentTemplates lists the eight kinds in palette order with Spanish lab
   ]);
   // A copy: changing it does not change the next answer
   tspl.componentTemplates().pop();
-  assert.equal(tspl.componentTemplates().length, 8);
+  assert.equal(tspl.componentTemplates().length, 9);
 });
 
 test('each kind inserts exactly one command right before PRINT and leaves the rest of the label alone', () => {
@@ -63,7 +64,7 @@ test('the templates use the agreed command layouts', () => {
 });
 
 test('every inserted command parses back, without diagnostics, into the right kind at the drop point (+-1 dot)', () => {
-  const expected = { text: 'text', barcode: 'barcode', qr: 'qr', line: 'line', box: 'line' };
+  const expected = { text: 'text', barcode: 'barcode', qr: 'qr', datamatrix: 'datamatrix', line: 'line', box: 'line' };
   for (const dpi of [203, 300]) {
     for (const kind of KINDS) {
       const { model } = build(BASE, kind, { x: 123, y: 456 }, { dpi });

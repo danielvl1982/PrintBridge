@@ -369,7 +369,7 @@
   // --- Content (the data of text, barcode and QR items): it lives outside the capture groups of the format command ---
 
   /** Kinds whose data can be edited and the data command letter of each format command (the inverse of DATA_TARGET). */
-  const CONTENT_KINDS = Object.freeze(['text', 'barcode', 'qr']);
+  const CONTENT_KINDS = Object.freeze(['text', 'barcode', 'qr', 'datamatrix']);
   const DATA_COMMAND = Object.freeze(Object.fromEntries(Object.entries(DATA_TARGET).map(([letter, format]) => [format, letter])));
 
   /** Content field of the panel: the manual caps the data at 255 characters (B-SV4 specification). */

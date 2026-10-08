@@ -17,11 +17,12 @@ function build(text, kind, point = at(100, 200), viewRotation) {
   return { out, model, problems: [...model.diagnostics, ...tpcl.validate(model)] };
 }
 
-test('componentTemplates lists the six kinds in order with Spanish labels', () => {
+test('componentTemplates lists the seven kinds in order with Spanish labels', () => {
   assert.deepEqual(tpcl.componentTemplates(), [
     { kind: 'text', label: 'Texto' },
     { kind: 'barcode', label: 'Código de barras' },
     { kind: 'qr', label: 'QR' },
+    { kind: 'datamatrix', label: 'Data Matrix' },
     { kind: 'line', label: 'Línea' },
     { kind: 'box', label: 'Caja' },
     { kind: 'area', label: 'Área invertida' },

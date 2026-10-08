@@ -164,8 +164,8 @@ test('rendering: a vertical BAR and a BOX go through the line renderer', () => {
   assert.match(svg, /<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" class="stroke"/);
 });
 
-test('DMATRIX and PDF417 are still unsupported with the existing warning (ELLIPSE, CIRCLE since A2 and ERASE, REVERSE since A3 are read)', () => {
-  for (const src of ['DMATRIX 10,10,100,50', 'PDF417 10,10,100,50']) {
+test('MAXICODE and PDF417 are still unsupported with the existing warning (ELLIPSE, CIRCLE since A2, ERASE, REVERSE since A3 and DMATRIX since D1 are read)', () => {
+  for (const src of ['MAXICODE 10,10,"x"', 'PDF417 10,10,100,50']) {
     const model = parse(src);
     assert.equal(model.items.length, 0, src);
     assert.equal(model.diagnostics.length, 1, src);
