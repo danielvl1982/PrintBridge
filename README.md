@@ -278,8 +278,8 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
 
 ## ZPL support (Zebra)
 
-**Work in progress: the language core, the text, the linear barcodes, QR and Data Matrix are in place, the other components are added next** (shapes, images,
-counters and the conversion of those to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
+**Work in progress: the language core, the text, the linear barcodes, QR, Data Matrix and the shapes are in place, the other components are added next** (images,
+counters and the conversion of the rest to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
 
 The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL.
 What works now:
@@ -349,6 +349,30 @@ What works now:
   **Editing:** QR: **Magnificación**, **Corrección de errores** (the level letter of the field data, also in the mixed mode), **Modelo** and **Contenido** (the data after the prefix, which stays; not offered in manual or mixed mode);
   Data Matrix: **Módulo (puntos)** (an omitted or 0 module shows the one derived from `^BY`), **Tamaño del símbolo** (automatic or one of the 24 square sizes; quality 200 only: it writes `c` and `r` together), **Rotación** and **Contenido** (in quality 200 the
   field data as written: type `__` for an underscore). `^` and `~` go through `^FH`. **Palette:** *QR* inserts `^FO x,y^BQN,2,4^FDMA,<#QRn#>^FS` (always unrotated); *Data Matrix* inserts `^FO x,y^BXN,4,200^FD<#DATAMATRIXn#>^FS`, rotated against the view.
+- **Shapes and reverse print:** lines, boxes, circles, ellipses, diagonals and the inverted / cleared areas, drawn in command order (a reverse area only inverts what came before it).
+
+  | Command | Item | Parameters (guide, Volume One) | Notes |
+  |---|---|---|---|
+  | `^GB` | Box (outline) | `w,h,t,c,r` | `w`, `h` outer size in dots (from `t` to 32000; a smaller value is raised to `t`, so `^GB0,100,20` is a vertical line 20 wide; default `t` or 1), `t` thickness 1..32000 (default 1, grows **inward**), `c` colour `B` / `W` (default `B`), `r` rounding degree 0..8 (default 0). **Radius = (r / 8) × (shorter side / 2)** (guide's formula). An outline is a box with the neutral line stroked on its centre line: the rectangle inset by `t / 2` and the radius reduced by `t / 2` (a thick border can swallow a small radius: the degree is kept) |
+  | `^GB` | Bar (line) | `w,h,t` | A box whose border meets in the middle (**2t >= the shorter side**, assumed) and is black is a bar (the neutral line along the longer side, like TSPL `BAR`); a solid black box with rounded corners is drawn as a thick rounded rectangle |
+  | `^GB` + `^FR` / `^LRY` | Inverted area | `w,h,t,,r` | A solid box with `^FR`: the **area that inverts** what is already drawn (white rectangle blended with `difference`, like TPCL `XR;B` and TSPL `REVERSE`). An outline with `^FR` is a reversed box (white stroke with the blend). Rounded corners on an area are drawn square (one information message) |
+  | `^GB` colour `W` | Cleared area / white box | `w,h,t,W,r` | A solid white box clears (white over what is drawn: TPCL `XR;A`, TSPL `ERASE`); a white outline is a box drawn in white. `^FR` on a white shape is ignored and drawn white (one information message) |
+  | `^GD` | Diagonal line | `w,h,t,c,o` | `w`, `h` 3..32000 the box it crosses, `o` = `R` (or `/`, default): from the bottom-left to the top-right, `L` (or `\`): from the top-left to the bottom-right; the line runs along the centre of its thickness from corner to corner (**not verified**) |
+  | `^GC` | Circle | `d,t,c` | `d` diameter 3..4095 (larger values are replaced by 4095), `t` 2..4095 per the guide's table (its default is 1), the thickness grows **inward** (the neutral ellipse is inset by `t / 2`); a thickness over half the diameter is a solid disc |
+  | `^GE` | Ellipse | `w,h,t,c` | The same for `w` x `h` (default `t` or 1) |
+
+  `^FO` is the top-left corner of the shape and `^FT` the **bottom-left** corner (the guide says it for boxes; for `^GD`, `^GC` and `^GE` it is **not documented** and the same is assumed).
+  **`^FR`** reverses one field (the output colour is the opposite of its background); **`^LRY`** does it for every field opened after it until **`^LRN`** (the guide: "identical to placing an `^FR` in all current and subsequent fields";
+  it notes that `^GB` needs to be used together with `^LR`). In the viewer `^FR` / `^LR` reverse text, boxes, ellipses, diagonals and areas; over bar codes, QR, Data Matrix and images the field is drawn normally
+  with one information message per label. The emit **never writes `^LR`**: each reversed item gets its own `^FR`.
+  **Not verified on a printer:** the picture of the geometry (the thickness grows inward from the outer box, the centre-line model above), the solid threshold 2t >= the shorter side, the `^FT` origin of `^GD` / `^GC` / `^GE`,
+  where a `^GD` line with thickness lies in its box, and what `^FR` does to a white shape.
+  **Writing:** the corners plus `t / 2` become the outer box `^FOx,y ^GBw,h,t[,B[,r]]`; the radius becomes the **nearest rounding degree** (0..8, one information message when it cannot reproduce the radius); a thickness over 32000 (`^GB` / `^GD`), under 2 or over 4095 (`^GC` / `^GE`), a size over 4095 and a
+  diagonal under 3 dots are limited with a warning; a horizontal / vertical line is a bar `^GB`, a slanted one `^GD` (`R` when it goes up to the right); a circle item is `^GC` (equal axes), everything else `^GE`; an area is `^GB w,h,min(w,h)^FR` (inverted) or `^GB w,h,min(w,h),W` (cleared).
+  **Editing:** a **box** has width, height, thickness, **rounding degree** (the nine degrees, each labelled with its shape), colour and **Impresión inversa (^FR)**; a **bar** has length, thickness and orientation; a **diagonal** has width, height, thickness, orientation (`R` / `L`), colour and reverse;
+  a **circle** has diameter, thickness, colour and reverse; an **ellipse** width, height, thickness, colour and reverse; an **area** has width, height (the thickness follows the shorter side so it stays solid) and the **mode** (Invertir = `^FR`, Borrar = colour `W`).
+  Under `^LRY` the reverse checkbox reads checked (the field is reversed) and checking it adds nothing; to turn it off edit the `^LR` commands. All shapes move with `^FO` / `^FT`.
+  **Palette:** *Línea* inserts `^FO x,y^GB<40 mm>,3,3^FS`, *Caja* `^GB<30 mm>,<20 mm>,3,B,0`, *Elipse* `^GE<30 mm>,<20 mm>,3`, *Círculo* `^GC<20 mm>,3` and *Área invertida* `^GB<30 mm>,<10 mm>,<10 mm>^FR`, all at the drop point (sizes in dots at the label's resolution).
 - **Convertir a…** lists **ZPL (Zebra)** as a target (file `.zpl`, UTF-8) and reads ZPL as a source. Text converts both ways with TPCL and TSPL (position, rotation, size, data;
   fonts are mapped to the nearest one with one information message, mono multiples of a matrix become a bitmapped font, the rest the scalable `0`); the TPCL text attributes,
   alignment, spacing, bold and counters are reported and written without them. Linear barcodes convert both ways with TPCL and TSPL (position, rotation, height, module, data, human readable line, check digit option; the ratio of the wide / narrow ones):
@@ -357,7 +381,10 @@ What works now:
   **QR** converts both ways with TPCL and TSPL (position, level, module <-> magnification, data; a TPCL module above 10 dots is clamped to the ZPL limit with one warning; the QR has no rotation in the model, so the TSPL rotation was already reported when read).
   **Data Matrix** converts both ways with TPCL `XB` type `Q` and TSPL `DMATRIX` (position, module, forced size, data; rotation with TPCL; TSPL has no rotation, one warning). ZPL has qualities 0 / 50 / 80 / 100 / 140 / 200: a TPCL ECC type with another value is written as 200 with one warning,
   TSPL writes any quality other than 200 as ECC 200 with a warning, a module of 0 (TPCL: nothing is printed) is skipped with a warning, and the TPCL format ID and connection setting are not converted.
-  The other components are reported as "no se puede exportar" until their tasks are done.
+  **Shapes** convert both ways with TPCL and TSPL: lines and boxes (TPCL `LC`, TSPL `BAR` / `BOX`: a ZPL box is the outer box of the neutral rectangle, so the border grows outward by `t / 2` from the TPCL / TSPL corners), the corner radius
+  (ZPL has only the 9 rounding degrees: the radius is **quantised** to the nearest one with one information message; TPCL / TSPL take the radius in their own units), the areas (TPCL `XR`, TSPL `REVERSE` / `ERASE` <-> `^GB ... ^FR` / white `^GB`), circles and ellipses with TSPL
+  (`CIRCLE` / `ELLIPSE`; TPCL has none: skipped with the existing warning) and the slanted lines with TPCL (TSPL has none: skipped with the existing warning). White (colour `W`) and reversed outlines, diagonals and ellipses have no TPCL / TSPL form: written as plain black shapes with one warning each.
+  The other components (images) are reported as "no se puede exportar" until their tasks are done.
 - Files are read and written as UTF-8 (the 2003 guide ties characters above ASCII to `^CI` and the printer font, and does not mention UTF-8: not verified).
 
 ## Limitations
