@@ -1,6 +1,6 @@
 # PrintBridge
 
-Tool to see how a label (TPCL for TEC/Toshiba printers, TSPL for TSC TTP printers) looks **without printing it**, while it is being created or
+Tool to see how a label (TPCL for TEC/Toshiba printers, TSPL for TSC TTP printers, ZPL for Zebra printers) looks **without printing it**, while it is being created or
 modified. It warns about overlapping texts, items that go outside the label and wrong measures.
 
 **Live app: <https://danielvl1982.github.io/PrintBridge/>**
@@ -36,6 +36,7 @@ from scratch with the example label.
 | `js/components/compose.js` | `PB.composeSlices`: builds a language's handler table from the slices that registered for it |
 | `js/languages/tpcl.js` | TPCL reading and writing (fonts and commands of the TEC/Toshiba printers; the language `emit` hook writes header, items and trailer) |
 | `js/languages/tspl.js` | TSPL reading and writing (tokenizer, label setup commands, language registration and the `emit` hook; the drawing commands come from the component slices) |
+| `js/languages/zpl.js`, `js/languages/zpl-edit.js` | ZPL (Zebra) reading and writing: tokenizer, field grouping, label setup commands, language registration, `emit` skeleton and the generic move / edit engines (the drawing commands come from the component slices as they are added) |
 | `js/view.js` | Preview rotation (pure coordinate mapping) |
 | `js/drawing.js` | Label drawing and overlap detection |
 | `js/ui.js` | Screen panels |
@@ -274,6 +275,27 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
   bytes (the code box shows them as a private-use placeholder, U+E00D, because a text box would turn them into line breaks; conversion and
   download write them back as `0x0D`). Pasted text cannot carry arbitrary bytes, so for exact graphics open the file.
 - The viewer imitates the printer fonts (as with TPCL): text widths are approximate.
+
+## ZPL support (Zebra)
+
+**Work in progress: the language core is in place, the components are added next** (text, bar codes, QR and Data Matrix, shapes, images, counters
+and the conversion to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
+
+The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL.
+What works now:
+
+- **Size:** `^PW` (width) and `^LL` (length), in dots, shown in the **Formato** row (rounded to 0.1 mm; the **Resolución** selector, 203 or 300 dpi, must
+  match the printer). Writing the size from the **Formato** row rewrites or adds `^PW` / `^LL` right after the first `^XA`, keeping the line ending of the file.
+  ZPL sizes are whole dots, so a catalogue size such as 100×60 mm may come back as 100.0×60.1 mm.
+- **Label setup read:** `^LH`, `^LS` and `^LT` move every later field, `^FW` (default orientation), `^CF` (default font), `^BY` and `^CI` are kept for the
+  components. `^POI` (inverted label) is reported and not applied. Printer configuration commands (`^MM`, `^MN`, `^MT`, `^PR`, `~SD`, `^MD`, `^PQ`...) are recognised and
+  not drawn (one information message per label); a command the viewer does not know is one warning each.
+- **Several formats** (`^XA` ... `^XZ`) in one file: the viewer shows the first one and says how many there are.
+- **Fields and data:** a field is `^FO` / `^FT` ... `^FS`; `^FD` data may have `^` and `~` through the `^FH` hex escapes (`_5E`, `_7E`). `^CC` / `^CT` / `^CD` prefix and
+  delimiter changes are read.
+- **Convertir a…** lists **ZPL (Zebra)** as a target (file `.zpl`, UTF-8) and reads ZPL as a source; until the components arrive the items are reported as
+  "no se puede exportar" in the warnings, and only the label size is written.
+- Files are read and written as UTF-8 (the 2003 guide ties characters above ASCII to `^CI` and the printer font, and does not mention UTF-8: not verified).
 
 ## Limitations
 

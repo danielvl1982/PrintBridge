@@ -303,7 +303,8 @@
   /** Writes the size typed or picked in the Formato row in the label if its language allows it; otherwise reports it. */
   function applySize(size) {
     const text = editor.text();
-    const result = sizes.apply(languages.detect(text), text, size);
+    // The resolution travels with the size: ZPL writes it in dots (TPCL and TSPL ignore it)
+    const result = sizes.apply(languages.detect(text), text, { ...size, dpi: Number($('dpi').value) });
     editor.setText(result.text);
     refresh({ notices: result.supported ? [] : [diag.warning('No se puede escribir el tamaño: el lenguaje de la etiqueta no lo admite o no se reconoce')] });
   }
