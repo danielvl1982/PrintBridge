@@ -4,9 +4,11 @@
  * It becomes the neutral `line` item with rect true, like a TPCL LC rectangle, so the renderer of the line slice draws it.
  * Assumption: the manual does not say toward which side the thickness grows; the viewer follows the convention it already
  * uses for TPCL boxes, where the stroke is centered on the rectangle that the corners span.
- * The corner radius is kept in native.radius but not drawn (one info per label).
- * Emit (the inverse): BOX x1,y1,x2,y2,thickness with the corners normalized to min/max and the thickness (item.width) in dots,
- * at least 1.
+ * The corner radius (dots) is kept in native.radius and as the neutral item.radius in 0.1 mm; the renderer draws it rounded.
+ * NOT VERIFIED ON A PRINTER: the radius argument comes from the TSC TSPL2 manual v3.0, which is not in docs/ (the local
+ * B-442/443 manual documents BOX without it).
+ * Emit (the inverse): BOX x1,y1,x2,y2,thickness[,radius] with the corners normalized to min/max, the thickness (item.width) in
+ * dots, at least 1, and the radius (item.radius) in dots only when it is greater than 0.
  * factory(helpers) -> { handlers, emit, build, coordinates, editable }; registered by js/components/box/index.js as `languages: { tpcl, tspl }`.
  */
 (function (PB) {
@@ -39,7 +41,8 @@
       const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
       const thickness = Math.max(1, roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0)));
       const [left, top, right, bottom] = [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)].map(roundDots);
-      return `BOX ${left},${top},${right},${bottom},${thickness}`;
+      const radius = Number.isFinite(item.radius) ? roundDots(exactDots(ctx, item.radius)) : 0;
+      return `BOX ${left},${top},${right},${bottom},${thickness}${radius > 0 ? `,${radius}` : ''}`;
     }
 
     return {
@@ -57,7 +60,8 @@
         applies: (item, cmd) => (cmd ? cmd.name === 'BOX' : item.ref === 'BOX'),
         fields: [
           numberField('thickness', 'Grosor (puntos)', 4, 1, MAX_DOTS, item => item.native && item.native.width),
-          numberField('radius', 'Radio de esquina (puntos)', 5, 0, MAX_DOTS, item => item.native && item.native.radius),
+          // Optional last argument: listed as 0 when omitted; a non-zero value appends it, 0 on an omitted one writes nothing
+          { ...numberField('radius', 'Radio de esquina (puntos)', 5, 0, MAX_DOTS, item => (item.native && item.native.radius) || 0), optional: 0 },
         ],
       }],
       handlers: [
@@ -73,19 +77,16 @@
             }
             const native = { width: thickness, kind: 'BOX' };
             const radius = cmd.args.length > 5 ? num(cmd.args[5]) : null;
-            if (radius !== null) {
-              native.radius = radius;
-              if (radius > 0 && !ctx.tsplBoxRadiusNoted) {
-                ctx.tsplBoxRadiusNoted = true;
-                ctx.report(diag.info('BOX: radio de esquina no soportado, se dibuja con esquinas rectas'));
-              }
-            }
+            if (radius !== null) native.radius = radius;
             const a = ctx.pos(px, py);
             const b = ctx.pos(ex, ey);
-            ctx.addItem({
+            const item = {
               kind: 'line', ref: 'BOX', source: sourceOf(cmd), x1: a.x, y1: a.y, x2: b.x, y2: b.y, rect: true,
               width: ctx.len(thickness), native,
-            });
+            };
+            // Rounded corners: the neutral radius is in 0.1 mm, native.radius keeps the dots of the command
+            if (radius !== null && radius >= 0) item.radius = ctx.len(radius);
+            ctx.addItem(item);
           },
         },
       ],

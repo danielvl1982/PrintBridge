@@ -1,6 +1,8 @@
 /**
  * Line slice, TPCL language: everything the LC command (line or rectangle) needs.
- *   LC;x1,y1,x2,y2,<0 line | 1 rectangle>,<thickness in dots>
+ *   LC;x1,y1,x2,y2,<0 line | 1 rectangle>,<thickness in dots>[,<radius ggg>]
+ * The optional radius (3 digits, 0.1 mm; B-SV4 manual 6.3.6) rounds the corners of a rectangle: it is kept as item.radius
+ * (0.1 mm) and native.radius; on a line (type 0) it is ignored and no field is kept.
  * The hooks are built by a factory because they need the shared helpers of js/languages/tpcl.js, which loads after
  * this file: factory(helpers) -> { handlers, build, coordinates, editable } (see js/components/registry.js).
  * The box slice reuses the LC parser, mover and editor of this file (same command) and only adds its own build.
@@ -31,6 +33,9 @@
   /** Thickness of an LC command in dots: at least 1, at most the 2 digits the editor allows. */
   const MAX_THICKNESS = 99;
 
+  /** Largest radius the 3-digit token holds, in 0.1 mm. */
+  const MAX_RADIUS = 999;
+
   /** Emits an LC command for a line or a box item (shared with the box slice): thickness from item.width (0.1 mm). */
   function emitLC(helpers) {
     const { wrap, coordText } = helpers;
@@ -41,21 +46,61 @@
       }
       const thickness = String(Math.min(dots, MAX_THICKNESS)).padStart(2, '0');
       const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(n => coordText(ctx, n));
-      return wrap(`LC;${x1},${y1},${x2},${y2},${item.rect ? 1 : 0},${thickness}`);
+      // Rounded corners: only a rectangle with radius > 0 writes the optional ",ggg" (0.1 mm, 3 digits)
+      const radius = item.rect && Number.isFinite(item.radius) ? Math.round(item.radius) : 0;
+      if (radius > MAX_RADIUS) {
+        ctx.once('tpcl-radius', () => PB.diagnostics.warning(`Hay radios de esquina de más de ${MAX_RADIUS} (0,1 mm): se ajustan al máximo de TPCL`));
+      }
+      const corner = radius > 0 ? `,${String(Math.min(radius, MAX_RADIUS)).padStart(3, '0')}` : '';
+      return wrap(`LC;${x1},${y1},${x2},${y2},${item.rect ? 1 : 0},${thickness}${corner}`);
     };
   }
 
+  /** LC command over the stripped text: x2, y2, type, thickness and the optional radius token (",ggg", possibly empty). */
+  const LC_PATTERN = /^\{LC;\d+,\d+,(\d+),(\d+),(\d),(\d+)((?:,\d+)?)/d;
+
+  /**
+   * Radius field over the optional token (written whole with its comma: `exact`; empty when omitted, so a non-zero value
+   * inserts it at the end of the command). 0 on an omitted token writes nothing; 0 on an existing one keeps it as ",000".
+   */
+  const radiusField = group => ({
+    key: 'radius', label: 'Radio de esquina (0,1 mm)', type: 'number', min: 0, max: MAX_RADIUS, step: 1, group, exact: true,
+    model: item => (item.native && item.native.radius) || 0,
+    read: raw => (raw ? Number(raw.slice(1)) : 0),
+    write: (v, width, raw) => {
+      if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+      const n = Math.min(MAX_RADIUS, Math.max(0, Math.round(v)));
+      if (n === 0 && raw === '') return null;
+      return `,${String(n).padStart(3, '0')}`;
+    },
+  });
+
   function tpcl(helpers) {
     const { sourceOf, numberField, MAX_COORD } = helpers;
+    const baseFields = [
+      numberField('x2', 'Final X (0,1 mm)', 1, 0, MAX_COORD, item => item.x2),
+      numberField('y2', 'Final Y (0,1 mm)', 2, 0, MAX_COORD, item => item.y2),
+      numberField('width', 'Grosor (puntos)', 4, 1, 99, item => item.native.width),
+      {
+        key: 'rect', label: 'Tipo', type: 'select', group: 3, model: item => (item.rect ? 'box' : 'line'),
+        options: [{ value: 'line', label: 'Línea' }, { value: 'box', label: 'Caja' }],
+        read: raw => (raw === '0' ? 'line' : 'box'),
+        write: v => (v === 'line' ? '0' : v === 'box' ? '1' : null),
+      },
+    ];
     return {
       // Parse handlers: { pattern, handle(match, cmd, ctx) }
       handlers: [{
         // Line or rectangle: LC;x1,y1,x2,y2,<0 line | 1 rectangle>,<thickness in dots>
-        pattern: /^LC;(\d+),(\d+),(\d+),(\d+),(\d),(\d+)/,
+        pattern: /^LC;(\d+),(\d+),(\d+),(\d+),(\d),(\d+)(?:,(\d+))?/,
         handle(m, cmd, ctx) {
-          ctx.model.items.push({
-            kind: 'line', ref: 'LC', source: sourceOf(cmd), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4], rect: m[5] !== '0', width: +m[6] * ctx.dot, native: { width: +m[6] },
-          });
+          const rect = m[5] !== '0';
+          const item = {
+            kind: 'line', ref: 'LC', source: sourceOf(cmd), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4], rect, width: +m[6] * ctx.dot, native: { width: +m[6] },
+          };
+          // Rounded corners: rectangles only (0.1 mm already); a radius on a line is ignored
+          if (rect && m[7] !== undefined) { item.radius = +m[7]; item.native.radius = +m[7]; }
+          ctx.model.items.push(item);
         },
       }],
       // build(text, point, options) -> text with the new component
@@ -68,20 +113,15 @@
       ],
       // Editable shapes for describeItem / updateItem (see EDITABLE in js/languages/tpcl.js)
       editable: [
-        { // Line / box: LC;x1,y1,<x2>,<y2>,<0 line | 1 box>,<thickness in dots>
-          applies: item => item.kind === 'line',
-          pattern: /^\{LC;\d+,\d+,(\d+),(\d+),(\d),(\d+)/d,
-          fields: [
-            numberField('x2', 'Final X (0,1 mm)', 1, 0, MAX_COORD, item => item.x2),
-            numberField('y2', 'Final Y (0,1 mm)', 2, 0, MAX_COORD, item => item.y2),
-            numberField('width', 'Grosor (puntos)', 4, 1, 99, item => item.native.width),
-            {
-              key: 'rect', label: 'Tipo', type: 'select', group: 3, model: item => (item.rect ? 'box' : 'line'),
-              options: [{ value: 'line', label: 'Línea' }, { value: 'box', label: 'Caja' }],
-              read: raw => (raw === '0' ? 'line' : 'box'),
-              write: v => (v === 'line' ? '0' : v === 'box' ? '1' : null),
-            },
-          ],
+        { // Line: LC;x1,y1,<x2>,<y2>,0,<thickness in dots> (a radius token, if any, is ignored)
+          applies: item => item.kind === 'line' && !item.rect,
+          pattern: LC_PATTERN,
+          fields: baseFields,
+        },
+        { // Box: the same plus the optional corner radius token (",ggg", written whole, empty when omitted)
+          applies: item => item.kind === 'line' && item.rect,
+          pattern: LC_PATTERN,
+          fields: [...baseFields, radiusField(5)],
         },
       ],
     };

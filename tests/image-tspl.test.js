@@ -121,7 +121,7 @@ test('PUTBMP, PUTPCX and PUTPNG give one specific warning each and no item', () 
 });
 
 test('other unsupported commands keep the generic warning', () => {
-  const model = tspl.parse('ELLIPSE 1,1,10,10,2\r\nERASE 0,0,5,5\r\n');
+  const model = tspl.parse('DMATRIX 1,1,10,10\r\nPDF417 0,0,5,5\r\n');
   assert.equal(warnings(model).length, 2);
   for (const m of warnings(model)) assert.match(m, /Comando no soportado/);
 });

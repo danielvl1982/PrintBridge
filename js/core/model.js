@@ -38,9 +38,25 @@
  *                 interCharGap = space between Code 39 characters in 0.1 mm (default: module; ITF has none).
  *                 check = 'none' | 'mod43' (Code 39 only) | 'unsupported' (the language's check digit option has no
  *                 neutral equivalent: drawn without check character and reported). Default: 'none'.
- *       line    { ref, x1, y1, x2, y2, rect, width, native:{ width } }
+ *       line    { ref, x1, y1, x2, y2, rect, width, radius?, native:{ width, radius? } }
  *               width = thickness in 0.1 mm (native.width = the language's value, in dots)
- *       image   { ref, x, y, width, height, href?, bitmap?, data:null }
+ *               radius = corner radius of a rectangle (rect true) in 0.1 mm, absent when the command has none; the renderer clamps
+ *               it to half of the shorter side. native.radius = the language's value (TPCL LC ggg: 0.1 mm; TSPL BOX: dots, not
+ *               verified on a printer). A radius on a line (rect false) is ignored.
+ *       ellipse { ref, x, y, width, height, thickness, native:{ ... } }
+ *               TSPL only (TPCL has no equivalent: a conversion skips it with one warning). x, y = top-left corner of the bounding
+ *               box, width/height = its size and thickness = the stroke width, all in 0.1 mm; the stroke is centered on the box edge.
+ *               A circle is an ellipse with equal axes that keeps ref 'CIRCLE' (emit writes CIRCLE back; ref 'ELLIPSE' otherwise).
+ *               native = the dots of the command: { width, height, thickness, kind: 'ELLIPSE' } or { diameter, thickness, kind: 'CIRCLE' }.
+ *               NOT VERIFIED ON A PRINTER: ELLIPSE / CIRCLE come from the TSC TSPL2 manual v3.0, which is not available locally.
+ *       area    { ref, mode, x, y, width, height, native:{ ... } }
+              Inverted / cleared area (TPCL XR, TSPL REVERSE and ERASE). mode = 'reverse' (inverts the white/black dots already drawn:
+              XR type B, REVERSE) or 'clear' (blots them out to white: XR type A, ERASE). x, y = top-left corner and width, height = size,
+              all in 0.1 mm (TPCL corners in any order are normalised). The item only affects what comes BEFORE it in the items list,
+              which is the command order: the parsers add the items as they read them and the renderer paints them in that order.
+              native = TPCL { x1, y1, x2, y2, type: 'A' | 'B' } (0.1 mm, as written) or TSPL { width, height, kind: 'REVERSE' | 'ERASE' } (dots).
+              The TSPL commands are from the B-442/443 manual and are not verified on a printer.
+      image   { ref, x, y, width, height, href?, bitmap?, data:null }
  *               width/height = size in 0.1 mm. It has no data. Two origins:
  *               - preview overlay added by the viewer (PB.images.makeItem): href = data URL (or URL) of the picture.
  *               - graphic command of the code (TPCL SG): bitmap = { w, h, data } in printer dots, data = flat

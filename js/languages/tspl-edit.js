@@ -12,6 +12,8 @@
  *     { key, label, type: 'number' | 'select' | 'text', arg, min?, max?, step?, options?: [{ value, label }],
  *       read(arg, cmd) -> value | undefined, write(value) -> new raw text | null, model?(item, { dpi }) -> value }
  *     arg is an argument index, or a function (cmd) -> index when the position depends on the optional arguments.
+ *     optional?: the value of a trailing argument when it is omitted (e.g. the BOX radius, 0): describeItem lists that value,
+ *     updateItem appends the argument (",value" after the last one) for any other value and writes nothing for the default.
  *     numberField(), selectField(), stringSelectField() and textField() build the usual ones; a field may give
  *     optionsFor(value) -> options to list the current value when it is not one of them.
  *
@@ -92,6 +94,12 @@
 
   /** Argument of a command that a field addresses. */
   const argOf = (field, cmd) => cmd.args[typeof field.arg === 'function' ? field.arg(cmd) : field.arg];
+
+  /**
+   * A field with an `optional` default (its value when the argument is omitted) whose argument is the one right after the
+   * last argument of the command: describeItem lists the default and updateItem can append the argument.
+   */
+  const isOmittedOptional = (field, cmd) => field.optional !== undefined && typeof field.arg === 'number' && cmd.args.length === field.arg;
 
   /** Replaces [start, end) ranges of text with values; ranges must not overlap. */
   function applyEdits(text, edits) {
@@ -189,7 +197,7 @@
       for (const f of shape.fields) {
         let value;
         const a = found && argOf(f, found.cmd);
-        if (found) value = a ? f.read(a, found.cmd) : undefined;
+        if (found) value = a ? f.read(a, found.cmd) : (isOmittedOptional(f, found.cmd) ? f.optional : undefined);
         else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
         const { key, label, type, min, max, step } = f;
@@ -207,7 +215,15 @@
       const edits = [];
       for (const f of shape.fields) {
         const a = argOf(f, found.cmd);
-        if (!Object.hasOwn(changes, f.key) || !a || f.read(a, found.cmd) === undefined) continue;
+        if (!Object.hasOwn(changes, f.key)) continue;
+        if (!a && isOmittedOptional(f, found.cmd)) {
+          // Omitted trailing argument: a value other than its default is appended right after the last argument
+          const value = f.write(changes[f.key]);
+          const last = found.cmd.args[found.cmd.args.length - 1];
+          if (value !== null && value !== String(f.optional) && last) edits.push({ start: last.end, end: last.end, value: `,${value}` });
+          continue;
+        }
+        if (!a || f.read(a, found.cmd) === undefined) continue;
         const value = f.write(changes[f.key]);
         if (value !== null && value !== a.raw) edits.push({ start: a.start, end: a.end, value });
       }

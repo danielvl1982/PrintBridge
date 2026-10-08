@@ -232,8 +232,8 @@ test('updateItem: BAR clamps to at least 1 dot and ignores x/y keys', () => {
 
 // ---- BOX
 
-test('describeItem: BOX lists thickness, and the radius only when the command has one', () => {
-  assert.deepEqual(pairs(describe(doc('BOX 10,20,300,200,4'))), [['thickness', 4]]);
+test('describeItem: BOX lists thickness and the radius (0 when the command has none)', () => {
+  assert.deepEqual(pairs(describe(doc('BOX 10,20,300,200,4'))), [['thickness', 4], ['radius', 0]]);
   assert.deepEqual(pairs(describe(doc('BOX 10,20,300,200,4,12'))), [['thickness', 4], ['radius', 12]]);
 });
 
@@ -244,10 +244,11 @@ test('updateItem: BOX rewrites thickness and radius, never the corners', () => {
   assert.equal(itemOf(out).native.width, 6);
 });
 
-test('updateItem: BOX thickness is clamped to at least 1 and a radius is not invented', () => {
+test('updateItem: BOX thickness is clamped to at least 1; a radius is appended only when non-zero', () => {
   const text = doc('BOX 10,20,300,200,4');
   assert.equal(update(text, { thickness: 0 }), doc('BOX 10,20,300,200,1'));
-  assert.equal(update(text, { radius: 5 }), text);
+  assert.equal(update(text, { radius: 5 }), doc('BOX 10,20,300,200,4,5'));
+  assert.equal(update(text, { radius: 0 }), text);
 });
 
 // ---- generic

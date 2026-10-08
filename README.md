@@ -30,8 +30,8 @@ from scratch with the example label.
 | `js/core/emit.js` | Shared helpers of the emitters (dots, escaping, id numbering, diagnostics) and the driver that calls each item's slice `emit` |
 | `js/core/convert.js` | `PB.convert`: the pure part of "Convertir a…" (`run`, `targets`, `toBytes`, `fileName`) on top of the language registry |
 | `js/components/registry.js` | `PB.components`: the registry where each label component registers itself |
-| `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
-| `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL and TSPL both read, build (palette), move and edit (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`) |
+| `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `ellipse`, `area`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
+| `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL and TSPL both read, build (palette), move and edit (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`, `ellipse/tspl.js` is `ELLIPSE` and `CIRCLE`; TSPL only; `area/` is TPCL `XR` and TSPL `REVERSE`/`ERASE`) |
 | `js/components/compose.js` | `PB.composeSlices`: builds a language's handler table from the slices that registered for it |
 | `js/languages/tpcl.js` | TPCL reading and writing (fonts and commands of the TEC/Toshiba printers; the language `emit` hook writes header, items and trailer) |
 | `js/languages/tspl.js` | TSPL reading and writing (tokenizer, label setup commands, language registration and the `emit` hook; the drawing commands come from the component slices) |
@@ -137,6 +137,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     "Selecciona un objeto". Clicking empty space deselects. What can be edited, in TPCL and TSPL:
     - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
       end point and thickness (the fields each command has).
+    - **Radio (esquinas redondeadas):** rectangles only (TPCL `LC` type 1, TSPL `BOX`): the corner radius, 0..999 in 0.1 mm for TPCL and in dots for TSPL, drawn clamped to half of the shorter side. A value above 0 adds the optional token at the end of the command; 0 keeps an existing token and writes nothing for an absent one. The TSPL radius argument comes from the TSPL2 manual and is not verified on a printer.
     - **Contenido:** the data of text, barcodes and QR. TSPL: `TEXT`, `BARCODE` and `QRCODE` (not counters `@n`, `BLOCK`,
       `128M`/`EAN128` or QR manual mode). TPCL: `PC`/`PV` text, barcodes and QR, inline (`=data`) or in the `RC`/`RV`/`RB`
       command; values with `| { }` or line breaks are rejected because TPCL has no escape for them.
@@ -153,7 +154,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
         **Negrita horizontal/vertical** (PC `Jkkll`, shift dots 0-16): the bold overprint is an approximation (the string
         is drawn again shifted by those dots).
     - Not editable yet: the barcode type, the check digit, increment and zero-suppress options.
-  - **Components panel:** drag a component (text, Code128 barcode, QR, line, box and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
+  - **Components panel:** drag a component (text, Code128 barcode, QR, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
@@ -197,7 +198,8 @@ What is lost or approximated (each case is reported in the warnings list):
 | `XB` / `RB` type `2` | Interleaved 2 of 5 / ITF (generated for real, same widths and text options) |
 | `XB` / `RB` type `B` | Code39 full ASCII: only the characters of standard Code39 are drawn (see limitations) |
 | `XB` other types | Other barcodes: drawn approximately |
-| `LC` | Lines and rectangles |
+| `LC` | Lines and rectangles (a rectangle may carry the optional corner radius `ggg`, 0.1 mm, drawn rounded) |
+| `XR` | Clear area: type `B` inverts white/black and type `A` clears to white, in the rectangle between the start and end corners (0.1 mm; the corners may come in any order). It acts on what is drawn **before** it in command order; what comes after is not affected. Drawn, moved, edited (**Final X**, **Final Y**, **Tipo**: Invertir / Borrar) and inserted from the palette (**Área invertida**, 30 x 10 mm, type `B`; clearing areas have no palette entry). **Browser check pending:** the inversion is drawn with the SVG blend mode `difference` |
 | `SG` | Graphic (nibble data, modes 0 and 4); not verified on a printer |
 | `D`, `AX`, `C`, `XS`, `XQ` | Configuration: not drawn |
 
@@ -216,17 +218,19 @@ It can be exported to TPCL with **Convertir a…**.
 | `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
 | `BARCODE` | Code128 (also `128M` and `EAN128`), Code39 and ITF / `25` are generated for real; EAN13 and the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
-| `BAR`, `BOX` | Filled bar and rectangle outline (with thickness) |
+| `BAR`, `BOX` | Filled bar and rectangle outline (with thickness and optional corner radius, in dots; the radius argument is from the TSPL2 manual and **not verified on a printer**) |
+| `ELLIPSE`, `CIRCLE` | Ellipse and circle outlines (`x,y` is the top-left corner of the bounding box; size and thickness in dots; stroke centered on the box edge). Drawn, moved, edited (**Ancho/Alto** or **Diámetro**, **Grosor**) and inserted from the palette (**Elipse**, **Círculo**). Both commands are from the TSPL2 manual v3.0 (not available locally) and are **not verified on a printer**. TPCL has no equivalent: converting to TPCL skips them with a warning |
+| `REVERSE`, `ERASE` | Inverts (`REVERSE`) or blots out (`ERASE`) a region of the image: `x,y,width,height` in dots. Like TPCL `XR` they act on what is drawn **before** them in command order, not on what follows. Drawn, moved, edited (**Ancho**, **Alto**) and inserted from the palette (**Área invertida**, a 30 x 10 mm `REVERSE`; `ERASE` has no palette entry). Both come from the B-442/443 manual (syntax only) and are **not verified on a printer**; the inversion is drawn with the SVG blend mode `difference` (**browser check pending**). Converting to TPCL writes `XR` type `B` / `A` (and the other way round) |
 | `BITMAP` | Raw binary graphic (mode 0 overwrite; bit 0 = black, MSB first) |
 | `CLS`, `PRINT`, `DENSITY`, `SPEED`, `SET`, `CODEPAGE`, `FEED`... | Configuration: not drawn |
 
-Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
+Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
 (images stored in the printer). Also:
 
 - **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
-- **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR` and a 30 x 20 mm `BOX`; texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
+- **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
-  information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), the `BOX` radius and the
+  information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
   text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.
 - **Resolución:** the dots-per-mm of a TSPL label are not in the file, so the **Resolución** selector (203 or 300 dpi) must match
   the printer: coordinates are in dots, so the same label is drawn smaller at 300 dpi.

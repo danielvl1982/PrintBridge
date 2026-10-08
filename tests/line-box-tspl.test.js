@@ -92,14 +92,13 @@ test('BOX builds a rect line item with the corners and the thickness', () => {
   assert.equal(PB.components.forItem(item).kind, 'box');
 });
 
-test('BOX radius is kept in native with one info per label', () => {
+test('BOX radius is kept in native (dots) and as the neutral radius, with no diagnostic (it is drawn)', () => {
   const model = parse('BOX 10,20,210,120,4,8\r\nBOX 10,20,50,60,2,5');
   assert.equal(model.items.length, 2);
   assert.equal(model.items[0].native.radius, 8);
   assert.equal(model.items[1].native.radius, 5);
-  const infos = model.diagnostics.filter(x => /radio de esquina/.test(x.text));
-  assert.equal(infos.length, 1);
-  assert.equal(infos[0].level, 'info');
+  near(model.items[0].radius, 8 * dotOf(203));
+  assert.equal(model.diagnostics.filter(x => /radio de esquina/.test(x.text)).length, 0);
 });
 
 test('BOX with radius 0 or none adds no diagnostic', () => {
@@ -165,8 +164,8 @@ test('rendering: a vertical BAR and a BOX go through the line renderer', () => {
   assert.match(svg, /<rect x="[\d.]+" y="[\d.]+" width="[\d.]+" height="[\d.]+" class="stroke"/);
 });
 
-test('ELLIPSE, CIRCLE, ERASE and REVERSE are still unsupported with the existing warning', () => {
-  for (const src of ['ELLIPSE 10,10,100,50,3', 'CIRCLE 10,10,80,3', 'ERASE 10,10,100,50', 'REVERSE 10,10,100,50']) {
+test('DMATRIX and PDF417 are still unsupported with the existing warning (ELLIPSE, CIRCLE since A2 and ERASE, REVERSE since A3 are read)', () => {
+  for (const src of ['DMATRIX 10,10,100,50', 'PDF417 10,10,100,50']) {
     const model = parse(src);
     assert.equal(model.items.length, 0, src);
     assert.equal(model.diagnostics.length, 1, src);

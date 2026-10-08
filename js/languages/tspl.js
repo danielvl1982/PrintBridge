@@ -5,7 +5,7 @@
  * (dpi, a user setting: the manual gives no dpi per model) and the original value is kept in item.native.
  *
  * This file holds the language skeleton: the line tokenizer, the parse driver, the context (ctx) and the setup commands
- * (SIZE, GAP, DIRECTION, REFERENCE, SHIFT, ...). The drawing commands (TEXT, BARCODE, QRCODE, BAR, BOX, BITMAP) come
+ * (SIZE, GAP, DIRECTION, REFERENCE, SHIFT, ...). The drawing commands (TEXT, BARCODE, QRCODE, BAR, BOX, ELLIPSE, CIRCLE, REVERSE, ERASE, BITMAP) come
  * from the slices of js/components/<kind>/tspl.js, registered with `languages: { tspl }`: PB.composeSlices adds their
  * handlers after the base ones and hands them SLICE_HELPERS so no slice duplicates the number/quote/unit code.
  *
@@ -355,7 +355,7 @@
   const EDITING = PB.tsplEdit.createTsplEditing({ coordinates: COMPOSED.coordinates, editable: COMPOSED.editable, commands });
 
   /** Lines that only TSPL writes: SIZE <n>, CLS, or a drawing command followed by a number. TPCL text ({…|}) is never TSPL. */
-  const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|BITMAP|BAR|BOX)[ \t]+\d)/im;
+  const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|BITMAP|BAR|BOX|ELLIPSE|CIRCLE)[ \t]+\d)/im;
   const detect = src => typeof src === 'string' && !/\{[\s\S]*?\|\}/.test(src) && TSPL_LINE.test(src);
 
   // ---------------------------------------------------------------------------------------------------------------

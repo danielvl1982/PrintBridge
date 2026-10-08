@@ -22,8 +22,8 @@ test('PB.images keeps its public name and lives in the slice', () => {
 });
 
 test('image is the last slice but not a language template (the app adds its palette entry)', () => {
-  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'image']);
-  assert.deepEqual(tpcl.componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box']);
+  assert.deepEqual(PB.components.kinds(), ['text', 'barcode', 'qr', 'line', 'box', 'ellipse', 'circle', 'area', 'image']);
+  assert.deepEqual(tpcl.componentTemplates().map(c => c.kind), ['text', 'barcode', 'qr', 'line', 'box', 'area']);
   const text = '{D0300,0500,0400|}\n';
   assert.equal(tpcl.buildComponent(text, 'image', { x: 10, y: 10 }), text);
 });
