@@ -138,6 +138,9 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .props input[type=number] { width: 72px; }
 .props input[type=range] { width: 100px; padding: 0; }
 .props input:disabled, .props select:disabled { background: #eef0f3; color: var(--muted); }
+.props-values { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; flex-basis: 100%; padding-top: 6px; border-top: 1px dashed var(--line); }
+.props-values-title { font-weight: 600; color: var(--text); }
+.props-note { color: var(--muted); font-size: 11px; }
 .props-input { display: flex; gap: 6px; align-items: center; }
 .props-input output { min-width: 3.2em; color: var(--text); }
 .props-actions { display: flex; flex-wrap: wrap; gap: 8px; }

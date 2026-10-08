@@ -74,7 +74,7 @@
 
   const propertiesPanel = ui.createPropertiesPanel(
     { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay') },
-    { onChange: changeProperty },
+    { onChange: changeProperty, onValueChange: changeTestValue },
   );
 
   // Picks the file for the image entry and remembers where the picture lands
@@ -197,8 +197,20 @@
       propertiesPanel.showOverlay();
     } else {
       const language = sourceLanguage();
-      propertiesPanel.show(language && language.describeItem ? language.describeItem(lastModel.items[index], editor.text()) : null);
+      const item = lastModel.items[index];
+      const descriptor = language && language.describeItem ? language.describeItem(item, editor.text()) : null;
+      propertiesPanel.show(descriptor, ui.variableFieldsFor(item, lastModel, state.values));
     }
+  }
+
+  /**
+   * A test value was edited in the properties form: it is app state shared with the Variables panel (never code), so the
+   * preview is redrawn and the Variables panel is repainted, without touching the language or the editor.
+   */
+  function changeTestValue(name, value) {
+    state.values[name] = value;
+    variablesPanel.invalidate();
+    refresh();
   }
 
   /** A properties form field was edited: the language rewrites only that field, through a path that keeps Ctrl+Z working. */
