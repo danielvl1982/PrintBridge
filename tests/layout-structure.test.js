@@ -293,6 +293,14 @@ test('the size row and the view row have a title with the same style as Componen
   }
 });
 
+test('the stage rows never shrink: the properties bar grows with its fields and the stage scrolls instead', () => {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  // A flex row with an explicit min-height (the properties bar: 48px) would shrink to it when the stage is bounded by max-height,
+  // and the wrapped fields of a selected text (a dozen) would overflow behind the next row (checked in Chrome: 108px hidden).
+  assert.match(bare, /\.stage\s*>\s*\*\s*\{[^}]*flex-shrink:\s*0/);
+  assert.match(bare, /\.props-bar\s*\{[^}]*min-height:\s*48px/, 'the reserved row height stays');
+});
+
 test('the stage is sticky on wide windows only, bounded to the viewport and scrolling inside', () => {
   const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
   const wide = bare.match(/@media\s*\(min-width:\s*(\d+)px\)\s*\{\s*\.stage\s*\{([^{}]*)\}\s*\}/);
