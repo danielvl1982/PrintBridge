@@ -221,7 +221,7 @@
     sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
     quoted, roundDots, exactDots, toDots, safeData,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
-    numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField,
+    numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField, stringSelectField: PB.tsplEdit.stringSelectField, textField: PB.tsplEdit.textField,
   });
 
   // ---------------------------------------------------------------------------------------------------------------

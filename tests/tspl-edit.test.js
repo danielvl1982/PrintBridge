@@ -70,7 +70,7 @@ test('the registered engines ignore keys that are not editable fields (coordinat
   const text = 'SIZE 100 mm,60 mm\r\nTEXT 10,20,"3",0,1,1,"Hi"\r\nPRINT 1\r\n';
   const item = tspl.parse(text, { dpi: 203 }).items[0];
   assert.equal(tspl.updateItem(text, item, { x: 1, y: 1, data: 'x' }, { dpi: 203 }), text);
-  assert.deepEqual(tspl.describeItem(item, text).fields.map(f => f.key), ['rotation', 'xmul', 'ymul']);
+  assert.deepEqual(tspl.describeItem(item, text).fields.map(f => f.key), ['rotation', 'xmul', 'ymul', 'font', 'content']);
 });
 
 // ---- engines with injected definitions

@@ -8,7 +8,7 @@
 
   /**
    * Value a form control holds, as the language expects it, or undefined if the input is not valid (the caller then
-   * keeps the field as it was). raw: text of a number / select control, checked state of a checkbox.
+   * keeps the field as it was). raw: text of a number / select / text control, checked state of a checkbox. A text field keeps its string as is.
    */
   function coerceFieldValue(field, raw) {
     if (field.type === 'checkbox') return Boolean(raw);
@@ -16,6 +16,7 @@
       const option = (field.options || []).find(o => String(o.value) === String(raw));
       return option ? option.value : undefined;
     }
+    if (field.type === 'text') return typeof raw === 'string' ? raw : undefined;
     const text = String(raw).trim().replace(',', '.');
     const number = text === '' ? NaN : Number(text);
     return Number.isFinite(number) ? number : undefined;
@@ -35,6 +36,12 @@
         return select;
       }
       const input = document.createElement('input');
+      if (field.type === 'text') {
+        input.type = 'text';
+        input.value = field.value;
+        if (field.maxLength !== undefined) input.maxLength = field.maxLength;
+        return input;
+      }
       if (field.type === 'checkbox') {
         input.type = 'checkbox';
         input.checked = Boolean(field.value);

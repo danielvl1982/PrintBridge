@@ -32,3 +32,37 @@ test('checkbox fields: the checked state is returned as a boolean', () => {
   assert.equal(coerceFieldValue(field, true), true);
   assert.equal(coerceFieldValue(field, false), false);
 });
+
+test('text fields: the string is returned as is (empty allowed, no trimming, no number parsing)', () => {
+  const field = { type: 'text', value: 'a' };
+  assert.equal(coerceFieldValue(field, '12,5'), '12,5');
+  assert.equal(coerceFieldValue(field, ''), '');
+  assert.equal(coerceFieldValue(field, '  x, y  '), '  x, y  ');
+  assert.equal(coerceFieldValue(field, 5), undefined);
+});
+
+test('text fields: the panel renders a text input with its maxLength and notifies the typed string on change', () => {
+  const listeners = {};
+  const fake = tag => ({
+    tagName: tag, dataset: {}, children: [], append(...c) { this.children.push(...c); }, replaceChildren(...c) { this.children = c; },
+    addEventListener(type, fn) { listeners[type] = fn; }, contains: () => false, querySelector: () => null,
+  });
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: fake, activeElement: null } });
+  try {
+    const els = { empty: fake('p'), title: fake('h'), form: fake('form'), overlay: fake('div') };
+    const calls = [];
+    PB.ui.createPropertiesPanel(els, { onChange: (key, value) => calls.push([key, value]) })
+      .show({ kind: 'text', fields: [{ key: 'content', label: 'Contenido', type: 'text', value: 'Hola', maxLength: 20 }] });
+    const input = els.form.children[0].children[1];
+    assert.equal(input.type, 'text');
+    assert.equal(input.value, 'Hola');
+    assert.equal(input.maxLength, 20);
+    assert.equal(input.dataset.key, 'content');
+    input.value = '';
+    listeners.change();
+    assert.deepEqual(calls, [['content', '']]);
+  } finally {
+    if (saved) Object.defineProperty(globalThis, 'document', saved); else delete globalThis.document;
+  }
+});

@@ -20,6 +20,12 @@
 .bold { font-weight: 700; }
 .italic { font-style: italic; }
 
+/* TPCL text attribute (text/render.js, shapes sized in text/layout.js): reverse = black background and white text, box, strike */
+.attr-fill { fill: #000; stroke: none; }
+.attr-outline { fill: none; stroke: #000; stroke-width: 3; }
+.attr-line { stroke: #000; stroke-width: 3; }
+text.attr-reverse { fill: #fff; }
+
 /* Human-readable text under the barcode */
 .human-readable { font-family: Arial, Helvetica, sans-serif; text-anchor: middle; }
 

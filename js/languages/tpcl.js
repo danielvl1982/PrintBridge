@@ -325,6 +325,48 @@
   /** Component kinds of the palette (neutral), in display order. A slice without a `build` hook (the image) is not a template. */
   const COMPONENTS = COMPOSED.components;
 
+  // --- Content (the data of text, barcode and QR items): it lives outside the capture groups of the format command ---
+
+  /** Kinds whose data can be edited and the data command letter of each format command (the inverse of DATA_TARGET). */
+  const CONTENT_KINDS = Object.freeze(['text', 'barcode', 'qr']);
+  const DATA_COMMAND = Object.freeze(Object.fromEntries(Object.entries(DATA_TARGET).map(([letter, format]) => [format, letter])));
+
+  /** Content field of the panel: the manual caps the data at 255 characters (B-SV4 specification). */
+  const CONTENT_FIELD = Object.freeze({ key: 'content', label: 'Contenido', type: 'text', maxLength: 255 });
+
+  /** Data as the panel shows it: a barcode's FNC1 character in the TPCL notation (">8"), the form the file stores. */
+  const contentOfModel = item => (item.data == null ? undefined : item.kind === 'barcode' ? item.data.replaceAll(barcodeData.FNC1, '>8') : item.data);
+
+  /**
+   * Where the data of an item is stored in the text: { start, end, value } over the whole text (start..end is the data
+   * only, value is it without line breaks), or null when there is none or it cannot be located unambiguously. The parser
+   * keeps the last data command (R?<id>) after the format command, which wins over an inline "=data"; else the inline
+   * data is used. Two format commands with the same reference are ambiguous.
+   */
+  function contentTarget(text, item) {
+    const span = item && CONTENT_KINDS.includes(item.kind) && typeof text === 'string' && item.source && item.source.spans && item.source.spans[0];
+    const ref = span && /^(PC|PV|XB)(\d+)$/.exec(item.ref || '');
+    if (!ref) return null;
+    const original = text.slice(span.start, span.end);
+    if (!stripNewlines(original).stripped.startsWith(`{${item.ref};`)) return null;
+    const letter = DATA_COMMAND[ref[1]];
+    let formats = 0;
+    let data = null;
+    for (const cmd of commands(text)) {
+      if (cmd.raw.startsWith(`${item.ref};`)) formats++;
+      else if (cmd.start >= span.end && cmd.raw.startsWith(`R${letter}${ref[2]};`)) data = cmd;
+    }
+    if (formats !== 1) return null;
+    if (data) {
+      const { stripped, map } = stripNewlines(text.slice(data.start, data.end));
+      const prefix = `{R${letter}${ref[2]};`.length;
+      return { start: data.start + map[prefix - 1] + 1, end: data.end - 2, value: stripped.slice(prefix, -2) };
+    }
+    const eq = item.kind === 'text' ? original.indexOf('=') : -1;
+    if (eq < 0) return null;
+    return { start: span.start + eq + 1, end: span.end - 2, value: original.slice(eq + 1, -2).replace(/[\r\n]/g, '') };
+  }
+
   /** Editable shape of an item (null: not editable) and, with a text and a source, its match over the command. */
   function editableOf(item, text) {
     const shape = item && ALL_EDITABLE.find(s => s.applies(item));
@@ -344,14 +386,22 @@
   function describeItem(item, text) {
     const found = editableOf(item, text);
     const kind = (item && item.kind) || null;
-    if (!found) return { kind, fields: [] };
-    const { shape, match } = found;
     const fields = [];
-    for (const f of shape.fields) {
-      const value = match ? f.read(match[f.group]) : f.model && f.model(item);
-      if (value === undefined || value === null) continue;
-      const { key, label, type, min, max, step, options } = f;
-      fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
+    if (found) {
+      const { shape, match } = found;
+      for (const f of shape.fields) {
+        const value = match ? f.read(match[f.group], item) : f.model && f.model(item);
+        if (value === undefined || value === null) continue;
+        const { key, label, type, min, max, step } = f;
+        const options = f.optionsFor ? f.optionsFor(value) : f.options; // optionsFor lists a current value outside the options
+        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
+      }
+    }
+    // Content: from the text when given (where its data is stored), else from the item model
+    if (item && CONTENT_KINDS.includes(item.kind)) {
+      const target = typeof text === 'string' ? contentTarget(text, item) : null;
+      const value = typeof text === 'string' ? target && target.value : contentOfModel(item);
+      if (typeof value === 'string') fields.push({ ...CONTENT_FIELD, value });
     }
     return { kind, fields };
   }
@@ -362,23 +412,35 @@
    * of a kind without editable fields are ignored: the text is returned unchanged if nothing changes.
    */
   function updateItem(text, item, changes) {
-    const found = changes && editableOf(item, text);
-    if (!found || !found.match) return text;
-    const { shape, match, original, map, span } = found;
+    if (!changes) return text;
+    const found = editableOf(item, text);
+    // Edits as absolute ranges of the text: { start, end, value }
     const edits = [];
-    for (const f of shape.fields) {
-      if (!Object.hasOwn(changes, f.key)) continue;
-      const [s, e] = match.indices[f.group];
-      const digits = f.write(changes[f.key], e - s);
-      if (digits !== null) edits.push({ s, e, digits: digits.padStart(e - s, '0') });
+    if (found && found.match) {
+      const { shape, match, map, span } = found;
+      for (const f of shape.fields) {
+        if (!Object.hasOwn(changes, f.key)) continue;
+        const [s, e] = match.indices[f.group];
+        const digits = f.write(changes[f.key], e - s, match[f.group], changes);
+        // `exact` fields write a whole token (not digits): no zero padding
+        // An empty range (an omitted optional token) is an insertion point: it has no end to map back through the stripped line breaks
+        if (digits !== null) edits.push({ start: span.start + map[s], end: s === e ? span.start + map[s] : span.start + map[e - 1] + 1, value: f.exact ? digits : digits.padStart(e - s, '0') });
+      }
+    }
+    // Content: the framing characters have no escape, so a value holding one is rejected (never altered)
+    const content = changes.content;
+    if (Object.hasOwn(changes, 'content') && typeof content === 'string' && !UNSAFE_DATA.test(content)) {
+      const target = contentTarget(text, item);
+      if (target) edits.push({ start: target.start, end: target.end, value: item.kind === 'barcode' ? content.replaceAll(barcodeData.FNC1, '>8') : content });
     }
     if (!edits.length) return text;
-    let out = original;
+    let out = text;
     // Right to left so the earlier indices stay valid (fields are in group order, not necessarily command order)
-    for (const { s, e, digits } of edits.sort((a, b) => b.s - a.s)) {
-      out = out.slice(0, map[s]) + digits + out.slice(map[e - 1] + 1);
-    }
-    return text.slice(0, span.start) + out + text.slice(span.end);
+    // Same start: the longer range first (a replacement before an insertion in front of it), then the later field first so
+    // that insertions at one point end up in field order
+    const ordered = edits.map((e, i) => ({ ...e, i })).sort((a, b) => b.start - a.start || b.end - a.end || b.i - a.i);
+    for (const { start, end, value } of ordered) out = out.slice(0, start) + value + out.slice(end);
+    return out;
   }
 
   PB.languages.register({

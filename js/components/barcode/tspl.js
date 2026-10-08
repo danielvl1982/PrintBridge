@@ -76,7 +76,7 @@
 
   function tspl(helpers) {
     const {
-      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, toDots, safeData, numberField, selectField,
+      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, toDots, safeData, numberField, selectField, textField,
       insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     } = helpers;
 
@@ -182,7 +182,10 @@
 
     const dots = (dpi, v) => (Number.isFinite(v) ? Math.round(v / PB.units.dotSize(dpi)) : undefined);
 
-    /** Properties of BARCODE (content and type untouched). The wide bar only matters for the wide/narrow symbologies. */
+    /** 128M and EAN128 data is rewritten by the parser (control codes, FNC1), so it cannot be edited as plain text. */
+    const rawContent = type => !['128M', 'EAN128'].includes(String(type).toUpperCase());
+
+    /** Properties of BARCODE (type untouched). The wide bar only matters for the wide/narrow symbologies. */
     const barcodeFields = wideNarrow => [
       numberField('height', 'Alto (puntos)', 3, 1, MAX_DOTS, (item, { dpi }) => dots(dpi, item.height)),
       selectField('readable', 'Texto legible', 4, [
@@ -191,6 +194,10 @@
       selectField('rotation', 'Rotación', 5, [0, 90, 180, 270], item => item.rotation),
       numberField('narrow', 'Barra estrecha (puntos)', 6, 1, MAX_NARROW, item => item.native && item.native.module),
       ...(wideNarrow ? [numberField('wide', 'Barra ancha (puntos)', 7, 1, MAX_DOTS, item => item.native && item.native.wide)] : []),
+      // The content is argument 8, or 9 when an alignment argument precedes it; counters are left out
+      textField('content', 'Contenido', cmd => (cmd.args.length >= 10 ? 9 : 8),
+        item => (item.native && rawContent(item.native.type) && !COUNTER.test(String(item.data)) ? item.data : undefined),
+        cmd => rawContent(cmd.args[2] && cmd.args[2].value)),
     ];
     const isBarcode = (item, cmd) => (cmd ? cmd.name === 'BARCODE' : item.ref === 'BARCODE');
     const isWideNarrow = (item, cmd) => {
