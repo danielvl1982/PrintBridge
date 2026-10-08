@@ -18,10 +18,10 @@ Convertir and starts collapsed.
 - Add the per-object test values to Propiedades and keep the Variables panel, collapsed by default and placed below Convertir.
 
 ## Tasks
-- [x] T1 Test values in Propiedades: group "Valores de prueba (solo vista previa)" with one text field per variable of the selected object
+- [x] T1 (48e9880) Test values in Propiedades: group "Valores de prueba (solo vista previa)" with one text field per variable of the selected object
       (`Valor de NAME`), a note "usada en N objetos" when the variable appears in more than one, both panels editing the same `state.values` and
       staying in sync, no change to the code text, tests.
-- [ ] T2 Variables panel below Convertir and collapsed by default (an explicit user choice stored in localStorage still wins), structure tests, README.
+- [x] T2 (c4949a9) Variables panel below Convertir and collapsed by default (an explicit user choice stored in localStorage still wins), structure tests, README.
 
 ## Route declaration
 Delegated direct, one writer for both tasks (same files), two commits.
@@ -35,4 +35,6 @@ object; the code text never changes; the panel order is Código, Convertir, Vari
 shared note and the panel order/collapse.
 
 ## Progress
-Plan created. Next: T1.
+Plan created.
+T1 done (48e9880): helper variableFieldsFor + values section in Propiedades, wired through changeTestValue in js/app.js; tests RED then 1256 green.
+T2 done (c4949a9): Variables below Convertir, data-collapsed-default, README; 1259 green. Next: Chrome verification.
