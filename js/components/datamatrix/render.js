@@ -51,6 +51,16 @@
   /** True when the data can be drawn (ASCII encodation, fits 144x144; a forced size that is too small falls back to the smallest). */
   const encodable = (item, data) => encodeItem(item, String(data ?? '')) !== null;
 
+  /**
+   * Side in modules of what render() draws for the data: the symbol when the item is ECC200, has a module and its data can be encoded, else the
+   * hatched placeholder (the forced size or a default). The ZPL hooks need it to place the symbol from the origin of its field.
+   */
+  function sideDrawn(item, data) {
+    const supported = item.ecc === undefined || item.ecc === 200;
+    const out = supported && item.cell !== 0 ? encodeItem(item, data) : null;
+    return out ? out.side : (item.size || PLACEHOLDER_SIDE);
+  }
+
   /** ctx comes from drawing.js: { n } rounds to 2 decimals, { rectsPath } joins rectangles, { value } substitutes variables. */
   function render(item, ctx) {
     const { n, rectsPath } = ctx;
@@ -81,6 +91,7 @@
   PB.slices.datamatrix.render = render;
   PB.slices.datamatrix.cellOf = cellOf;
   PB.slices.datamatrix.sideOf = sideOf;
+  PB.slices.datamatrix.sideDrawn = sideDrawn;
   PB.slices.datamatrix.encodable = encodable;
   PB.slices.datamatrix.DEFAULT_CELL = DEFAULT_CELL;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

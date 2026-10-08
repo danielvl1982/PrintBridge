@@ -278,7 +278,7 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
 
 ## ZPL support (Zebra)
 
-**Work in progress: the language core and the text are in place, the other components are added next** (bar codes, QR and Data Matrix, shapes, images,
+**Work in progress: the language core, the text, the linear barcodes, QR and Data Matrix are in place, the other components are added next** (shapes, images,
 counters and the conversion of those to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
 
 The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL.
@@ -306,9 +306,58 @@ What works now:
   **Editing:** in the Propiedades panel a `^A` text has font, height, width (0 = standard / proportional), rotation, content (`^` and `~` go through `^FH`) and the
   **Impresión inversa (^FR)** checkbox; a field with only data has content and reverse. **Palette:** *Texto* inserts `^FO x,y^A0N,h,w^FD<#TEXTOn#>^FS` (4 mm) at the drop point,
   rotated against the view. The **ZPL example** (Ejemplo) shows several fonts, a rotated text and a reverse one.
+- **Linear barcodes:** `^BY w,r,h` (module width 1..10 dots, wide / narrow ratio 2.0..3.0, default height; it persists until changed, also across fields) and the commands below,
+  `^FO x,y ^BC… ^FD data ^FS`. Every one is generated for real by the same encoders and renderer as TPCL / TSPL (bars, human readable line below, EAN / UPC guard bars, rotation).
+  Parameters not written take the guide's default: orientation = `^FW`, height = `^BY`, interpretation line `Y`, line above `N`.
+
+  | Command | Barcode | Parameters (guide, Volume One) | Notes |
+  |---|---|---|---|
+  | `^BC` | Code 128 | `o,h,f,g,e,m` | `e` UCC check digit and `m` mode `N` / `U` / `A` (`D` of later guides) are read, kept and **not applied** (one information message). Data with the invocation codes: `>8` FNC1, `>0` `><` `>=` the characters `>` `^` `~`; the start codes and subset changes (`>9` `>:` `>;` `>5` `>6` `>7`) are dropped because the viewer chooses the subsets itself (mode N uses subset B unless a start code is given, so the drawn length can differ: reported); `>1` `>2` `>3` `>4` are reported and dropped. Emit writes the data as it was read, else `>8` and `>0` |
+  | `^B3` | Code 39 | `o,e,h,f,g` | `e` = Mod 43 check digit. Wide / narrow with the `^BY` ratio |
+  | `^B2` | Interleaved 2 of 5 | `o,h,f,g,e` | `e` = Mod 10 check digit (the viewer now draws it; an odd number of digits gets a leading 0) |
+  | `^BE` / `^B8` | EAN-13 / EAN-8 | `o,h,f,g` | The check digit is always calculated. The printer pads / truncates the data on the left (12 / 7 characters); the viewer takes the digits as written and reports a wrong length |
+  | `^BU` | UPC-A | `o,h,f,g,e` | `e` = print the check digit (default `Y`, kept, not applied); data 11 characters |
+  | `^B9` | UPC-E | `o,h,f,g,e` | Data = the 10 characters (manufacturer and product code) of the guide: the viewer applies the four zero-suppression rules to draw the 6 digits (data that no rule can shorten is reported and drawn as written). Only number system 0 |
+  | `^BA` | Code 93 | `o,h,f,g,e` | The two check characters are always in the bars; `e` = print them (default `N`, kept) |
+  | `^BK` | Codabar (NW7) | `o,e,h,f,g,k,l` | `e` fixed `N`; `k` / `l` = start / stop character `A`..`D` (default `A`); the data has neither, the viewer data carries them like TPCL / TSPL |
+  | `^BM` | MSI | `o,e,h,f,g,e2` | `e` = `A` none, `B` 1 Mod 10 (default), `C` 2 Mod 10, `D` Mod 11 + Mod 10 (the check options of TPCL: none / auto / IBM 10+10 / IBM 11+10); `e2` is kept |
+  | `^BI` / `^BJ` | Industrial / Standard 2 of 5 | `o,h,f,g` | `^BJ` is drawn as Industrial 2 of 5 (one information message) and written back as `^BJ` |
+
+  Postnet, Planet, Code 11, LOGMARS, Plessey, Code 49, Codablock, PDF417 / MicroPDF417 and MaxiCode are out of scope (the field is one warning each).
+  **Position:** `^FO` is the top-left corner of the rotated bars, `^FT` the base of the bars (guide: "even when an interpretation is present"), and the orientation `N R I B` is 0 / 90 / 180 / 270° clockwise.
+  The viewer rotates a barcode around its anchor (the top-left of the unrotated bars, what TPCL / TSPL give), so a rotated `^FO` field is placed from the height and, for 180° / 270°, the length of the bars
+  (measured on the data as written: variables `<#NAME#>` are not substituted). **Not verified on a printer:** whether the `^FO` box also holds the interpretation line, the default ratio of `^BY`
+  (the guide gives only the initial module 2 and height 10; 3.0 is assumed), the line above the code (drawn below) and the rounding of the wide bar (the guide's Table J, rounded down).
+  **Editing:** the Propiedades panel offers **Tipo de código** (all the symbologies above, by re-writing the whole command: the layouts differ; `^FO` / `^FT`, the data and the other commands stay as they are),
+  **Dígito de control** (Code 39: none / Mod 43; ITF: none / Mod 10; MSI: the four options; the others have one), height, rotation, human readable line, line above, **Módulo (puntos, ^BY)**,
+  **Relación ancho / estrecho (^BY)** (the wide / narrow symbologies), the command's own options (print check digit, UCC check and mode, Codabar start / stop) and the content. A change of type is refused when it would lose
+  a Code 128 invocation code, a UCC check or mode, a Codabar start / stop character or an MSI `e2`.
+  The module and ratio are **`^BY` values that persist**: when the `^BY` that governs the barcode belongs to it alone it is rewritten in place; when it also governs other barcodes, a `^BY` with the new value is
+  written right before the field and one with the previous value right after its `^FS`, so the others do not change (a barcode with no `^BY` and no neighbours gets a plain `^BY` before it).
+  **Palette:** *Código de barras* inserts `^BY2,3,h ^FO x,y ^BCN,h,Y,N,N ^FD<#CODIGOn#> ^FS` (Code 128, 8 mm), rotated against the view. **Writing:** every barcode field is preceded by its own `^BY`
+  (module, and the ratio for the wide / narrow symbologies).
+- **QR and Data Matrix:** generated for real by the same generators and renderers as TPCL / TSPL. `^BY` has no effect on them except the height for a Data Matrix without module (below).
+
+  | Command | Symbol | Parameters (guide, Volume One) | Notes |
+  |---|---|---|---|
+  | `^BQ` | QR Code | `a,b,c` | `a` orientation: **fixed** (normal, `^FW` has no effect; another letter is reported once and ignored, so the QR is never rotated); `b` model 1 / 2 (default 2; the viewer draws model 1 as model 2, one information message); `c` magnification 1..10 = dots per module (default by resolution: 150 dpi 1, 200 dpi 2, 300 dpi 3, 600 dpi 6; the nearest one for 203 / 254 dpi). The **field data** carries the level and the input mode: `^FD` `<H\|Q\|M\|L>` `<A\|M>` `,` data (`QA,0123 2D code`). Automatic input `A`: the data follows. Manual input `M`: the data starts with the character mode `N` numeric, `A` alphanumeric, `B` + 4 digits (byte count) + bytes, `K` kanji (segments separated by commas); the viewer strips the prefixes. The mixed mode (`D<code><divisions><parity>,` before the level) is reported and drawn as the joined data (code number and divisions are not modelled). Data without the prefix is drawn as written with level `M` (one warning). Emit writes `^BQN,2,<mag>^FD<ECC>A,<data>` (the manual and mixed forms read from a ZPL file are written back as read while the data and the level are unchanged) |
+  | `^BX` | Data Matrix | `o,h,s,c,r,f,g` | `o` orientation `N R I B` (default `^FW`); `h` module in dots (1..9999; **0 or omitted: the `^BY` height divided by the symbol side**, rounded, at least 1; emit always writes it explicitly); `s` quality, **default 0**: only **200** (ECC 200) is drawn, 0 / 50 / 80 / 100 / 140 are kept and reported ("ECC n no soportado", hatched box, like TPCL's ECC types); `c`, `r` columns and rows: both equal and one of the 24 square sizes force the size (quality 200); a rectangle (18×8, 32×8, 26×12, 36×12, 36×16, 48×16) is reported and drawn as the smallest square that fits; any other combination, or only one of the two, is reported and automatic; `f` format ID and `g` escape character (default `_`) are kept. In quality 200 data `__` is one underscore; the other escape sequences (`_1`, `_d123`, `_5009`...) are **not interpreted** (one warning, encoded as written). The encoder is ASCII encodation only (see the limitations) |
+
+  **Position (not verified for 2D symbols):** `^FO` is the top-left corner of the symbol (for a Data Matrix, of the box of the rotated symbol: the symbol turns around its origin, so the anchor is moved by the side of the symbol for `R`, `I` and `B`),
+  `^FT` its bottom-left corner. The 2003 guide defines `^FT` for text, bar codes, boxes and images but says nothing about the 2D symbols, and it does not say whether `^FO` leaves a quiet zone around a QR Code (later guides mention one):
+  the symbol is drawn from the origin without it, as for TPCL and TSPL. The side used for `^FT` and the rotated Data Matrix is measured on the data as written (variables `<#NAME#>` are not substituted).
+  **Editing:** QR: **Magnificación**, **Corrección de errores** (the level letter of the field data, also in the mixed mode), **Modelo** and **Contenido** (the data after the prefix, which stays; not offered in manual or mixed mode);
+  Data Matrix: **Módulo (puntos)** (an omitted or 0 module shows the one derived from `^BY`), **Tamaño del símbolo** (automatic or one of the 24 square sizes; quality 200 only: it writes `c` and `r` together), **Rotación** and **Contenido** (in quality 200 the
+  field data as written: type `__` for an underscore). `^` and `~` go through `^FH`. **Palette:** *QR* inserts `^FO x,y^BQN,2,4^FDMA,<#QRn#>^FS` (always unrotated); *Data Matrix* inserts `^FO x,y^BXN,4,200^FD<#DATAMATRIXn#>^FS`, rotated against the view.
 - **Convertir a…** lists **ZPL (Zebra)** as a target (file `.zpl`, UTF-8) and reads ZPL as a source. Text converts both ways with TPCL and TSPL (position, rotation, size, data;
   fonts are mapped to the nearest one with one information message, mono multiples of a matrix become a bitmapped font, the rest the scalable `0`); the TPCL text attributes,
-  alignment, spacing, bold and counters are reported and written without them. The other components are reported as "no se puede exportar" until their tasks are done.
+  alignment, spacing, bold and counters are reported and written without them. Linear barcodes convert both ways with TPCL and TSPL (position, rotation, height, module, data, human readable line, check digit option; the ratio of the wide / narrow ones):
+  ZPL has **no EAN / UPC add-ons** (+2 / +5: dropped from the data, one warning) and **no TPCL price check digits** (written as automatic, one warning); the types ZPL lacks are skipped with one warning per label;
+  TSPL has no MSI and no Industrial 2 of 5 (one warning each); what ZPL has and the others lack (line above the code, Code 128 mode and UCC check) is one information message of the reading.
+  **QR** converts both ways with TPCL and TSPL (position, level, module <-> magnification, data; a TPCL module above 10 dots is clamped to the ZPL limit with one warning; the QR has no rotation in the model, so the TSPL rotation was already reported when read).
+  **Data Matrix** converts both ways with TPCL `XB` type `Q` and TSPL `DMATRIX` (position, module, forced size, data; rotation with TPCL; TSPL has no rotation, one warning). ZPL has qualities 0 / 50 / 80 / 100 / 140 / 200: a TPCL ECC type with another value is written as 200 with one warning,
+  TSPL writes any quality other than 200 as ECC 200 with a warning, a module of 0 (TPCL: nothing is printed) is skipped with a warning, and the TPCL format ID and connection setting are not converted.
+  The other components are reported as "no se puede exportar" until their tasks are done.
 - Files are read and written as UTF-8 (the 2003 guide ties characters above ASCII to `^CI` and the printer font, and does not mention UTF-8: not verified).
 
 ## Limitations

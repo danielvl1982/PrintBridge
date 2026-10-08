@@ -38,8 +38,10 @@
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)
+ *               ZPL ^BQ: ref 'BQ', no rotation (the orientation is fixed); the level is the first letter of the ^FD data, native = { type, model, cell
+ *               (the magnification), mode, mixed, origin, orientationArg, zplData } (see js/components/qr/zpl.js)
  *       datamatrix { ref, x, y, rotation, cell, size?, ecc, area?, symbology:'datamatrix', native, data }
- *               Data Matrix (TPCL XB type Q, TSPL DMATRIX). The viewer draws ECC200 with ASCII encodation and square symbols only.
+ *               Data Matrix (TPCL XB type Q, TSPL DMATRIX, ZPL ^BX; ecc = the ZPL quality 0..200, ZPL ref 'BX', see js/components/datamatrix/zpl.js). The viewer draws ECC200 with ASCII encodation and square symbols only.
  *               cell = side of each module in 0.1 mm; 0 = the printer draws nothing (TPCL cell width 00); null = no module (TSPL DMATRIX
  *               without the optional xm, row, col group): the symbol fits `area` = { width, height } in 0.1 mm (TSPL only; whole dots of
  *               min(width, height) / symbol side).
@@ -75,6 +77,11 @@
  *                 interCharGap = space between Code 39 characters in 0.1 mm (default: module; ITF has none).
  *                 check = 'none' | 'mod43' (Code 39 only) | 'unsupported' (the language's check digit option has no
  *                 neutral equivalent: drawn without check character and reported). Default: 'none'.
+ *                 ITF also has check = 'auto' (modulus 10 attached; ZPL ^B2 e = Y); TPCL and TSPL have no such option (reported).
+ *               ZPL (^BC ^B3 ^B2 ^BE ^B8 ^BU ^B9 ^BA ^BK ^BM ^BI ^BJ, js/components/barcode/zpl.js): native = { type: the command name, module (dots),
+ *                 ratio (^BY), height (dots or null), origin: 'FO' | 'FT' | 'default', above, zplData, ... }; x, y is the anchor (top-left of the
+ *                 unrotated bars) like the other languages, derived from the origin of the field and the orientation. The wide / narrow
+ *                 symbologies carry widths from the ^BY module and ratio; the Codabar data carries its start / stop letters; UPC-E data is the 6 digits.
  *               counter?, zeroSuppress? as in text (the bars always draw the start value; the zero suppression is kept but not drawn).
  *       line    { ref, x1, y1, x2, y2, rect, width, radius?, native:{ width, radius? } }
  *               width = thickness in 0.1 mm (native.width = the language's value, in dots)

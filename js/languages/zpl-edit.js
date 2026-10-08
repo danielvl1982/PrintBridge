@@ -27,6 +27,13 @@
  *     flag: the field is the PRESENCE of the command `cmd` (no arguments, ^FR): describeItem gives true / false, updateItem adds it before the
  *     ^FS or removes it. Fields that share one argument (^A: font letter and orientation) are written one over the other's result.
  *     reemit: the field is not written by itself: the shape's reemit hook writes the command again for the new value (barcode type).
+ *     custom: the field is not one argument: it has its own read and write over the whole text (the barcode's module and ratio live in a
+ *       ^BY command that can sit outside the field and be shared with other fields; an empty argument stands for a state value). A custom
+ *       field has read(text, found, item) -> value | undefined (found = { field, offset }) and edits(text, found, item, value, opts) ->
+ *       [{ start, end, value }] | null (null = refuse); opts.changes holds every key of the update. Without text, model(item) is used.
+ *       argEdit(cmd, index, value) writes one argument of a command, filling the missing ones before it with empty arguments.
+ *       paramField({ key, label, type, cmd, arg, read(raw, cmd, item), write(value, cmd, item) }) builds the usual custom field over one
+ *       argument whose empty value stands for a default (QR model, Data Matrix module and orientation).
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so the other commands of the field, other fields,
  * comments and line endings stay byte for byte. An argument that is not a plain number is never moved. The coordinates of an item
@@ -152,6 +159,32 @@
     },
   });
 
+  /**
+   * A custom field over ONE argument of a command of the field whose empty or missing value stands for a default the descriptor cannot see
+   * (the orientation follows ^FW, an omitted model is 2...): read(raw, cmd, item) -> value | undefined (raw = the argument as written, '' when
+   * empty or missing), write(value, cmd, item) -> the raw text | null (null refuses). Nothing is written when the value is the one in force.
+   * names: the command(s) of the field (the last one that matches is used); index: the argument.
+   */
+  function paramField({ key, label, type, cmd: names, arg: index, read, write, ...rest }) {
+    const locate = found => (found ? found.field.find(names) : undefined);
+    const valueOf = (found, item, text) => {
+      const cmd = locate(found);
+      if (!cmd) return undefined;
+      const a = cmd.args[index];
+      return read(a ? a.raw : '', cmd, item, text);
+    };
+    return {
+      key, label, type, custom: true, ...rest,
+      read: (text, found, item) => valueOf(found, item, text),
+      edits(text, found, item, value) {
+        const cmd = locate(found);
+        const raw = cmd ? write(value, cmd, item) : null;
+        if (raw === null || raw === undefined || valueOf(found, item, text) === value) return null;
+        return [argEdit(cmd, index, raw)];
+      },
+    };
+  }
+
   // ---------------------------------------------------------------------------------------------------------------
   // Fields and offsets
 
@@ -240,6 +273,18 @@
 
   /** Where text can be added to a command that has fewer arguments than the one wanted: after its last argument, or after its name. */
   const appendPoint = cmd => (cmd.args.length ? cmd.args[cmd.args.length - 1].end : cmd.start + 1 + cmd.name.length);
+
+  /**
+   * The edit that sets argument `index` of a command to `value`: replaces it when it exists (an empty argument too), else appends it after the
+   * last argument with empty arguments for the ones in between (^BC -> ^BC,,N for index 2).
+   */
+  function argEdit(cmd, index, value) {
+    const a = cmd.args[index];
+    if (a) return { start: a.start, end: a.end, value };
+    const at = appendPoint(cmd);
+    const gaps = Array(Math.max(0, index - cmd.args.length)).fill('');
+    return { start: at, end: at, value: (cmd.args.length ? ',' : '') + [...gaps, value].join(',') };
+  }
 
   /**
    * Builds the engines. definitions: { coordinates, editable, commands } (commands: the PB.zpl.commands tokenizer, looked up lazily
@@ -341,7 +386,8 @@
       const fields = [];
       for (const f of shape.fields) {
         let value;
-        if (f.flag) value = found ? found.field.has(f.cmd) : f.model ? f.model(item, { dpi }) : undefined;
+        if (f.custom) value = found ? f.read(text, found, item) : f.model ? f.model(item, { dpi }) : undefined;
+        else if (f.flag) value = found ? found.field.has(f.cmd) : f.model ? f.model(item, { dpi }) : undefined;
         else if (found) {
           const cmd = found.field.find(f.cmd);
           const a = cmd && cmd.args[argIndex(f, cmd)];
@@ -369,6 +415,12 @@
       const sameArg = new Map();
       for (const f of shape.fields) {
         if (f.reemit || !Object.hasOwn(changes, f.key)) continue;
+        if (f.custom) {
+          // Written over the whole text; skipped when the type hook already claimed the command (one change at a time in the panel)
+          const written = claimed ? null : f.edits(text, found, item, changes[f.key], { ...opts, changes });
+          if (written) edits.push(...written);
+          continue;
+        }
         if (f.flag) { flagEdits(text, found.field, f, changes[f.key], edits); continue; }
         const cmd = found.field.find(f.cmd);
         if (!cmd) continue;
@@ -405,7 +457,7 @@
   }
 
   PB.zplEdit = Object.freeze({
-    createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, MAX_DATA,
-    numberField, selectField, stringSelectField, checkboxField, textField, contentField,
+    createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA,
+    numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
