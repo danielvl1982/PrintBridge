@@ -9,7 +9,8 @@ modified. It warns about overlapping texts, items that go outside the label and 
 UI labels below are quoted exactly as they appear.
 
 Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md). The development plan and its progress live in
-[`odd/tasks/multi-printer-language-support.md`](odd/tasks/multi-printer-language-support.md).
+[`odd/tasks/multi-printer-language-support.md`](odd/tasks/multi-printer-language-support.md); the later features have their own plans in
+`odd/tasks/` (`editable-gaps.md`, `component-candidates.md`, `image-rotation.md`).
 
 ## How to open it
 
@@ -30,7 +31,7 @@ from scratch with the example label.
 | `js/core/emit.js` | Shared helpers of the emitters (dots, escaping, id numbering, diagnostics) and the driver that calls each item's slice `emit` |
 | `js/core/convert.js` | `PB.convert`: the pure part of "Convertir a…" (`run`, `targets`, `toBytes`, `fileName`) on top of the language registry |
 | `js/components/registry.js` | `PB.components`: the registry where each label component registers itself |
-| `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `line`, `box`, `ellipse`, `area`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
+| `js/components/<name>/` | One folder per component (`text`, `barcode`, `qr`, `datamatrix`, `line`, `box`, `ellipse`, `area`, `image`) with its encoders and constants, drawing, parsing, building, moving, editing and validation |
 | `js/components/<name>/tpcl.js`, `js/components/<name>/tspl.js` | The pieces of that component for one language: TPCL and TSPL both read, build (palette), move and edit (`line/tspl.js` is `BAR`, `box/tspl.js` is `BOX`, `ellipse/tspl.js` is `ELLIPSE` and `CIRCLE`; TSPL only; `area/` is TPCL `XR` and TSPL `REVERSE`/`ERASE`) |
 | `js/components/compose.js` | `PB.composeSlices`: builds a language's handler table from the slices that registered for it |
 | `js/languages/tpcl.js` | TPCL reading and writing (fonts and commands of the TEC/Toshiba printers; the language `emit` hook writes header, items and trailer) |
@@ -178,7 +179,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       or a guard bar that the other form cannot hold (a start/stop option towards Code 128, Code 93 or EAN / UPC), TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Postnet...). Content the new type cannot encode
       (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
       new symbology only adds rows.
-  - **Components panel:** drag a component (text, Code128 barcode, QR, Data Matrix, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
+  - **Components panel:** drag a component (text, Code128 barcode, QR, Data Matrix, line, box, **Área invertida**, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
@@ -228,7 +229,7 @@ What is lost or approximated (each case is reported in the warnings list):
 | `XB` / `RB` type `4` | NW7 / Codabar (widths form; start/stop letters A-D in the data; generated for real) |
 | `XB` / `RB` type `1` | MSI (widths form; check options 1 none, 2 check, 3 IBM modulus 10, 4 IBM modulus 10 + 10, 5 IBM modulus 11 + 10; generated for real) |
 | `XB` / `RB` type `O` | Industrial 2 of 5 (widths form, wide space 00; check options 1 / 2 / 3; generated for real) |
-| `XB` other types | Other barcodes: drawn approximately |
+| `XB` other types | Other barcodes: drawn approximately (PDF417 `P`, MicroPDF417 `X` and MaxiCode `Z` are out of scope and are not generated) |
 | `LC` | Lines and rectangles (a rectangle may carry the optional corner radius `ggg`, 0.1 mm, drawn rounded) |
 | `XR` | Clear area: type `B` inverts white/black and type `A` clears to white, in the rectangle between the start and end corners (0.1 mm; the corners may come in any order). It acts on what is drawn **before** it in command order; what comes after is not affected. Drawn, moved, edited (**Final X**, **Final Y**, **Tipo**: Invertir / Borrar) and inserted from the palette (**Área invertida**, 30 x 10 mm, type `B`; clearing areas have no palette entry). **Browser check pending:** the inversion is drawn with the SVG blend mode `difference` |
 | `SG` | Graphic (nibble data, modes 0 and 4); not verified on a printer |
@@ -238,7 +239,7 @@ What is lost or approximated (each case is reported in the warnings list):
 
 The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`DMATRIX`/`BITMAP`/`BAR`/`BOX`
 followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. The label is drawn, clicking an item selects its line, and, as with TPCL, you can
-**drag items** to move them, edit their properties (numbers, font and content) in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, line, box and image,
+**drag items** to move them, edit their properties (numbers, font and content) in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, Data Matrix, line, box, ellipse, circle, inverted area and image,
 written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (`BLOCK` and `BITMAP` data are never touched, and a counter `@n` keeps its text: only its step in the `SET COUNTER` line is editable).
 `REFERENCE` and `SHIFT` are taken into account (the item lands under the cursor), positions never go below 0 and `DIRECTION 0` is edited as `DIRECTION 1`.
 It can be exported to TPCL with **Convertir a…**.
@@ -256,7 +257,7 @@ It can be exported to TPCL with **Convertir a…**.
 | `BITMAP` | Raw binary graphic (mode 0 overwrite; bit 0 = black, MSB first) |
 | `CLS`, `PRINT`, `DENSITY`, `SPEED`, `SET`, `CODEPAGE`, `FEED`... | Configuration: not drawn |
 
-Not supported (a warning is shown): `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
+Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`PUTPNG`
 (images stored in the printer). Also:
 
 - **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
