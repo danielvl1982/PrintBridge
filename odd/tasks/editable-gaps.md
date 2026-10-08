@@ -31,7 +31,7 @@ Out for now (cost/risk, decide later): G6 barcode type selector, G7 check digit 
 - [x] T3 Font: TPCL PC font letter select, TSPL TEXT font id (string select); tests.
 - [x] T4 TPCL text attribute: parse B/W/F/C (extend the regex) into the item, draw reverse / boxed / stroked in the preview, edit the attribute; tests.
 - [x] T5 TPCL alignment `P1..P4`: parse, draw in the preview, edit; tests.
-- [ ] T6 TPCL spacing `±hh` and bold `Jkkll`: parse, show, edit; README and contract docs.
+- [x] T6 TPCL spacing `±hh` and bold `Jkkll`: parse, show, edit; README and contract docs.
 
 ## Route declaration
 Delegated direct, one writer per task (multi-file each, sequential). Reading that prepares each write belongs to its writer.
@@ -50,3 +50,7 @@ T2 done: TPCL content (inline =data, RC/RV/RB command, FNC1 >8 round trip, unsaf
 T3 done: TPCL PC/PV font letter select and TSPL TEXT font id (string select, extra option for a current unknown value); `node --test` 804/804 green; commit a442d2e. Next: T4.
 T4 done: TPCL text attribute B/W/F/C parsed into item.attribute, drawn (pure geometry in text/render.js, sized from the measured text in layout.js), written back by emit and editable (kind + margins in dots); TSPL warns once; `node --test` 833/833 green; commit 573bef2 (browser check pending). Next: T5.
 T5 done: TPCL alignment Pq/Po parsed into item.align (P1 = none), drawn via text-anchor / textLength (pure alignAttributes in text/render.js; center/right relative to the origin = approximation, the manual gives an area width only to P4), written back by emit and editable (kind + equal-space width); TSPL info once; `node --test` 858/858 green; commit 9551f47 (browser check pending). Next: T6.
+T6 done: TPCL character spacing ghh/ghhh (item.spacing, signed dots in native + 0.1 mm) and PC bold Jkkll (item.bold) parsed, drawn (SVG letter-spacing; bold as shifted overprint copies, pure helpers in text/render.js), written back by emit and editable (spacing -99..99 PC / -512..512 PV, bold 0..16 PC only); TSPL info once each; `node --test` 892/892 green; commit pending (browser check pending).
+
+## Result
+The editable-gaps feature closed the panel-versus-manual gaps for text in six commits: panel `text` field and TSPL content (T1), TPCL content inline or in RC/RV/RB (T2), font letter / TSPL font id (T3), TPCL attribute B/W/F/C drawn and editable (T4), alignment Pq/Po (T5) and character spacing plus PC bold (T6). Every field is whole-token `exact` in the TPCL engine, round-trips through parse -> emit -> parse and leaves other commands untouched; TSPL conversion warns or informs once per feature. Open points: the default margin of attributes in PV (character size in mm x 8 dots) is a reading of the manual not verified on a printer; center / right alignment are drawn relative to the item origin (an approximation, the manual gives an area width only to P4); the bold overprint is drawn as shifted copies (an approximation); G6 (barcode type selector) and G7 (check digit / increment / zero-suppress) were left out by agreement. Pending browser check by the user: edit content, font, attribute, alignment, spacing and bold from the panel in TPCL and TSPL labels.

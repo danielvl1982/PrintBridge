@@ -54,6 +54,15 @@
     measured.full = { x, y, width: Math.max(measured.full.x + measured.full.width, extra.x + extra.width) - x, height: Math.max(measured.full.y + measured.full.height, extra.y + extra.height) - y };
   }
 
+  /** Widens the click/overflow box to the bold overprint copies (.text-bold, shifted copies of the string; the ink box stays the text's own). */
+  function includeBold(group, measured) {
+    for (const copy of group.querySelectorAll('text.text-bold')) {
+      const extra = boxInGroup(copy, copy.getBBox());
+      const x = Math.min(measured.full.x, extra.x), y = Math.min(measured.full.y, extra.y);
+      measured.full = { x, y, width: Math.max(measured.full.x + measured.full.width, extra.x + extra.width) - x, height: Math.max(measured.full.y + measured.full.height, extra.y + extra.height) - y };
+    }
+  }
+
   /**
    * layout(group, item) hook: { full, ink } boxes of the painted item, or null to leave it out of the checks (blank text).
    * Also fits the click area (.hit) to the measured text.
@@ -63,6 +72,7 @@
     const measured = textBoxes(textEl);
     if (!measured) return null;
     paintAttribute(group, item, textEl, measured);
+    includeBold(group, measured);
     const hit = group.querySelector('.hit');
     for (const k of ['x', 'y', 'width', 'height']) hit.setAttribute(k, measured.full[k]);
     return measured;

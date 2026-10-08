@@ -139,6 +139,8 @@
       if (item.align && item.align.kind !== 'left' && item.align.kind) {
         ctx.once('tspl-text-align', () => diag.info('Hay textos con alineación (centro, derecha o espaciado igual), que TEXT de TSPL no escribe: se escriben a la izquierda'));
       }
+      if (item.spacing) ctx.once('tspl-text-spacing', () => diag.info('Hay textos con espaciado entre caracteres, que TEXT de TSPL no escribe: se escriben sin él'));
+      if (item.bold) ctx.once('tspl-text-bold', () => diag.info('Hay textos en negrita (sobreimpresión), que TEXT de TSPL no escribe: se escriben sin ella'));
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
       return `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${quoted(safeData(ctx, item.data))}`;
     }

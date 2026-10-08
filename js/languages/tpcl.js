@@ -436,7 +436,10 @@
     if (!edits.length) return text;
     let out = text;
     // Right to left so the earlier indices stay valid (fields are in group order, not necessarily command order)
-    for (const { start, end, value } of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, start) + value + out.slice(end);
+    // Same start: the longer range first (a replacement before an insertion in front of it), then the later field first so
+    // that insertions at one point end up in field order
+    const ordered = edits.map((e, i) => ({ ...e, i })).sort((a, b) => b.start - a.start || b.end - a.end || b.i - a.i);
+    for (const { start, end, value } of ordered) out = out.slice(0, start) + value + out.slice(end);
     return out;
   }
 

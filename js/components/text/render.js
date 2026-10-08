@@ -59,6 +59,29 @@
     return { anchor: ANCHORS[align.kind] || 'start' };
   }
 
+  /**
+   * Letter spacing of the character spacing option (ghh / ghhh), pure geometry: the signed distance (0.1 mm, item.spacing.value)
+   * in the text's own frame (before its horizontal scale, hence divided by scaleX), or null when there is none. Faithful to the
+   * manual (the dots are added to each character's own advance, as SVG letter-spacing does); with equal space the spacing is
+   * invalid in the manual, so it is not drawn (the stretch of the alignment decides).
+   */
+  function spacingAttributes(spacing, align, scaleX) {
+    if (!spacing || !Number.isFinite(spacing.value) || spacing.value === 0) return null;
+    if (align && align.kind === 'equal') return null;
+    return scaleX > 0 ? spacing.value / scaleX : null;
+  }
+
+  /**
+   * Overprint shifts of the bold option (Jkkll), pure geometry: the string is printed again shifted by the horizontal shift
+   * (h), the vertical one (v) and both, in 0.1 mm, in the text's own rotated frame. Approximation: the printer's exact overprint
+   * pattern is not in the manual (only its figure), the copies thicken the strokes by those distances. Nothing for 0 / 0.
+   */
+  function boldShifts(bold) {
+    if (!bold) return [];
+    const [h, v] = [bold.h > 0 ? bold.h : 0, bold.v > 0 ? bold.v : 0];
+    return [h && { dx: h, dy: 0 }, v && { dx: 0, dy: v }, h && v && { dx: h, dy: v }].filter(Boolean);
+  }
+
   /** ctx comes from drawing.js: { n } rounds to 2 decimals, { esc } escapes markup, { value } substitutes variables, { textScale }. */
   function render(item, ctx) {
     const { n, esc } = ctx;
@@ -68,11 +91,16 @@
     const behind = attribute ? `<g class="text-attr" data-kind="${esc(attribute.kind)}" transform="translate(${item.x} ${item.y}) rotate(${item.rotation})"></g>` : '';
     const classes = fontClasses(f) + (attribute && attribute.kind === 'reverse' ? ' attr-reverse' : '');
     const place = alignAttributes(item.align, f.scaleX);
-    const placed = (place.anchor === 'start' ? '' : ` text-anchor="${place.anchor}"`) + (place.textLength ? ` textLength="${n(place.textLength)}" lengthAdjust="spacing"` : '');
+    const letter = spacingAttributes(item.spacing, item.align, f.scaleX);
+    const placed = (place.anchor === 'start' ? '' : ` text-anchor="${place.anchor}"`) + (place.textLength ? ` textLength="${n(place.textLength)}" lengthAdjust="spacing"` : '') +
+      (letter == null ? '' : ` letter-spacing="${n(letter)}"`);
+    // One string element per overprint (the first is the text itself and stays first: layout.js measures it); `shift` moves a copy in the rotated frame
+    const string = (cls, shift) => `<text class="${cls}"${placed} transform="translate(${item.x} ${item.y}) rotate(${item.rotation})${shift ? ` translate(${n(shift.dx)} ${n(shift.dy)})` : ''} scale(${n(f.scaleX)} 1)" ` +
+      `font-size="${n(f.size * ctx.textScale)}" xml:space="preserve">${esc(ctx.value(item.data))}</text>`;
+    const copies = boldShifts(item.bold).map(shift => string(`${classes} text-bold`, shift)).join('');
     return {
       // .hit is sized after measuring the real text (PB.layout, in drawing.js)
-      markup: `${behind}<rect class="hit"/><text class="${classes}"${placed} transform="translate(${item.x} ${item.y}) rotate(${item.rotation}) scale(${n(f.scaleX)} 1)" ` +
-        `font-size="${n(f.size * ctx.textScale)}" xml:space="preserve">${esc(ctx.value(item.data))}</text>`,
+      markup: `${behind}<rect class="hit"/>${string(classes)}${copies}`,
       anchor: [item.x, item.y],
     };
   }
@@ -80,5 +108,7 @@
   PB.slices.text.render = render;
   PB.slices.text.attributeShapes = attributeShapes;
   PB.slices.text.alignAttributes = alignAttributes;
+  PB.slices.text.spacingAttributes = spacingAttributes;
+  PB.slices.text.boldShifts = boldShifts;
   PB.slices.text.attributeMarkup = attributeMarkup;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

@@ -20,6 +20,10 @@
  *               only), native = the dots written in the file (absent when omitted), defaultDots = the manual default in dots
  *               align? = { kind: 'center' | 'right' | 'equal', width? } (TPCL Pq / Po alignment relative to x; absent = left;
  *               width = the string area of an equal space in 0.1 mm, 50..1040)
+ *               spacing? = { value, native } (TPCL ghh / ghhh character spacing: native = the signed printer DOTS as written, PC
+ *               -99..99, PV -512..512; value = the same distance in 0.1 mm, signed; absent = none or 0)
+ *               bold? = { h, v, native: { h, v } } (TPCL PC Jkkll bold overprint: native = the shift in printer DOTS as written,
+ *               0..16 each; h, v = the same shifts in 0.1 mm; absent = none)
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)

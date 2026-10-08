@@ -143,9 +143,9 @@ test('content: a stale item (its command no longer at the source span) is ignore
 
 test('content: describeItem without text uses the item data; the field comes last', () => {
   const d = tpcl.describeItem(itemsOf(PC_RC)[0]);
-  assert.deepEqual(d.fields.map(f => f.key), ['rotation', 'attribute', 'align', 'content']);
-  assert.equal(d.fields[3].value, 'HOLA');
-  assert.deepEqual(tpcl.describeItem(itemsOf(PC_RC)[0], PC_RC).fields.map(f => f.key), ['hMag', 'vMag', 'rotation', 'font', 'attribute', 'align', 'content']);
+  assert.deepEqual(d.fields.map(f => f.key), ['rotation', 'spacing', 'attribute', 'boldH', 'boldV', 'align', 'content']);
+  assert.equal(d.fields[6].value, 'HOLA');
+  assert.deepEqual(tpcl.describeItem(itemsOf(PC_RC)[0], PC_RC).fields.map(f => f.key), ['hMag', 'vMag', 'rotation', 'font', 'spacing', 'attribute', 'boldH', 'boldV', 'align', 'content']);
   assert.deepEqual(tpcl.describeItem(itemsOf(QR_RB)[0], QR_RB).fields.map(f => f.key), ['cell', 'ecc', 'content']);
   assert.deepEqual(tpcl.describeItem(itemsOf(XB_128)[0], XB_128).fields.map(f => f.key), ['module', 'height', 'rotation', 'humanReadable', 'content']);
 });
