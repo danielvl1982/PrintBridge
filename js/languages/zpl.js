@@ -76,7 +76,7 @@
 
   /** Names of the printer configuration commands that are recognised and not drawn (either prefix). */
   const CONFIG_NAMES = Object.freeze([
-    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'DY', 'EF', 'EG', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
+    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'EF', 'EG', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
     'HY', 'HZ', 'ID', 'JA', 'JB', 'JC', 'JD', 'JE', 'JF', 'JG', 'JI', 'JJ', 'JL', 'JM', 'JN', 'JO', 'JP', 'JQ', 'JR', 'JS', 'JT', 'JU', 'JW',
     'JX', 'JZ', 'KB', 'KD', 'KL', 'KN', 'KP', 'MC', 'MD', 'MF', 'ML', 'MM', 'MN', 'MP', 'MT', 'MU', 'MW', 'NC', 'NI', 'NR', 'NS', 'NT', 'PF',
     'PM', 'PP', 'PQ', 'PR', 'PS', 'RO', 'SC', 'SD', 'SE', 'SL', 'SO', 'SP', 'SQ', 'SR', 'SS', 'ST', 'SX', 'SZ', 'TA', 'TO', 'WC', 'WD', 'XB',
@@ -85,7 +85,7 @@
 
   /** Every command of the 2003 guide, for the detection (the drawing ones are matched by pattern below). */
   const KNOWN_NAMES = new Set([
-    ...CONFIG_NAMES, 'A', 'A@', 'CC', 'CD', 'CF', 'CI', 'CT', 'DF', 'DG', 'FB', 'FC', 'FD', 'FH', 'FM', 'FN', 'FO', 'FP', 'FR', 'FS', 'FT', 'FV',
+    ...CONFIG_NAMES, 'A', 'A@', 'CC', 'CD', 'CF', 'CI', 'CT', 'DF', 'DG', 'DY', 'FB', 'FC', 'FD', 'FH', 'FM', 'FN', 'FO', 'FP', 'FR', 'FS', 'FT', 'FV',
     'FW', 'FX', 'GB', 'GC', 'GD', 'GE', 'GF', 'GS', 'IL', 'IM', 'IS', 'LH', 'LL', 'LR', 'LS', 'LT', 'PO', 'PW', 'SF', 'SN', 'XA', 'XF', 'XG', 'XZ',
   ]);
   const isKnownName = name => KNOWN_NAMES.has(name) || /^B[0-9A-Z]$/.test(name);
@@ -733,10 +733,28 @@
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.zpl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CONFIG_NAMES });
 
-  // UTF-8 (the default): see the note on ^CI in the header. No image insertion yet (Z6).
+  /**
+   * ^FO..^GFA..^FS for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral bitmap, 1 = black; dpi), ready for
+   * insertCommand. A bitmap over the 99999 bytes of ^GF is refused with an error (the app shows it as the reason the image was not inserted).
+   */
+  function imageCommand({ xMm, yMm, w, h, data, dpi }) {
+    const image = PB.slices.image.zpl;
+    const bitmap = { w, h, data };
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    if (image.totalBytes(bitmap) > image.MAX_BYTES) {
+      throw new Error(`${w}×${h} puntos supera el máximo de ^GF (${image.MAX_BYTES} bytes de imagen)`);
+    }
+    const dots = mm => {
+      const tenths = units.fromMm(mm);
+      return Number.isFinite(tenths) ? Math.max(0, roundDots(tenths / units.dotSize(dpi))) : 0;
+    };
+    return image.graphicField(dots(xMm), dots(yMm), bitmap);
+  }
+
+  // UTF-8 (the default): see the note on ^CI in the header. The ^GF data is ASCII hexadecimal, so the file stays plain text.
   PB.languages.register({
     id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize,
-    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

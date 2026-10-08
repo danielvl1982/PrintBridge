@@ -111,8 +111,8 @@
       image   { ref, x, y, width, height, href?, bitmap?, data:null }
  *               width/height = size in 0.1 mm. It has no data. Two origins:
  *               - preview overlay added by the viewer (PB.images.makeItem): href = data URL (or URL) of the picture.
- *               - graphic command of the code (TPCL SG): bitmap = { w, h, data } in printer dots, data = flat
- *                 Uint8Array of 0/1 (1 = black), row by row, length w * h.
+ *               - graphic command of the code (TPCL SG, TSPL BITMAP, ZPL ^GF): bitmap = { w, h, data } in printer dots, data = flat
+ *                 Uint8Array of 0/1 (1 = black), row by row, length w * h. ZPL: native = { format: 'A', total, bytesPerRow, compressed, origin }.
  *   - data: text of the field with #NAME# variables (null if it has no data). In barcodes, function 1
  *     (FNC1) is the character PB.barcodeData.FNC1: a language with another notation (TPCL: ">8") translates it
  *     when parsing, so neither the drawing nor the encoder know any language notation.
