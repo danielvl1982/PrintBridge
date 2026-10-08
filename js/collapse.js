@@ -3,8 +3,9 @@
  * A container marked with `data-collapsible` gets its title (first `h2` or `.strip-title`) turned into a toggle: clicking it
  * (or pressing Enter/Space) adds/removes the class `is-collapsed` on the container. The direct child of the container that holds
  * the title is marked `collapse-head`; the CSS hides every other child while collapsed, so only the title stays visible.
+ * A container with `data-collapsed-default` starts collapsed when nothing is stored for its key; a stored choice (true or false) wins.
  * The collapsed state of each section (keyed by the `data-collapsible` value) is kept in localStorage; every storage access is
- * guarded, so a blocked or corrupt storage just means the sections start expanded.
+ * guarded, so a blocked or corrupt storage just means the sections start in their default state (expanded unless declared otherwise).
  * Run it after the scripts that render titles (js/convert-panel.js).
  */
 (function (PB) {
@@ -42,7 +43,9 @@
 
     const id = container.getAttribute('data-collapsible');
     const remember = storage && id;
-    if (remember && readState(storage)[id] === true) {
+    const stored = remember ? readState(storage)[id] : undefined;
+    const collapsedAtStart = typeof stored === 'boolean' ? stored : container.getAttribute('data-collapsed-default') != null;
+    if (collapsedAtStart) {
       container.classList.add(COLLAPSED);
       title.setAttribute('aria-expanded', 'false');
     }

@@ -23,10 +23,27 @@
   }
 
   /**
+   * Test values of the variables an item uses: [{ name, value, usedIn }] in order of appearance. value is the current test
+   * value ('' if none); usedIn is how many objects of the model use the variable. They are app-level (state.values), not
+   * part of the label code, so they are not fields of the language.
+   */
+  function variableFieldsFor(item, model, values) {
+    if (!item) return [];
+    const { namesIn } = PB.variables;
+    const perItem = model.items.map(it => namesIn(it.data));
+    return namesIn(item.data).map(name => ({
+      name,
+      value: values[name] ?? '',
+      usedIn: perItem.filter(names => names.includes(name)).length,
+    }));
+  }
+
+  /**
    * els: { empty, title, form, overlay } (the overlay element holds the image controls, which belong to the page).
    *  - onChange(key, value): a field was edited (applied on `change`, not on every keystroke). The caller re-shows the panel.
+   *  - onValueChange(name, value): the test value of a variable was edited (on `change`); it is never a field of the language.
    */
-  function createPropertiesPanel(els, { onChange }) {
+  function createPropertiesPanel(els, { onChange, onValueChange }) {
     function control(field) {
       if (field.type === 'select') {
         const select = document.createElement('select');
@@ -69,6 +86,26 @@
       return label;
     }
 
+    /** Section with one text input per variable of the object, after the language fields. */
+    function valuesSection(variableFields) {
+      const section = document.createElement('div');
+      section.className = 'props-values';
+      section.append(Object.assign(document.createElement('span'), { className: 'props-values-title', textContent: 'Valores de prueba (solo vista previa)' }));
+      for (const { name, value, usedIn } of variableFields) {
+        const label = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = value;
+        input.dataset.key = `var:${name}`;
+        // The raw string goes as typed: no number parsing, and it never reaches the language
+        input.addEventListener('change', () => onValueChange(name, input.value));
+        label.append(Object.assign(document.createElement('span'), { textContent: `Valor de ${name}` }), input);
+        if (usedIn > 1) label.append(Object.assign(document.createElement('small'), { className: 'props-note', textContent: `usada en ${usedIn} objetos` }));
+        section.append(label);
+      }
+      return section;
+    }
+
     function setMode(mode) {
       els.empty.hidden = mode !== 'empty';
       els.form.hidden = mode !== 'form';
@@ -76,10 +113,13 @@
     }
 
     return Object.freeze({
-      /** Shows the form of a descriptor { kind, fields }; null (or one without fields) shows the empty message. */
-      show(descriptor) {
+      /**
+       * Shows the form of a descriptor { kind, fields }; null (or one without fields and variables) shows the empty message.
+       * variableFields (see variableFieldsFor) adds the test values section after the fields.
+       */
+      show(descriptor, variableFields = []) {
         const focused = els.form.contains(document.activeElement) ? document.activeElement.dataset.key : null;
-        if (!descriptor || !descriptor.fields.length) {
+        if (!descriptor || (!descriptor.fields.length && !variableFields.length)) {
           els.form.replaceChildren();
           els.title.textContent = '';
           els.empty.textContent = descriptor ? 'Este objeto no tiene propiedades editables' : 'Selecciona un objeto';
@@ -87,7 +127,7 @@
           return;
         }
         els.title.textContent = descriptor.kind || '';
-        els.form.replaceChildren(...descriptor.fields.map(row));
+        els.form.replaceChildren(...descriptor.fields.map(row), ...(variableFields.length ? [valuesSection(variableFields)] : []));
         setMode('form');
         // The edit re-renders the form: the field being edited keeps the keyboard focus
         if (focused) els.form.querySelector(`[data-key="${focused}"]`)?.focus();
@@ -103,5 +143,6 @@
 
   PB.ui = PB.ui || {};
   PB.ui.coerceFieldValue = coerceFieldValue;
+  PB.ui.variableFieldsFor = variableFieldsFor;
   PB.ui.createPropertiesPanel = createPropertiesPanel;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

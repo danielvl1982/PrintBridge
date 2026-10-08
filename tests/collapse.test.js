@@ -122,6 +122,39 @@ test('broken or throwing storage never breaks the toggle', () => {
   assert.ok(!other.container.classList.contains('is-collapsed'));
 });
 
+test('data-collapsed-default: collapsed when storage has no entry, an explicit stored choice wins, broken storage uses the default', () => {
+  const make = (storage) => {
+    const f = fixture();
+    f.container.setAttribute('data-collapsible', 'variables');
+    f.container.setAttribute('data-collapsed-default', '');
+    PB.ui.makeCollapsible(f.container, storage);
+    return f;
+  };
+  const key = PB.ui.COLLAPSE_STORAGE_KEY;
+  const none = make(memoryStorage());
+  assert.ok(none.container.classList.contains('is-collapsed'));
+  assert.equal(none.title.getAttribute('aria-expanded'), 'false');
+  assert.ok(make(null).container.classList.contains('is-collapsed'), 'no storage at all');
+  assert.ok(make(memoryStorage({ [key]: JSON.stringify({ code: false }) })).container.classList.contains('is-collapsed'), 'other keys do not count');
+  assert.ok(!make(memoryStorage({ [key]: JSON.stringify({ variables: false }) })).container.classList.contains('is-collapsed'), 'stored false expands');
+  assert.ok(make(memoryStorage({ [key]: JSON.stringify({ variables: true }) })).container.classList.contains('is-collapsed'), 'stored true collapses');
+  const bad = { getItem: () => { throw new Error('blocked'); }, setItem: () => { throw new Error('blocked'); } };
+  assert.ok(make(bad).container.classList.contains('is-collapsed'), 'throwing storage');
+  assert.ok(make(memoryStorage({ [key]: '{not json' })).container.classList.contains('is-collapsed'), 'corrupt storage');
+});
+
+test('a section without data-collapsed-default still starts expanded', () => {
+  const { container } = fixture();
+  container.setAttribute('data-collapsible', 'code');
+  PB.ui.makeCollapsible(container, memoryStorage());
+  assert.ok(!container.classList.contains('is-collapsed'));
+});
+
+test('index.html: the Variables section declares it starts collapsed', () => {
+  const html = fs.readFileSync(path.join(__dirname, '..', 'index.html'), 'utf8');
+  assert.match(html, /<section class="panel" data-collapsible="variables" data-collapsed-default>/);
+});
+
 const ROOT = path.join(__dirname, '..');
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
 const tagOf = marker => {
