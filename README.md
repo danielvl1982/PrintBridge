@@ -137,6 +137,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     "Selecciona un objeto". Clicking empty space deselects. What can be edited, in TPCL and TSPL:
     - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
       end point and thickness (the fields each command has).
+    - **Radio (esquinas redondeadas):** rectangles only (TPCL `LC` type 1, TSPL `BOX`): the corner radius, 0..999 in 0.1 mm for TPCL and in dots for TSPL, drawn clamped to half of the shorter side. A value above 0 adds the optional token at the end of the command; 0 keeps an existing token and writes nothing for an absent one. The TSPL radius argument comes from the TSPL2 manual and is not verified on a printer.
     - **Contenido:** the data of text, barcodes and QR. TSPL: `TEXT`, `BARCODE` and `QRCODE` (not counters `@n`, `BLOCK`,
       `128M`/`EAN128` or QR manual mode). TPCL: `PC`/`PV` text, barcodes and QR, inline (`=data`) or in the `RC`/`RV`/`RB`
       command; values with `| { }` or line breaks are rejected because TPCL has no escape for them.
@@ -197,7 +198,7 @@ What is lost or approximated (each case is reported in the warnings list):
 | `XB` / `RB` type `2` | Interleaved 2 of 5 / ITF (generated for real, same widths and text options) |
 | `XB` / `RB` type `B` | Code39 full ASCII: only the characters of standard Code39 are drawn (see limitations) |
 | `XB` other types | Other barcodes: drawn approximately |
-| `LC` | Lines and rectangles |
+| `LC` | Lines and rectangles (a rectangle may carry the optional corner radius `ggg`, 0.1 mm, drawn rounded) |
 | `SG` | Graphic (nibble data, modes 0 and 4); not verified on a printer |
 | `D`, `AX`, `C`, `XS`, `XQ` | Configuration: not drawn |
 
@@ -216,7 +217,7 @@ It can be exported to TPCL with **Convertir a…**.
 | `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
 | `BARCODE` | Code128 (also `128M` and `EAN128`), Code39 and ITF / `25` are generated for real; EAN13 and the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
-| `BAR`, `BOX` | Filled bar and rectangle outline (with thickness) |
+| `BAR`, `BOX` | Filled bar and rectangle outline (with thickness and optional corner radius, in dots; the radius argument is from the TSPL2 manual and **not verified on a printer**) |
 | `BITMAP` | Raw binary graphic (mode 0 overwrite; bit 0 = black, MSB first) |
 | `CLS`, `PRINT`, `DENSITY`, `SPEED`, `SET`, `CODEPAGE`, `FEED`... | Configuration: not drawn |
 
@@ -226,7 +227,7 @@ Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DM
 - **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR` and a 30 x 20 mm `BOX`; texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
-  information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), the `BOX` radius and the
+  information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
   text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.
 - **Resolución:** the dots-per-mm of a TSPL label are not in the file, so the **Resolución** selector (203 or 300 dpi) must match
   the printer: coordinates are in dots, so the same label is drawn smaller at 300 dpi.

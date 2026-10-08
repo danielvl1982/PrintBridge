@@ -39,7 +39,7 @@ test('TPCL hooks: line owns parse, move and edit; both build', () => {
   const box = PB.components.get('box').languages.tpcl(stub);
   assert.equal(line.handlers.length, 1);
   assert.equal(line.coordinates.length, 1);
-  assert.equal(line.editable.length, 1);
+  assert.equal(line.editable.length, 2, 'line shape and box shape (the box adds the radius)');
   assert.equal(line.build('', { x: 10, y: 20 }), '{LC;0010,0020,0410,0020,0,03|}');
   assert.equal(box.build('', { x: 10, y: 20 }), '{LC;0010,0020,0310,0220,1,03|}');
   assert.equal(box.handlers, undefined);

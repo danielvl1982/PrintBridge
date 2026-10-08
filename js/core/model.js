@@ -38,8 +38,11 @@
  *                 interCharGap = space between Code 39 characters in 0.1 mm (default: module; ITF has none).
  *                 check = 'none' | 'mod43' (Code 39 only) | 'unsupported' (the language's check digit option has no
  *                 neutral equivalent: drawn without check character and reported). Default: 'none'.
- *       line    { ref, x1, y1, x2, y2, rect, width, native:{ width } }
+ *       line    { ref, x1, y1, x2, y2, rect, width, radius?, native:{ width, radius? } }
  *               width = thickness in 0.1 mm (native.width = the language's value, in dots)
+ *               radius = corner radius of a rectangle (rect true) in 0.1 mm, absent when the command has none; the renderer clamps
+ *               it to half of the shorter side. native.radius = the language's value (TPCL LC ggg: 0.1 mm; TSPL BOX: dots, not
+ *               verified on a printer). A radius on a line (rect false) is ignored.
  *       image   { ref, x, y, width, height, href?, bitmap?, data:null }
  *               width/height = size in 0.1 mm. It has no data. Two origins:
  *               - preview overlay added by the viewer (PB.images.makeItem): href = data URL (or URL) of the picture.

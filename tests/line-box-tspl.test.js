@@ -92,14 +92,13 @@ test('BOX builds a rect line item with the corners and the thickness', () => {
   assert.equal(PB.components.forItem(item).kind, 'box');
 });
 
-test('BOX radius is kept in native with one info per label', () => {
+test('BOX radius is kept in native (dots) and as the neutral radius, with no diagnostic (it is drawn)', () => {
   const model = parse('BOX 10,20,210,120,4,8\r\nBOX 10,20,50,60,2,5');
   assert.equal(model.items.length, 2);
   assert.equal(model.items[0].native.radius, 8);
   assert.equal(model.items[1].native.radius, 5);
-  const infos = model.diagnostics.filter(x => /radio de esquina/.test(x.text));
-  assert.equal(infos.length, 1);
-  assert.equal(infos[0].level, 'info');
+  near(model.items[0].radius, 8 * dotOf(203));
+  assert.equal(model.diagnostics.filter(x => /radio de esquina/.test(x.text)).length, 0);
 });
 
 test('BOX with radius 0 or none adds no diagnostic', () => {
