@@ -13,7 +13,7 @@ After closing the editable-property gaps (odd/tasks/editable-gaps.md), add the c
 ## Groups and tasks
 ### Group A: shapes (branch `feat/shapes`)
 - [x] A1 Rounded corners: TPCL `LC` rectangle radius `ggg` (3 digits, 0.1 mm; manual 6.3.6) and TSPL `BOX` radius (dots): parse, draw, emit, edit (`Radio`), TPCL<->TSPL conversion, palette unchanged.
-- [ ] A2 Ellipse and circle (TSPL only: `ELLIPSE x,y,width,height,thickness`, `CIRCLE x,y,diameter,thickness`): parse, draw, move, edit, palette entries for TSPL, emit; TPCL conversion warns (no equivalent); neutral model kind(s).
+- [x] A2 Ellipse and circle (TSPL only: `ELLIPSE x,y,width,height,thickness`, `CIRCLE x,y,diameter,thickness`): parse, draw, move, edit, palette entries for TSPL, emit; TPCL conversion warns (no equivalent); neutral model kind(s).
 - [ ] A3 Inverted / cleared area: TPCL `XR;x1,y1,x2,y2,A|B` (A clears, B reverses black/white, manual 6.3.5) and TSPL `REVERSE x,y,w,h` / `ERASE x,y,w,h` (B-442/443 manual): parse, draw respecting the drawing order, move, edit, palette ("Área invertida"), emit and conversion.
 
 ### Group B: counters and barcode options (branch `feat/barcode-options`)
@@ -39,3 +39,4 @@ Each task round-trips parse -> emit -> parse, keeps unrelated commands untouched
 ## Progress
 Plan created from the user's decision.
 - A1 done on `feat/shapes` (commit 7ad63d8). Neutral `radius` (0.1 mm) on rect line items, SVG rx/ry clamped to half the shorter side, TPCL `,ggg` / TSPL BOX radius parse+emit+edit+conversion; RED observed (22 of 24 new tests failing) then GREEN. Browser check pending (user). Next: A2.
+- A2 done on `feat/shapes` (commit 58c5edc). Two slices share the neutral kind `ellipse` (`ellipse` and `circle`, selected by ref, because the palette needs one entry per slice): TSPL ELLIPSE/CIRCLE parse, SVG <ellipse>, move, edit (Ancho/Alto/Grosor, Diámetro/Grosor), palette Elipse/Círculo, emit; TPCL emit hook only warns once and skips (no TPCL palette entry). Ellipses count for the outside-the-label check but not for overlaps (like boxes). RED observed (30 of 33 new tests failing) then GREEN, node --test 949/949. Not verified on a printer (TSPL2 v3.0 manual). Browser check pending (user). Next: A3.
