@@ -189,32 +189,63 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 
 ### Convertir a…
 
-Converts the label in the **Código de etiqueta** box to another printer language (TPCL to TSPL and TSPL to TPCL, for example
-to move a label from a TEC SV4T to a TSC TTP). The source language is detected from the text and the **Resolución** selector
-is used to convert between dots and mm, so set it to the printer's before converting.
+Converts the label in the **Código de etiqueta** box to another printer language: **TPCL** (Toshiba TEC), **TSPL** (TSC TTP) or **ZPL** (Zebra), in any of the six directions
+(for example to move a label from a TEC SV4T to a TSC TTP or to a Zebra). The source language is detected from the text, the **Resolución** selector is used to convert
+between dots and mm (set it to the printer's before converting), and the target can also be the language of the label (it is read and written again by that language).
+**Nothing the conversion writes has been verified on a printer**, ZPL included: it is a starting point to check with a test print, not a guaranteed copy.
 
 - **Convertir:** writes the label in the chosen language in the output box. A line above it says what was converted
   ("Convertido de … a …"); with an empty or unrecognized label it shows the reason instead.
-- **Avisos de conversión:** a list of everything the conversion could not carry over exactly (orange = warning, gray = information).
-  Read it before printing: the converted label is a starting point, not a guaranteed copy.
-- **Copiar:** copies the output to the clipboard. A TSPL label with images holds raw binary data that the clipboard can
-  alter, so in that case the panel says so and **Descargar** is the reliable way.
-- **Descargar:** saves the output as a file. TSPL is saved as **`.prn`, one byte per character (latin1)**, because the
-  `BITMAP` data is raw binary and UTF-8 would corrupt it; TPCL is saved as `.txt` (UTF-8). The file name is the name of the opened (or dropped) file, or the example id, without its extension, plus the target extension; for pasted text with no file it is `etiqueta`.
+- **Avisos de conversión:** a list of everything the conversion could not carry over exactly (orange = warning, gray = information), plus, marked **Origen:**, the warnings
+  and errors of reading the source (a command the viewer does not know is not in the output either). Read it before printing.
+- **Copiar:** copies the output to the clipboard. A TSPL label with images holds raw binary data that the clipboard can alter, so in that case the panel says so and
+  **Descargar** is the reliable way. TPCL and ZPL are plain text (a ZPL image is ASCII hexadecimal `^GF` data), so Copiar is safe and the note never appears for them.
+- **Descargar:** saves the output as a file: ZPL as **`.zpl`** and TPCL as `.txt`, both UTF-8 (no byte order mark); TSPL as **`.prn`, one byte per character (latin1)**, because the
+  `BITMAP` data is raw binary and UTF-8 would corrupt it. The file name is the name of the opened (or dropped) file, or the example id, without its extension, plus the target
+  extension; for pasted text with no file it is `etiqueta`.
 
-What is lost or approximated (each case is reported in the warnings list):
+What is exact, approximated (**~**, reported in the warnings list) or left out (**x**, reported) in each direction; **=** is exact within one dot (and the 0.1 mm rounding) and **–** does not apply.
+The positions of the items are carried through the neutral model, so they are exact; see the open question about the origin of a text below.
 
-- Text: the TPCL PC bitmap fonts (letter, serif, italic) have no TSPL equivalent; TPCL magnifications in steps of 0.1 become
-  TSPL integer multipliers or a scalable font in whole points.
-- Barcodes: types without a counterpart are skipped with a warning (for example TSPL Postnet in TPCL or the other way round, or TSPL `128M` control codes). Code 93 (TPCL `C`, TSPL `93`) and NW7 / Codabar (TPCL `4`, TSPL `CODA`) convert in both directions; MSI and 2 de 5 industrial have no TSPL type (the B-442/443 manual lists none), so they are skipped with a warning when converting to TSPL; a Code 93 without check characters (TPCL option 1 / 2) is written as `93` with a warning (TSPL has no option: the check characters are attached). The twelve EAN / UPC variants (EAN-13, EAN-8, UPC-A, UPC-E, each with +2 / +5) convert exactly in both directions; the TPCL check digit options none / check and the WPC guard bar length have no TSPL equivalent (a warning and an information message; the TSPL type attaches the check digit automatically).
-- QR: the rotation is not converted.
-- Data Matrix (TPCL `XB` type `Q`, TSPL `DMATRIX`): position, module, forced size and data convert both ways. TSPL has no rotation (a rotated TPCL code is written unrotated, with a warning), no ECC type (any ECC other than 200 is written as ECC200, with a warning), and a TPCL cell width `00` (nothing is printed) is skipped with a warning. TPCL to TSPL always writes the form with `xm,row,col` (rows and columns = the symbol the viewer draws, width and height = symbol side x module), so the printer cannot choose another size. TSPL without `xm` to TPCL writes the cell width that fits the area (whole dots). The TPCL format ID and connection setting are not converted.
-- Variables: TPCL `#NAME#` is written literally in TSPL, which has no substitution.
-- Label size: the TPCL pitch and the TSPL gap are **not converted** (TSPL to TPCL writes the height as the pitch; TPCL to TSPL omits `GAP`).
-- TPCL output: the `{XS;…|}` trailer is a default taken from the reference spool and **has not been verified on a printer**.
-- Images: a TSPL `BITMAP` (or a ZPL `^GF`) whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet
-  inserted in the code is not part of the conversion.
-- TPCL fields have 4 digits and 2-digit ids, and coordinates are rounded between 0.1 mm and dots.
+| Component / feature | TPCL→TSPL | TPCL→ZPL | TSPL→TPCL | TSPL→ZPL | ZPL→TPCL | ZPL→TSPL |
+|---|---|---|---|---|---|---|
+| Text: position, rotation, size, data | = | = | = | = | = | = |
+| Text: font family / weight / style | ~ nearest built-in font | ~ | ~ | ~ | ~ | ~ |
+| Text: TPCL attribute (reverse, box, strike) | ~ written without | ~ written without | – | – | – | – |
+| Text: TPCL alignment, spacing, bold | ~ written without | ~ written without | – | – | – | – |
+| Text: ZPL reverse print `^FR` | – | – | – | – | ~ written normal | ~ written normal |
+| Counters (increment / step) and their start value | = | = | = | = | = | = |
+| Zero suppression (TPCL characters kept, ZPL `z`) | ~ dropped | ~ becomes "all leading zeros" | – | – | = | ~ dropped |
+| `#NAME#` variables | ~ literal text | ~ literal text | = | ~ literal text | = (`<#FNn#>`) | ~ literal text |
+| Code 128, Code 39, ITF, Code 93, NW7 / Codabar (data, height, module, rotation, text line, wide / narrow) | = | = | = | = | = | = |
+| Check digit options with no counterpart (Code 93 none / check, ITF check digit, EAN / UPC none / check, TSPL `25C`) | ~ automatic or none | ~ | ~ | ~ | ~ | ~ |
+| EAN / UPC add-on (+2 / +5) | = | ~ dropped from the data | = | ~ dropped | – | – |
+| EAN / UPC guard bar length (TPCL) | ~ dropped | ~ dropped | – | – | – | – |
+| MSI, Industrial 2 of 5 | x | = | – | – | = | x |
+| TSPL barcode types without a neutral symbology (`POST`, `MSI`...) | – | – | x | x | – | – |
+| QR (position, level, module, data) | = (module above 10 dots clamped) | = (same) | = | = | = | = |
+| Data Matrix (position, module, forced size, data) | = | = | = | = | = | = |
+| Data Matrix rotation | ~ written unrotated | = | – | – | = | ~ written unrotated |
+| Lines, bars, boxes, thickness | = | = | = | = | = | = |
+| Box corner radius | = | ~ quantised to the 9 ZPL degrees | = | ~ quantised | = | = |
+| Diagonal lines | x | = | – | – | = | x |
+| Lines of length 0 | x | x | – | – | – | – |
+| White / reversed (ZPL `W`, `^FR`) lines, boxes and ellipses | – | – | – | – | ~ written plain | ~ written plain |
+| Ellipses and circles | – | – | x | = | x | = |
+| Reverse / clear areas (TPCL `XR`, TSPL `REVERSE` / `ERASE`, ZPL `^GB`) | = | = | = | = | = | = |
+| Images (bitmap) | = | = | = | = | = | = |
+| Label size (width, height) | = | = (whole dots: 100×60 mm reads back 100.0×60.1) | = | = | = | = |
+| Pitch (TPCL) / gap (TSPL) | ~ gap not written | ~ one information message: ZPL has only `^PW` / `^LL` | ~ pitch = height | ~ same message | ~ pitch = height | ~ no `GAP` |
+| Label printed rotated 180° (TSPL `DIRECTION 0`, ZPL `^POI`) | – | – | ~ not written | ~ not written | ~ not written | ~ not written |
+
+Notes: a TPCL field has 4 digits and 2-digit ids, and coordinates are rounded between 0.1 mm and dots (values beyond the field are clamped with a warning); a TPCL
+increment beyond 10 digits (ZPL `^SN` allows 12) is clamped with one warning; the TPCL `{XS;…|}` trailer is a default taken from the reference spool; a TSPL `BITMAP`
+(or a ZPL `^GF`) whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet inserted in the code is not part of the conversion;
+the TPCL format ID and connection setting of a Data Matrix are not converted. The detail of each ZPL feature is in *ZPL support*.
+
+**Open question, text origin:** TPCL, TSPL and ZPL do not place a text the same way (TPCL gives the origin of the text, ZPL `^FO` the top-left of the field and `^FT` the baseline,
+TSPL `TEXT` the top-left according to its manual although the viewer draws it from the baseline). The conversion keeps the origin the viewer reads, so a text lines up in the viewer
+in all three languages, but on a printer a TSPL text may come out about one font height away from the same text in ZPL. Check it with a test print.
 
 ## What it draws
 
@@ -279,14 +310,14 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
 
 ## ZPL support (Zebra)
 
-**Work in progress: the language core, the text, the linear barcodes, QR, Data Matrix, the shapes, the images, the counters and the field variables are in place, the conversion of the rest to and from TPCL / TSPL is added next.** Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
+**Work in progress: the language core, the text, the linear barcodes, QR, Data Matrix, the shapes, the images, the counters, the field variables and the conversion to and from TPCL / TSPL are in place (see *Convertir a…* for what is exact and what is lost).** Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
 
 The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL.
 What works now:
 
 - **Size:** `^PW` (width) and `^LL` (length), in dots, shown in the **Formato** row (rounded to 0.1 mm; the **Resolución** selector, 203 or 300 dpi, must
   match the printer). Writing the size from the **Formato** row rewrites or adds `^PW` / `^LL` right after the first `^XA`, keeping the line ending of the file.
-  ZPL sizes are whole dots, so a catalogue size such as 100×60 mm may come back as 100.0×60.1 mm.
+  ZPL sizes are whole dots, so a catalogue size such as 100×60 mm may come back as 100.0×60.1 mm: the **Tamaño etiqueta** combo still marks the standard size (it matches within one dot, and ZPL has no **Paso**). TPCL and TSPL keep the exact match.
 - **Label setup read:** `^LH`, `^LS` and `^LT` move every later field, `^FW` (default orientation), `^CF` (default font), `^BY` and `^CI` are kept for the
   components. `^POI` (inverted label) is reported and not applied. Printer configuration commands (`^MM`, `^MN`, `^MT`, `^PR`, `~SD`, `^MD`, `^PQ`...) are recognised and
   not drawn (one information message per label); a command the viewer does not know is one warning each.
@@ -405,7 +436,7 @@ What works now:
   **Shapes** convert both ways with TPCL and TSPL: lines and boxes (TPCL `LC`, TSPL `BAR` / `BOX`: a ZPL box is the outer box of the neutral rectangle, so the border grows outward by `t / 2` from the TPCL / TSPL corners), the corner radius
   (ZPL has only the 9 rounding degrees: the radius is **quantised** to the nearest one with one information message; TPCL / TSPL take the radius in their own units), the areas (TPCL `XR`, TSPL `REVERSE` / `ERASE` <-> `^GB ... ^FR` / white `^GB`), circles and ellipses with TSPL
   (`CIRCLE` / `ELLIPSE`; TPCL has none: skipped with the existing warning) and the slanted lines with TPCL (TSPL has none: skipped with the existing warning). White (colour `W`) and reversed outlines, diagonals and ellipses have no TPCL / TSPL form: written as plain black shapes with one warning each.
-  **Images** convert both ways with TPCL `SG` and TSPL `BITMAP` (position and bitmap: ZPL 1 = black, TPCL nibble data, TSPL inverted bits; a width that is not a multiple of 8 gains white padding columns in ZPL and TSPL; the images stored in the ZPL printer are not converted). The other components are reported as "no se puede exportar" until their tasks are done.
+  **Images** convert both ways with TPCL `SG` and TSPL `BITMAP` (position and bitmap: ZPL 1 = black, TPCL nibble data, TSPL inverted bits; a width that is not a multiple of 8 gains white padding columns in ZPL and TSPL; the images stored in the ZPL printer are not converted).
 - Files are read and written as UTF-8 (the 2003 guide ties characters above ASCII to `^CI` and the printer font, and does not mention UTF-8: not verified).
 
 ## Limitations
