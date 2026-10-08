@@ -39,7 +39,7 @@ const dmSide = (data, cell, size) => dm.encode(data, size ? { size } : undefined
 test('the qr and datamatrix slices register a zpl factory after tpcl and tspl; ZPL offers QR and Data Matrix in the palette after the barcode', () => {
   assert.deepEqual(Object.keys(PB.components.get('qr').languages), ['tpcl', 'tspl', 'zpl']);
   assert.deepEqual(Object.keys(PB.components.get('datamatrix').languages), ['tpcl', 'tspl', 'zpl']);
-  assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]), [['text', 'Texto'], ['barcode', 'Código de barras'], ['qr', 'QR'], ['datamatrix', 'Data Matrix']]);
+  assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]).slice(0, 4), [['text', 'Texto'], ['barcode', 'Código de barras'], ['qr', 'QR'], ['datamatrix', 'Data Matrix']]);
 });
 
 // ---------------------------------------------------------------------------------------------------------------

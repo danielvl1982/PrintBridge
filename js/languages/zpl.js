@@ -35,7 +35,7 @@
  *   - ^FD, ^FV, ^FH, ^FR, ^FN, ^FP, ^SN are field MODIFIERS: they are stored in the field (field.data, field.reverse) and never dispatched.
  *   - the setup commands (^PW ^LL ^LH ^LS ^LT ^PO ^CF ^FW ^CI ^BY and the recognised-but-not-drawn configuration ones) are IMMEDIATE: they run when they
  *     are read, inside an open field too, so the state the handler sees at ^FS is the state after all of them (the guide's ^CF inside a field
- *     example relies on it). A slice may declare an immediate handler too (`immediate: true`, e.g. ^LR in Z5).
+ *     example relies on it). A slice may declare an immediate handler too (`immediate: true`: ^LR, in js/components/area/zpl.js).
  *   - any other command is the content of a field; one that arrives outside a field starts an implicit one with no origin (0,0, one info
  *     per label). A command with no handler is reported once (warning) when it is read.
  *   - at close, the MAIN command is the LAST command of the field that has a handler (so ^A0N,..^BCN,.. is a bar code, the ^A is ignored);
@@ -49,7 +49,8 @@
  *   - ctx: model, dot, dpi, report, once(key, fn), addItem, len(dots), pos(xDots, yDots) -> { x, y } in 0.1 mm, origin(field), sourceOf, and the
  *     printer state: lh { x, y }, ls, lt, orientation (^FW, 'N' at power-up), font { name, height, width } (^CF; A,9,5 at power-up; a null
  *     height or width is "proportional to the other"), by { module, ratio, height } (^BY; 2, 3, 10: the 2003 guide gives the initial module and height only, the ratio 3.0
- *     is assumed; read through byValues(), which the barcode slice's editing shares), charset (^CI), invert (^PO).
+ *     is assumed; read through byValues(), which the barcode slice's editing shares), charset (^CI), invert (^PO: the label orientation I), labelReverse (^LRY / ^LRN: every field OPENED while it is on gets field.reverse, like an ^FR of its own,
+ *     and field.labelReverse; the slices that keep a native record native.labelReverse; the emitters never write ^LR).
  *
  * ---- Formats ---------------------------------------------------------------------------------------------------------------------
  * A file may hold several ^XA .. ^XZ formats. The viewer draws the FIRST one (commands before the first ^XA are printer state and apply) and
@@ -75,7 +76,7 @@
 
   /** Names of the printer configuration commands that are recognised and not drawn (either prefix). */
   const CONFIG_NAMES = Object.freeze([
-    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'DY', 'EF', 'EG', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
+    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'EF', 'EG', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
     'HY', 'HZ', 'ID', 'JA', 'JB', 'JC', 'JD', 'JE', 'JF', 'JG', 'JI', 'JJ', 'JL', 'JM', 'JN', 'JO', 'JP', 'JQ', 'JR', 'JS', 'JT', 'JU', 'JW',
     'JX', 'JZ', 'KB', 'KD', 'KL', 'KN', 'KP', 'MC', 'MD', 'MF', 'ML', 'MM', 'MN', 'MP', 'MT', 'MU', 'MW', 'NC', 'NI', 'NR', 'NS', 'NT', 'PF',
     'PM', 'PP', 'PQ', 'PR', 'PS', 'RO', 'SC', 'SD', 'SE', 'SL', 'SO', 'SP', 'SQ', 'SR', 'SS', 'ST', 'SX', 'SZ', 'TA', 'TO', 'WC', 'WD', 'XB',
@@ -84,10 +85,13 @@
 
   /** Every command of the 2003 guide, for the detection (the drawing ones are matched by pattern below). */
   const KNOWN_NAMES = new Set([
-    ...CONFIG_NAMES, 'A', 'A@', 'CC', 'CD', 'CF', 'CI', 'CT', 'DF', 'DG', 'FB', 'FC', 'FD', 'FH', 'FM', 'FN', 'FO', 'FP', 'FR', 'FS', 'FT', 'FV',
+    ...CONFIG_NAMES, 'A', 'A@', 'CC', 'CD', 'CF', 'CI', 'CT', 'DF', 'DG', 'DY', 'FB', 'FC', 'FD', 'FH', 'FM', 'FN', 'FO', 'FP', 'FR', 'FS', 'FT', 'FV',
     'FW', 'FX', 'GB', 'GC', 'GD', 'GE', 'GF', 'GS', 'IL', 'IM', 'IS', 'LH', 'LL', 'LR', 'LS', 'LT', 'PO', 'PW', 'SF', 'SN', 'XA', 'XF', 'XG', 'XZ',
   ]);
   const isKnownName = name => KNOWN_NAMES.has(name) || /^B[0-9A-Z]$/.test(name);
+
+  /** Neutral kinds the viewer can draw reversed (^FR / ^LR): the text, the shapes and the areas. */
+  const REVERSIBLE = new Set(['text', 'line', 'ellipse', 'area']);
 
   /** Commands that only complete a field (never its main command). */
   const MODIFIERS = new Set(['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^FS', '^FX', '^SN']);
@@ -306,6 +310,7 @@
     encodeData: zplEdit.encodeData, decodeData: zplEdit.decodeData,
     numberField: zplEdit.numberField, selectField: zplEdit.selectField, stringSelectField: zplEdit.stringSelectField,
     checkboxField: zplEdit.checkboxField, textField: zplEdit.textField, contentField: zplEdit.contentField, paramField: zplEdit.paramField,
+    reverseField: zplEdit.reverseField, setArgs: zplEdit.setArgs, flagEdits: zplEdit.flagEdits,
   });
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -447,6 +452,8 @@
       by: { module: 2, ratio: 3, height: 10 },
       charset: 0,
       invert: false,
+      /** ^LR: true after ^LRY until ^LRN. Every field OPENED while it is on is reversed (see dispatch). */
+      labelReverse: false,
       /** The open field (see the header), and the ids of the configuration commands seen. */
       field: null,
       ignored: new Set(),
@@ -483,7 +490,7 @@
   /** Starts a field; its start offset is the one of its first command. */
   function openField(ctx) {
     const cmds = [];
-    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, reverse: false, closed: false, ...zplEdit.fieldMethods(cmds) };
+    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
     return ctx.field;
   }
 
@@ -542,7 +549,14 @@
       if (!main.unsupported) ctx.report(diag.warning(`Comando no soportado por el visor: ${brief(main)}`));
       return;
     }
+    // ^LRY is the same as an ^FR in every field after it (the guide): the handlers only see field.reverse; native.labelReverse (set by the
+    // slices that keep a native) tells the editing engines the ^FR is not in the field itself
+    if (field.labelReverse) field.reverse = true;
+    const before = ctx.model.items.length;
     handler.handle(key.match(handler.pattern), main, ctx, field);
+    if (field.reverse && ctx.model.items.slice(before).some(item => !REVERSIBLE.has(item.kind))) {
+      ctx.once('zpl-reverse-unsupported', () => diag.info('^FR / ^LR sobre códigos de barras, QR, Data Matrix o imágenes: el visor los dibuja sin invertir (no verificado en impresora)'));
+    }
   }
 
   /** One command read, in order. */
@@ -719,10 +733,28 @@
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.zpl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CONFIG_NAMES });
 
-  // UTF-8 (the default): see the note on ^CI in the header. No image insertion yet (Z6).
+  /**
+   * ^FO..^GFA..^FS for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral bitmap, 1 = black; dpi), ready for
+   * insertCommand. A bitmap over the 99999 bytes of ^GF is refused with an error (the app shows it as the reason the image was not inserted).
+   */
+  function imageCommand({ xMm, yMm, w, h, data, dpi }) {
+    const image = PB.slices.image.zpl;
+    const bitmap = { w, h, data };
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    if (image.totalBytes(bitmap) > image.MAX_BYTES) {
+      throw new Error(`${w}×${h} puntos supera el máximo de ^GF (${image.MAX_BYTES} bytes de imagen)`);
+    }
+    const dots = mm => {
+      const tenths = units.fromMm(mm);
+      return Number.isFinite(tenths) ? Math.max(0, roundDots(tenths / units.dotSize(dpi))) : 0;
+    };
+    return image.graphicField(dots(xMm), dots(yMm), bitmap);
+  }
+
+  // UTF-8 (the default): see the note on ^CI in the header. The ^GF data is ASCII hexadecimal, so the file stays plain text.
   PB.languages.register({
     id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize,
-    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

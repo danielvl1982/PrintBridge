@@ -6,7 +6,7 @@
 (function (PB) {
   'use strict';
 
-  const { render, tpcl, tspl } = PB.slices.line;
+  const { render, tpcl, tspl, zpl } = PB.slices.line;
 
   PB.components.register({
     kind: 'line',
@@ -20,6 +20,6 @@
     render,
     // Lines are thin strokes: they take no part in the label-overflow and overlap checks
     layout: () => null,
-    languages: { tpcl, tspl },
+    languages: { tpcl, tspl, zpl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

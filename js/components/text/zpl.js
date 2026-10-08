@@ -15,7 +15,8 @@
  *   ^FO: "the upper-left corner of the field area ... independent of the rotation". ^FT: "the origin is at the start of the character string, at
  *       the baseline of the font" and does not change with the rotation (normal: characters rest on the baseline; rotated: drawn to the right
  *       of the baseline going down; inverted: down from the baseline, to the left; bottom-up: to the left, going up).
- *   ^FR: the colour of the output is the reverse of its background. ^FH: hex escapes in the data. ^FP: direction and gaps (vertical formatting).
+ *   ^FR: the colour of the output is the reverse of its background; ^LRY does the same for every later field (until ^LRN, see js/languages/zpl.js:
+ *       the parser sets field.reverse for both and native.labelReverse for the second). ^FH: hex escapes in the data. ^FP: direction and gaps (vertical formatting).
  * ---- What it does NOT document (so what follows is the viewer's simulation, NOT VERIFIED ON A PRINTER) -----------------------------
  *   The font matrices (Volume Two, Appendix E) are not in Volume One: BITMAP_FONTS holds the commonly published ones (cell height x width in dots
  *   and the inter-character gap): A 9x5, B 11x7, C and D 18x10, E 28x15 (OCR-B), F 26x13, G 60x40, H 21x13 (OCR-A). The guide only lists the
@@ -156,7 +157,7 @@
   function zpl(helpers) {
     const {
       sourceOf, int, ROTATIONS, rotationOf, orientationOf, exactDots, roundDots, fieldData, fo, ft,
-      numberField, stringSelectField, contentField, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
+      numberField, stringSelectField, contentField, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, reverseField,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -269,7 +270,7 @@
         ...(field.reverse && { reverse: true }),
         native: {
           font: spec.name, fontArg: spec.fontArg, orientationArg: spec.orientationArg, height: spec.h, width: spec.w,
-          hMult: cell.hMult, wMult: cell.wMult, origin: o.kind,
+          hMult: cell.hMult, wMult: cell.wMult, origin: o.kind, ...(field.labelReverse && { labelReverse: true }),
         },
       };
     }
@@ -306,8 +307,8 @@
       read: a => (a.raw.length > 1 ? rotationOf(a.raw[1]) ?? undefined : undefined),
       write: (v, a) => (ROTATIONS.includes(v) ? a.raw[0] + orientationOf(v) + a.raw.slice(2) : null),
     };
-    /** ^FR is a command without arguments: the field is present or not (`flag`, handled by js/languages/zpl-edit.js). */
-    const reverseField = { key: 'reverse', label: 'Impresión inversa (^FR)', type: 'checkbox', cmd: 'FR', flag: true, model: item => item.reverse === true };
+    /** ^FR: the presence of the command, or the ^LRY state of the label (native.labelReverse): see reverseField in js/languages/zpl-edit.js. */
+    const reverse = reverseField('reverse', 'Impresión inversa (^FR)');
     const contentOf = contentField('content', 'Contenido', item => item.data);
 
     return {
@@ -321,11 +322,11 @@
       editable: [
         {
           applies: (item, field) => item.kind === 'text' && (field ? field.has('A') : item.ref === 'A'),
-          fields: [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField, contentOf, reverseField],
+          fields: [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField, contentOf, reverse],
         },
         {
           applies: (item, field) => item.kind === 'text' && (field ? !field.has('A') : item.ref === 'FD'),
-          fields: [contentOf, reverseField],
+          fields: [contentOf, reverse],
         },
       ],
       handlers: [

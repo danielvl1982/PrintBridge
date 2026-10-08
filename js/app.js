@@ -451,7 +451,7 @@
   }
 
   /**
-   * Writes the preview image into the label code as a graphic command (TPCL SG with nibble data, TSPL BITMAP), then drops the preview
+   * Writes the preview image into the label code as a graphic command (TPCL SG with nibble data, TSPL BITMAP, ZPL ^GF), then drops the preview
    * overlay: the image is now drawn from the code. The command format is NOT verified on a real printer.
    */
   function insertImage() {
@@ -469,7 +469,7 @@
         if (image !== state.image) return;
         // The rotated dots are what is written (the same ones the preview shows), at the top-left of the rotated box
         const { w, h, data } = images.rotateBitmap(bitmap, imagePanel.rotation());
-        // TSPL writes a BITMAP from the neutral bitmap; TPCL (no hook) writes an SG with nibble data
+        // TSPL and ZPL write their command from the neutral bitmap (imageCommand); TPCL (no hook) writes an SG with nibble data
         const command = language.imageCommand
           ? language.imageCommand({ ...placement, w, h, data, dpi: Number($('dpi').value) })
           : images.buildSG({ ...placement, w, h, data: images.bitmapToNibble(data, w, h) });

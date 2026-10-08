@@ -35,6 +35,8 @@
 
     /** ELLIPSE x,y,w,h,t or CIRCLE x,y,d,t of an ellipse item. */
     function emit(item, ctx) {
+      if (item.white === true) ctx.once('tspl-ellipse-white', () => diag.warning('Hay elipses o círculos en blanco (color W de ZPL): TSPL no tiene color de trazo, se escriben en negro'));
+      else if (item.reverse === true) ctx.once('tspl-ellipse-reverse', () => diag.warning('Hay elipses o círculos con impresión inversa (^FR o ^LR de ZPL): TSPL no la tiene en estas formas, se escriben normales'));
       const dots = v => exactDots(ctx, Number.isFinite(v) ? v : 0);
       const [x, y] = [item.x, item.y].map(v => Math.max(0, roundDots(dots(v))));
       const [w, h] = [item.width, item.height].map(v => Math.max(1, roundDots(dots(v))));

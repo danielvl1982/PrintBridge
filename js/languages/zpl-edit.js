@@ -34,6 +34,8 @@
  *       argEdit(cmd, index, value) writes one argument of a command, filling the missing ones before it with empty arguments.
  *       paramField({ key, label, type, cmd, arg, read(raw, cmd, item), write(value, cmd, item) }) builds the usual custom field over one
  *       argument whose empty value stands for a default (QR model, Data Matrix module and orientation).
+ *       reverseField(key, label) is the ^FR checkbox (own ^FR or the ^LRY state of the label: custom, see its comment); setArgs(cmd, { index: text })
+ *       edits several arguments of a command at once.
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so the other commands of the field, other fields,
  * comments and line endings stay byte for byte. An argument that is not a plain number is never moved. The coordinates of an item
@@ -185,6 +187,48 @@
     };
   }
 
+  /**
+   * The reverse print checkbox of a field (text, shapes): `^FR` is the presence of a command, but a field can also be reversed by ^LRY, which
+   * the parser records in native.labelReverse. Read: true with an own ^FR or under ^LRY. Write: true adds ^FR unless ^LRY already reverses the
+   * field; false removes the own ^FR (^LRY stays: the label state is not part of the field, edit the text to turn it off).
+   */
+  function reverseField(key, label) {
+    const viaLabel = item => Boolean(item && item.native && item.native.labelReverse === true);
+    return {
+      key, label, type: 'checkbox', custom: true, model: item => item.reverse === true || (item.kind === 'area' && item.mode === 'reverse') || viaLabel(item),
+      read: (text, found, item) => found.field.has('FR') || viaLabel(item),
+      edits(text, found, item, value) {
+        if (typeof value !== 'boolean' || (value && viaLabel(item))) return null;
+        const edits = [];
+        flagEdits(text, found.field, { cmd: 'FR' }, value, edits);
+        return edits.length ? edits : null;
+      },
+    };
+  }
+
+  /**
+   * Edits that set several arguments of one command at once ({ index: new text }): an argument that exists is replaced, the missing ones are
+   * appended in one run after the last argument (the gaps between them are written empty, so they keep their default).
+   */
+  function setArgs(cmd, values) {
+    const edits = [];
+    const missing = {};
+    for (const [key, value] of Object.entries(values)) {
+      const index = Number(key);
+      const a = cmd.args[index];
+      if (a) edits.push({ start: a.start, end: a.end, value });
+      else missing[index] = value;
+    }
+    const indexes = Object.keys(missing).map(Number);
+    if (indexes.length) {
+      const parts = [];
+      for (let i = cmd.args.length; i <= Math.max(...indexes); i++) parts.push(missing[i] === undefined ? '' : missing[i]);
+      const at = appendPoint(cmd);
+      edits.push({ start: at, end: at, value: (cmd.args.length ? ',' : '') + parts.join(',') });
+    }
+    return edits;
+  }
+
   // ---------------------------------------------------------------------------------------------------------------
   // Fields and offsets
 
@@ -287,6 +331,29 @@
   }
 
   /**
+   * A `flag` field is the presence of a command with no arguments (^FR): true adds it before the ^FS of the field (or after its last
+   * command), false removes every one, with the line break when it sat alone on its line. Pushes the edits into `edits`.
+   */
+  function flagEdits(text, field, f, want, edits) {
+    if (typeof want !== 'boolean') return;
+    const present = field.findAll(f.cmd);
+    if (want && !present.length) {
+      const last = field.cmds[field.cmds.length - 1];
+      const at = last.id === '^FS' ? last.start : last.end;
+      edits.push({ start: at, end: at, value: `^${f.cmd}` });
+    } else if (!want) {
+      for (const cmd of present) {
+        let [start, end] = [cmd.start, cmd.end];
+        const before = text.slice(0, start);
+        const lineStart = Math.max(before.lastIndexOf('\n'), before.lastIndexOf('\r')) + 1;
+        const after = /^[ \t]*(\r\n|\r|\n)/.exec(text.slice(end));
+        if (/^[ \t]*$/.test(before.slice(lineStart)) && after) { start = lineStart; end += after[0].length; }
+        edits.push({ start, end, value: '' });
+      }
+    }
+  }
+
+  /**
    * Builds the engines. definitions: { coordinates, editable, commands } (commands: the PB.zpl.commands tokenizer, looked up lazily
    * when not given because js/languages/zpl.js loads after this file).
    */
@@ -347,29 +414,6 @@
         edits.push({ start: at, end: at, value: (cmd.args.length ? ',' : '') + values.join(',') });
       }
       return edits.length ? applyEdits(text, edits) : text;
-    }
-
-    /**
-     * A `flag` field is the presence of a command with no arguments (^FR): true adds it before the ^FS of the field (or after its last
-     * command), false removes every one, with the line break when it sat alone on its line. Pushes the edits into `edits`.
-     */
-    function flagEdits(text, field, f, want, edits) {
-      if (typeof want !== 'boolean') return;
-      const present = field.findAll(f.cmd);
-      if (want && !present.length) {
-        const last = field.cmds[field.cmds.length - 1];
-        const at = last.id === '^FS' ? last.start : last.end;
-        edits.push({ start: at, end: at, value: `^${f.cmd}` });
-      } else if (!want) {
-        for (const cmd of present) {
-          let [start, end] = [cmd.start, cmd.end];
-          const before = text.slice(0, start);
-          const lineStart = Math.max(before.lastIndexOf('\n'), before.lastIndexOf('\r')) + 1;
-          const after = /^[ \t]*(\r\n|\r|\n)/.exec(text.slice(end));
-          if (/^[ \t]*$/.test(before.slice(lineStart)) && after) { start = lineStart; end += after[0].length; }
-          edits.push({ start, end, value: '' });
-        }
-      }
     }
 
     const shapeOf = (item, field) => (item && field ? editable.find(s => s.applies(item, field)) : undefined);
@@ -458,6 +502,6 @@
 
   PB.zplEdit = Object.freeze({
     createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA,
-    numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField,
+    numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField, reverseField, setArgs, flagEdits,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

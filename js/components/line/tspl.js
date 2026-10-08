@@ -38,6 +38,8 @@
 
     /** BAR x,y,width,height for an axis-aligned line item; diagonal lines are skipped with a warning. */
     function emit(item, ctx) {
+      if (item.white === true) ctx.once('tspl-shape-white', () => diag.warning('Hay líneas o cajas en blanco (color W de ZPL): TSPL no tiene color de trazo, se escriben en negro'));
+      else if (item.reverse === true) ctx.once('tspl-shape-reverse', () => diag.warning('Hay líneas o cajas con impresión inversa (^FR o ^LR de ZPL): TSPL no la tiene en estas formas, se escriben normales'));
       const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
       const thickness = Math.max(1, roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0)));
       const horizontal = Math.abs(y2 - y1) <= 1;
