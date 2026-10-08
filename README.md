@@ -42,6 +42,8 @@ from scratch with the example label.
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
 | `tests/` | Automated tests (`node --test` from the project root) |
+| `odd/tasks/` | Feature plans and progress of the development |
+| `docs/` | Local printer manuals: **git-ignored** (copyrighted), only `docs/README.md` is versioned; see it for which manual goes where |
 
 All modules share the global namespace `PrintBridge`. To add a fixed size or a new example, only `js/config.js` needs to be touched.
 
@@ -93,7 +95,8 @@ Overlays a picture on the preview to check where it would go. Until you insert i
   preview shows the converted black and white result (the same dots that get inserted), so you see the effect of the
   threshold, the width and the resolution before inserting. If the conversion fails, the plain picture is shown with an error.
 - **Insertar en el código:** converts the picture to black and white and writes it into the label code as a TPCL
-  `{SG;xxxx,yyyy,wwww,hhhh,0,<data>|}` command, placed before `{XS;…|}` (or at the end if there is none). Then the
+  `{SG;xxxx,yyyy,wwww,hhhh,0,<data>|}` command, placed before `{XS;…|}` (or at the end if there is none), or as a TSPL
+  `BITMAP x,y,widthBytes,height,0,<data>` command placed before `PRINT` (bit 0 = black, the payload is raw bytes). Then the
   preview image is removed and the picture is drawn from the code, so it survives editing and reloading.
   - Conversion: the picture is resampled to the width in dots (width in mm at the selected **Resolución**; empty = natural
     pixels), shrinking in successive halves (each step at most 2:1, high-quality smoothing) so thin lines survive;
@@ -128,15 +131,29 @@ Overlays a picture on the preview to check where it would go. Until you insert i
   - **Drag an item** to move it: when dropped, only its coordinates change in the code (it works with the rotated
     view too, and **Ctrl+Z** in the code box undoes the move). Pressing **Esc** while dragging cancels it. For the
     preview image, dropping it updates **Posición X / Posición Y**. Only languages that can rewrite positions
-    (currently TPCL) allow dragging.
-  - **Propiedades panel:** selecting an item shows its editable fields (size, magnification, rotation, module width,
-    human-readable text, error-correction level, end point, thickness...; only the values TPCL accepts). Changing a field
-    (on leaving it or pressing Intro) rewrites only that field in the code, and **Ctrl+Z** in the code box undoes it. With
-    nothing selected it shows "Selecciona un objeto". Clicking empty space deselects. In TSPL the content of TEXT, BARCODE
-    and QRCODE is editable too (not for counters `@n`, BLOCK, 128M/EAN128 or QR manual mode); in TPCL so is the data of
-    PC/PV text, barcodes and QR, inline (`=data`) or in its `RC`/`RV`/`RB` command (values with `| { }` or line breaks are rejected). The font of text is selectable too: the PC/PV font letter in TPCL (the PC table is the viewer's
-    simulation, not verified against the printer) and the TEXT font id in TSPL; a value not in the list is kept and shown. The TPCL text attribute of PC/PV (`B` black, `W` reverse, `F` boxed, `C` stroked out, with their `aabb`/`aa` dot margins) is drawn in the preview and editable (**Atributo**, **Margen horizontal/vertical**); omitted margins use the manual default (PC: larger magnification x 6 dots; PV: larger character size in mm x 8 dots, a reading of the manual not verified on a printer). TSPL has no text attribute: converting such a text writes it plain and warns once. The TPCL text alignment (`Pq` of PC, `Po` of PV: `P1` left, `P2` center, `P3` right, `P4aaaa` equal space over an area `aaaa` wide) is drawn in the preview and editable (**Alineación**, **Ancho del área**); the manual gives an area width only to equal space, so center and right are drawn relative to the item origin (an approximation), and TSPL `TEXT` has no alignment, so converting writes such a text left with one info. The TPCL character spacing (`ghh` of PC, `ghhh` of PV, a signed number of dots) and the PC bold (`Jkkll`, shift dots 00..16) are read, drawn in the preview and editable (**Espaciado entre caracteres**, **Negrita horizontal/vertical**); the spacing is drawn as SVG letter spacing (ignored with equal space, as in the manual) and the bold overprint is an approximation (the string is drawn again shifted by those dots), and TSPL has neither, so converting writes such a text plain with one info each.
-  - **Components panel:** drag a component (text, Code128 barcode, QR, line, box) onto the label to insert it into the
+    (TPCL and TSPL) allow dragging.
+  - **Propiedades panel:** selecting an item shows its editable fields. Changing a field (on leaving it or pressing
+    Intro) rewrites only that field in the code, and **Ctrl+Z** in the code box undoes it. With nothing selected it shows
+    "Selecciona un objeto". Clicking empty space deselects. What can be edited, in TPCL and TSPL:
+    - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
+      end point and thickness (the fields each command has).
+    - **Contenido:** the data of text, barcodes and QR. TSPL: `TEXT`, `BARCODE` and `QRCODE` (not counters `@n`, `BLOCK`,
+      `128M`/`EAN128` or QR manual mode). TPCL: `PC`/`PV` text, barcodes and QR, inline (`=data`) or in the `RC`/`RV`/`RB`
+      command; values with `| { }` or line breaks are rejected because TPCL has no escape for them.
+    - **Fuente:** the PC font letter (A-T) or PV font (`A`, `B`) in TPCL, and the font id of `TEXT` in TSPL. A value not in the
+      list is kept and shown. The PC font table is the viewer's simulation, not verified against the printer.
+    - **TPCL text options** (PC and PV only; TSPL has none of them, so converting writes such a text plain and warns once):
+      - **Atributo:** `B` black, `W` reverse, `F` boxed, `C` stroked out, with **Margen horizontal/vertical** in dots.
+        Omitted margins use the manual default (PC: larger magnification x 6 dots; PV: larger size in mm x 8 dots, a reading
+        of the manual that is not verified).
+      - **Alineación:** `P1` left, `P2` center, `P3` right, `P4aaaa` equal space over an area `aaaa` wide (**Ancho del área**).
+        The manual gives an area width only to equal space, so center and right are drawn relative to the item origin
+        (an approximation).
+      - **Espaciado entre caracteres** (`ghh` / `ghhh`, signed dots; ignored with equal space, as in the manual) and
+        **Negrita horizontal/vertical** (PC `Jkkll`, shift dots 0-16): the bold overprint is an approximation (the string
+        is drawn again shifted by those dots).
+    - Not editable yet: the barcode type, the check digit, increment and zero-suppress options.
+  - **Components panel:** drag a component (text, Code128 barcode, QR, line, box and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
@@ -172,8 +189,8 @@ What is lost or approximated (each case is reported in the warnings list):
 
 | Command | What it is |
 |---|---|
-| `PC` / `RC` | Texts (printer fonts A–T, with magnification and rotation) |
-| `PV` / `RV` | Texts with an outline font (height and width in 0.1 mm) |
+| `PC` / `RC` | Texts (printer fonts A–T, with magnification, rotation, attribute, alignment, spacing and bold) |
+| `PV` / `RV` | Texts with an outline font (height and width in 0.1 mm; same attribute, alignment and spacing options) |
 | `XB` / `RB` type `T` | QR code (generated for real) |
 | `XB` / `RB` types `9` and `A` | Code128 (generated for real, with the text below if the label asks for it) |
 | `XB` / `RB` type `3` | Code39 (generated for real, with the wide/narrow widths of the command and the text below if the label asks for it) |
@@ -188,8 +205,8 @@ What is lost or approximated (each case is reported in the warnings list):
 
 The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`BITMAP`/`BAR`/`BOX`
 followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. The label is drawn, clicking an item selects its line, and, as with TPCL, you can
-**drag items** to move them, edit their numeric properties in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, line and box,
-written before `PRINT`) and change the size (the **Formato** row). Only the numbers of a command are rewritten (the text, counters and `BITMAP` data are never touched).
+**drag items** to move them, edit their properties (numbers, font and content) in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, line, box and image,
+written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (counters, `BLOCK` and `BITMAP` data are never touched).
 `REFERENCE` and `SHIFT` are taken into account (the item lands under the cursor), positions never go below 0 and `DIRECTION 0` is edited as `DIRECTION 1`.
 It can be exported to TPCL with **Convertir a…**.
 
@@ -204,7 +221,7 @@ It can be exported to TPCL with **Convertir a…**.
 | `CLS`, `PRINT`, `DENSITY`, `SPEED`, `SET`, `CODEPAGE`, `FEED`... | Configuration: not drawn |
 
 Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
-(images stored in the printer). Also not supported:
+(images stored in the printer). Also:
 
 - **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR` and a 30 x 20 mm `BOX`; texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
