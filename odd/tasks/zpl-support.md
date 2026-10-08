@@ -16,11 +16,12 @@ and conversion to and from TPCL and TSPL ("Convertir a…"). Reference: `docs/zp
 
 ## Groups and tasks
 ### Group A: foundation and text (branch `feat/zpl-foundation`)
-- [ ] Z1 ZPL language core: tokenizer for `^XX` / `~XX` commands (parameters separated by commas, fields closed by `^FS`, `^XA` .. `^XZ` blocks, `^FX` comments, several labels in a
+- [x] Z1 ZPL language core: tokenizer for `^XX` / `~XX` commands (parameters separated by commas, fields closed by `^FS`, `^XA` .. `^XZ` blocks, `^FX` comments, several labels in a
       file), detection, registration, label size from `^PW` / `^LL` / `^LH` / `^LS`, orientation `^PO`, default font `^CF` and field orientation `^FW`, `^CI`, `^FH`
       escapes, parse errors reported in the existing style, emit skeleton (`^XA` header, `^PW`/`^LL`, `^XZ` trailer), `insertCommand`, `sizeCommands`/`applySize`
       (the Formato row), `.zpl` file extension and encoding, the example label, the converter target list, language detection tests, app wiring of the new language
       (palette hooks, Convertir panel), README stub.
+      Done in `ca1e060` (core, engines) and `31764b2` (app wiring, README). Route: inline single writer. The example label is NOT added yet (nothing is drawable until Z2: add it there).
 - [ ] Z2 Text: `^FO` / `^FT` origin semantics (`^FT` is the baseline origin), `^A` fonts (bitmap A..H, `0` scalable, others per the guide) with height / width, rotation N/R/I/B,
       `^FD` content with `^FH` hex escapes, `^FR` reverse: parse, draw (font simulation like TPCL/TSPL), emit, move, edit (font, size, rotation, content, reverse), palette entry, tests.
 
@@ -54,4 +55,4 @@ Each task round-trips parse -> emit -> parse, keeps unrelated commands untouched
 `node --test` after each task. Chrome check by the assistant after each group (puppeteer-core outside the repo); user checks with real labels and a Zebra printer when available.
 
 ## Progress
-Manual renamed to `docs/zpl/Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` and documented in `docs/README.md`. Plan created. Next: Z1 on `feat/zpl-foundation`.
+Manual renamed to `docs/zpl/Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` and documented in `docs/README.md`. Plan created. Z1 done on `feat/zpl-foundation` (`ca1e060`, `31764b2`; `node --test` 1351 green, 92 new). Next: Z2 (text, and the example label).
