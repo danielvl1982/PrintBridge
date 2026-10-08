@@ -2,7 +2,7 @@
  * Printer language registry. Each language provides:
  *   { id, name, detect(text) -> boolean, parse(text, { dpi }) -> model, validate?(model) -> diagnostics,
  *     sizeCommands?(resolvedSize) -> string[],
- *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text, insertImage?: boolean,
+ *     applySize?(text, resolvedSize) -> text, insertCommand?(text, command) -> text, insertImage?: boolean, imageCommand?({ xMm, yMm, w, h, data, dpi }) -> string,
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
  *     updateItem?(text, item, changes, { dpi }) -> text, describeItem?(item, text?) -> { kind, fields },
  *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text,
@@ -10,8 +10,9 @@
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
  * insertImage (optional, boolean): the language can take the preview image as a command (TPCL SG, written with
- *   insertCommand); only then does the palette offer the Imagen entry and the image panel write the image into the label
- *   (TSPL does not have it: its image stays a preview).
+ *   insertCommand); only then does the palette offer the Imagen entry and the image panel write the image into the label.
+ *   imageCommand (optional) builds that command from the neutral bitmap (1 = black; TSPL BITMAP, throws if too large);
+ *   without it the app writes the TPCL SG command.
  * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
  *   if the item has no source.
  * updateItem (optional): the text with only the fields in changes ({ key: value }) rewritten in that item's command, with

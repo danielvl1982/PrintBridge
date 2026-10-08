@@ -419,7 +419,7 @@
   }
 
   /**
-   * Writes the preview image into the label code as a graphic command (TPCL SG, nibble data), then drops the preview
+   * Writes the preview image into the label code as a graphic command (TPCL SG with nibble data, TSPL BITMAP), then drops the preview
    * overlay: the image is now drawn from the code. The command format is NOT verified on a real printer.
    */
   function insertImage() {
@@ -435,7 +435,10 @@
     convertImage()
       .then(({ w, h, data }) => {
         if (image !== state.image) return;
-        const command = images.buildSG({ ...placement, w, h, data: images.bitmapToNibble(data, w, h) });
+        // TSPL writes a BITMAP from the neutral bitmap; TPCL (no hook) writes an SG with nibble data
+        const command = language.imageCommand
+          ? language.imageCommand({ ...placement, w, h, data, dpi: Number($('dpi').value) })
+          : images.buildSG({ ...placement, w, h, data: images.bitmapToNibble(data, w, h) });
         editor.setText(language.insertCommand(editor.text(), command));
         removeImage();
       })

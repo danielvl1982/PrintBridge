@@ -460,11 +460,28 @@
     return slice && slice.hooks.build ? slice.hooks.build(text, point, options || {}) : text;
   }
 
+  /**
+   * BITMAP command for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral
+   * bitmap, 1 = black; dpi), ready for insertCommand. The editor holds a 0x0D payload byte as CR_PLACEHOLDER (a
+   * textarea would normalize it), as when a file is opened. A bitmap over the BITMAP maximum is refused with an error.
+   */
+  function imageCommand({ xMm, yMm, w, h, data, dpi }) {
+    const image = PB.slices.image.tspl;
+    if (Math.ceil(w / 8) > image.MAX_WIDTH_BYTES || h > image.MAX_HEIGHT) {
+      throw new Error(`${w}×${h} puntos supera el máximo de BITMAP (${image.MAX_WIDTH_BYTES * 8}×${image.MAX_HEIGHT})`);
+    }
+    const dots = mm => {
+      const units = PB.units.fromMm(mm);
+      return Number.isFinite(units) ? Math.max(0, Math.round(units / PB.units.dotSize(dpi))) : 0;
+    };
+    return image.bitmapCommand(dots(xMm), dots(yMm), { w, h, data }).replace(/\r/g, CR_PLACEHOLDER);
+  }
+
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CR_PLACEHOLDER });
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize,
-    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

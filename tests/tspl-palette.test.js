@@ -192,13 +192,13 @@ test('the moved or edited result of a new component keeps working with the TSPL 
   assert.equal(tspl.describeItem(item, out).fields.length > 0, true);
 });
 
-test('the palette offers the image only for a language that can write it (TPCL), not for TSPL', () => {
+test('the palette offers the image for the languages that can write it (TPCL and TSPL)', () => {
   const image = { kind: 'image', label: 'Imagen' };
   assert.equal(typeof PB.ui.paletteEntries, 'function');
-  assert.deepEqual(PB.ui.paletteEntries(tspl, image).map(e => e.kind), KINDS);
+  assert.deepEqual(PB.ui.paletteEntries(tspl, image).map(e => e.kind), [...KINDS, 'image']);
   assert.deepEqual(PB.ui.paletteEntries(tpcl, image).map(e => e.kind), [...KINDS, 'image']);
   assert.deepEqual(PB.ui.paletteEntries(null, image), []);
   // Language capability, documented in js/core/languages.js
   assert.equal(tpcl.insertImage, true);
-  assert.ok(!tspl.insertImage);
+  assert.equal(tspl.insertImage, true);
 });

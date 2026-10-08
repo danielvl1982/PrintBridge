@@ -41,6 +41,15 @@
     return out;
   }
 
+  /** BITMAP command (overwrite mode) of a neutral bitmap at x, y in dots; the payload is binary, one char per byte. */
+  function bitmapCommand(x, y, bm) {
+    const bytes = encodeBitmap(bm);
+    let payload = '';
+    // Chunked: spreading a whole bitmap into fromCharCode would overflow the call stack
+    for (let i = 0; i < bytes.length; i += 8192) payload += String.fromCharCode(...bytes.subarray(i, i + 8192));
+    return `BITMAP ${x},${y},${widthBytes(bm.w)},${bm.h},0,${payload}`;
+  }
+
   function tspl(helpers) {
     const { sourceOf, int, exactDots, roundDots } = helpers;
 
@@ -61,11 +70,7 @@
         return [];
       }
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
-      const bytes = encodeBitmap(bm);
-      let payload = '';
-      // Chunked: spreading a whole bitmap into fromCharCode would overflow the call stack
-      for (let i = 0; i < bytes.length; i += 8192) payload += String.fromCharCode(...bytes.subarray(i, i + 8192));
-      return [`BITMAP ${x},${y},${widthBytes(bm.w)},${bm.h},0,${payload}`];
+      return [bitmapCommand(x, y, bm)];
     }
 
     return {
@@ -132,5 +137,8 @@
   // The encoder is exposed for the tests
   tspl.encodeBitmap = encodeBitmap;
   tspl.widthBytes = widthBytes;
+  tspl.bitmapCommand = bitmapCommand;
+  tspl.MAX_WIDTH_BYTES = MAX_WIDTH_BYTES;
+  tspl.MAX_HEIGHT = MAX_HEIGHT;
   PB.slices.image.tspl = tspl;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

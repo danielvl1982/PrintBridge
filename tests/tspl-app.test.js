@@ -93,11 +93,12 @@ test('the configuration offers 203 and 300 dpi, 203 first (the TPCL default)', (
   assert.deepEqual([...PB.config.resolutions], [203, 300]);
 });
 
-test('TSPL has the editing and palette hooks, but not the image insertion (TPCL only)', () => {
+test('TSPL has the editing, palette and image insertion hooks', () => {
   for (const hook of ['moveItem', 'updateItem', 'describeItem', 'insertCommand', 'componentTemplates', 'buildComponent']) {
     assert.equal(typeof tspl[hook], 'function', hook);
   }
-  assert.ok(!tspl.insertImage);
+  assert.equal(tspl.insertImage, true);
+  assert.equal(typeof tspl.imageCommand, 'function');
   assert.equal(tpcl.insertImage, true);
   // TSPL writes the label size (SIZE/GAP)
   for (const hook of ['sizeCommands', 'applySize']) assert.equal(typeof tspl[hook], 'function', hook);

@@ -203,7 +203,7 @@ It can be exported to TPCL with **Convertir a…**.
 Not supported (a warning is shown): `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`, `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
 (images stored in the printer). Also not supported:
 
-- **Images in the code:** the **Imagen** palette entry and **Insertar en el código** are TPCL only (TSPL has no `BITMAP` writer yet). A preview image can still be overlaid to check positions.
+- **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR` and a 30 x 20 mm `BOX`; texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), the `BOX` radius and the
