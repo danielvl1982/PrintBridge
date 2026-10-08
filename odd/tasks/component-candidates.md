@@ -38,4 +38,4 @@ Each task round-trips parse -> emit -> parse, keeps unrelated commands untouched
 
 ## Progress
 Plan created from the user's decision.
-- A1 done on `feat/shapes` (commit: pending). Neutral `radius` (0.1 mm) on rect line items, SVG rx/ry clamped to half the shorter side, TPCL `,ggg` / TSPL BOX radius parse+emit+edit+conversion; RED observed (22 of 24 new tests failing) then GREEN. Browser check pending (user). Next: A2.
+- A1 done on `feat/shapes` (commit 7ad63d8). Neutral `radius` (0.1 mm) on rect line items, SVG rx/ry clamped to half the shorter side, TPCL `,ggg` / TSPL BOX radius parse+emit+edit+conversion; RED observed (22 of 24 new tests failing) then GREEN. Browser check pending (user). Next: A2.
