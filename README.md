@@ -278,8 +278,8 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
 
 ## ZPL support (Zebra)
 
-**Work in progress: the language core is in place, the components are added next** (text, bar codes, QR and Data Matrix, shapes, images, counters
-and the conversion to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
+**Work in progress: the language core and the text are in place, the other components are added next** (bar codes, QR and Data Matrix, shapes, images,
+counters and the conversion of those to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
 
 The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL.
 What works now:
@@ -293,8 +293,22 @@ What works now:
 - **Several formats** (`^XA` ... `^XZ`) in one file: the viewer shows the first one and says how many there are.
 - **Fields and data:** a field is `^FO` / `^FT` ... `^FS`; `^FD` data may have `^` and `~` through the `^FH` hex escapes (`_5E`, `_7E`). `^CC` / `^CT` / `^CD` prefix and
   delimiter changes are read.
-- **Convertir a…** lists **ZPL (Zebra)** as a target (file `.zpl`, UTF-8) and reads ZPL as a source; until the components arrive the items are reported as
-  "no se puede exportar" in the warnings, and only the label size is written.
+- **Text:** a field `^FO x,y ^A f o,h,w ^FD data ^FS` is drawn (a field with only `^FD` / `^FV` is text in the default font `^CF`, A 9×5 at power-up).
+  `^FO` is the top-left of the text box and `^FT` the baseline origin (guide); the orientation `N R I B` is 0 / 90 / 180 / 270° clockwise, `^FW` the default.
+  `^FR` (reverse print) draws the text white blended with `difference`, so it reads inverted over black (and black over white); `^FH` escapes are decoded;
+  `^FP` other than horizontal and `^FB` blocks are reported and drawn as one line left to right.
+  **Fonts** (the viewer's simulation, same as for TPCL / TSPL): the guide's Volume One does not include the font matrices (Volume Two), so the table is the
+  commonly published one and **not verified**: cell height × width in dots at 1× (inter-character gap): A 9×5 (1), B 11×7 (2), C and D 18×10 (2), E 28×15 (5, OCR-B),
+  F 26×13 (3), G 60×40 (8), H 21×13 (6, OCR-A); bitmapped fonts take height and width as multiples of the matrix (1 to 10 times; a missing one follows the other)
+  and are drawn mono; `0` is the scalable font (height and width 10 to 32000 dots, a missing one follows the other, 15 × 12 without any), drawn sans bold. Other fonts
+  (P..V, GS, 1..9, downloaded) are drawn as a sans font of the asked height, with one information message. The baseline of a `^FO` field (80% of the height) and the length
+  of a `^FO` text rotated 180° / 270° are approximations.
+  **Editing:** in the Propiedades panel a `^A` text has font, height, width (0 = standard / proportional), rotation, content (`^` and `~` go through `^FH`) and the
+  **Impresión inversa (^FR)** checkbox; a field with only data has content and reverse. **Palette:** *Texto* inserts `^FO x,y^A0N,h,w^FD<#TEXTOn#>^FS` (4 mm) at the drop point,
+  rotated against the view. The **ZPL example** (Ejemplo) shows several fonts, a rotated text and a reverse one.
+- **Convertir a…** lists **ZPL (Zebra)** as a target (file `.zpl`, UTF-8) and reads ZPL as a source. Text converts both ways with TPCL and TSPL (position, rotation, size, data;
+  fonts are mapped to the nearest one with one information message, mono multiples of a matrix become a bitmapped font, the rest the scalable `0`); the TPCL text attributes,
+  alignment, spacing, bold and counters are reported and written without them. The other components are reported as "no se puede exportar" until their tasks are done.
 - Files are read and written as UTF-8 (the 2003 guide ties characters above ASCII to `^CI` and the printer font, and does not mention UTF-8: not verified).
 
 ## Limitations
