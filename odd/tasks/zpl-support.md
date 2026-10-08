@@ -22,7 +22,7 @@ and conversion to and from TPCL and TSPL ("Convertir a…"). Reference: `docs/zp
       (the Formato row), `.zpl` file extension and encoding, the example label, the converter target list, language detection tests, app wiring of the new language
       (palette hooks, Convertir panel), README stub.
       Done in `ca1e060` (core, engines) and `31764b2` (app wiring, README). Route: inline single writer. The example label is NOT added yet (nothing is drawable until Z2: add it there).
-- [ ] Z2 Text: `^FO` / `^FT` origin semantics (`^FT` is the baseline origin), `^A` fonts (bitmap A..H, `0` scalable, others per the guide) with height / width, rotation N/R/I/B,
+- [x] Z2 Text: `^FO` / `^FT` origin semantics (`^FT` is the baseline origin), `^A` fonts (bitmap A..H, `0` scalable, others per the guide) with height / width, rotation N/R/I/B,
       `^FD` content with `^FH` hex escapes, `^FR` reverse: parse, draw (font simulation like TPCL/TSPL), emit, move, edit (font, size, rotation, content, reverse), palette entry, tests.
 
 ### Group B: barcodes and 2D (branch `feat/zpl-barcodes`)
@@ -55,4 +55,7 @@ Each task round-trips parse -> emit -> parse, keeps unrelated commands untouched
 `node --test` after each task. Chrome check by the assistant after each group (puppeteer-core outside the repo); user checks with real labels and a Zebra printer when available.
 
 ## Progress
-Manual renamed to `docs/zpl/Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` and documented in `docs/README.md`. Plan created. Z1 done on `feat/zpl-foundation` (`ca1e060`, `31764b2`; `node --test` 1351 green, 92 new). Next: Z2 (text, and the example label).
+Manual renamed to `docs/zpl/Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` and documented in `docs/README.md`. Plan created. Z1 done on `feat/zpl-foundation` (`ca1e060`, `31764b2`; `node --test` 1351 green, 92 new). Z2 done (`08698aa` code and tests, `a954bde` README; `node --test` 1389 green, 38 new in tests/zpl-text.test.js, RED observed first). Next: Chrome check of the ZPL text and example, then merge group A.
+
+## Result of group A
+ZPL reads, draws, emits, edits and conversions of text work: `^FO` / `^FT` origins, `^A` fonts (bitmapped A..H as multiples of the matrix, scalable `0`), `^CF` / `^FW` defaults, `^FH` escapes, `^FR` reverse (white text blended with difference), Propiedades fields (font, height, width, rotation, content, reverse), the Texto palette entry and one ZPL example. Not in the 2003 Volume One (so unverified, marked in code and README): the font matrices (Volume Two), the baseline of `^FO` and the length of rotated `^FO` text. Engine additions: `flag` fields (presence of `^FR`) and fields sharing one argument. Pending: browser check of the reverse blend and the example.
