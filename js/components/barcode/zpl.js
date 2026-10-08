@@ -212,8 +212,8 @@
 
   function zpl(helpers) {
     const {
-      sourceOf, int, ROTATIONS, rotationOf, orientationOf, toDots, fieldData, fo, ft, commands, byValues, isImmediate, argEdit,
-      contentField, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
+      sourceOf, int, ROTATIONS, rotationOf, orientationOf, toDots, dataCommands, fo, ft, commands, byValues, isImmediate, argEdit,
+      contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     } = helpers;
 
     const dotMm = ctx => PB.units.dotSize(ctx.dpi);
@@ -399,8 +399,6 @@
         ctx.once('zpl-addon', () => diag.warning('Hay códigos EAN / UPC con complemento (+2 / +5), que ZPL no tiene: se escriben sin el complemento (sus dígitos se quitan de los datos)'));
       }
       if (isWpc(item.symbology) && item.guard > 0) ctx.once('zpl-guard', () => diag.info('La longitud de la barra de guarda de los códigos EAN / UPC de TPCL no se escribe en ZPL'));
-      if (item.counter) ctx.once('zpl-barcode-counter', () => diag.warning('Hay códigos de barras con contador: ZPL los escribe como datos fijos con el valor inicial (el contador ^SN aún no se escribe)'));
-      if (item.zeroSuppress) ctx.once('zpl-barcode-zero', () => diag.info('Hay códigos de barras con supresión de ceros, que ZPL no tiene: se escriben sin ella'));
     }
 
     /** The field data: written back as read when the item's data is still what it decodes to, else encoded from the item. */
@@ -474,7 +472,7 @@
       }
       if (origin.some(v => v < -dotMm(ctx) / 2)) ctx.once('zpl-barcode-origin', () => diag.info('Hay códigos de barras girados cuyo origen queda fuera de la etiqueta (por la izquierda o por arriba): el origen se ajusta a 0'));
       const at = useFo ? fo(ctx, ...origin) : ft(ctx, ...origin);
-      const line = `${at}^${name}${parameterText(name, values)}${fieldData(ctx, data)}^FS`;
+      const line = `${at}^${name}${parameterText(name, values)}${dataCommands(ctx, item, data)}^FS`;
       return [`^BY${by.module}${by.ratio === undefined ? '' : `,${formatRatio(by.ratio)}`}`, line];
     }
 
@@ -511,7 +509,7 @@
         if (!open) open = { start: cmd.start, end: cmd.end, barcode: false, content: false };
         open.end = cmd.end;
         if (id === '^FS') { close(); continue; }
-        if (!['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^SN'].includes(id)) open.content = true;
+        if (!['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^SN', '^SF'].includes(id)) open.content = true;
         if (NAMES.includes(cmd.name)) open.barcode = true;
       }
       close();
@@ -687,6 +685,7 @@
       letters('start', 'Carácter de inicio', 'k', START_STOP, 'A'),
       letters('stop', 'Carácter de parada', 'l', START_STOP, 'A'),
       contentField('content', 'Contenido', item => item.data),
+      ...serialFields(),
     );
 
     /**

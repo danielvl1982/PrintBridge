@@ -17,6 +17,15 @@
       return [...new Set(model.items.flatMap(it => PB.variables.namesIn(it.data)))];
     },
 
+    /**
+     * Test values suggested by a label: model.variableDefaults = { NAME: value } (ZPL ^FN data, see js/languages/zpl.js). A default fills only the
+     * variables that have no value yet in `values` (an empty value the user typed counts as a value). It changes `values`; a model without
+     * defaults changes nothing.
+     */
+    seedDefaults(values, model) {
+      for (const [name, value] of Object.entries((model && model.variableDefaults) || {})) if (values[name] == null) values[name] = value;
+    },
+
     /** Replaces the variables with their value; the ones without a value are left as they are. */
     substitute(text, values) {
       return text == null ? '' : text.replace(PATTERN, (match, name) => values[name] ?? match);

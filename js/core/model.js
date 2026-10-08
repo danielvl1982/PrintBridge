@@ -6,7 +6,10 @@
  * Neutral model: what parse(text, { dpi }) of any language returns and what the drawing and the emitters consume.
  * Every measure in the model is real, in 0.1 mm; the language converts with dpi the ones it gives in printer dots
  * and keeps the original value in item.native for its emitter.
- *   model { language, size, items, diagnostics }
+ *   model { language, size, items, diagnostics, variableDefaults? }
+ *   - variableDefaults?: { NAME: value } the test values the label itself suggests for its #NAME# / <#NAME#> variables (ZPL: the ^FD data of an ^FN
+ *     field is the default of the variable <#FNn#>; absent when there is none). The app takes them through PB.variables.seedDefaults, only for the
+ *     variables that have no test value yet, so a value typed by the user is never overwritten.
  *   - language: id of the language that parsed it (key of PB.languages).
  *   - size: { width, height, pitch, gap, native }. Measures in 0.1 mm (null if the label does not declare them);
  *     pitch = distance between labels, gap = separation between labels; native = language-specific data
@@ -29,12 +32,14 @@
  *               model keeps the START value in data. step = signed integer, + increments and - decrements, never 0 (0 = no counter,
  *               absent); TPCL PC/PV/XB "noooooooooo" skip value 0000000000..9999999999, native = the token as written ("+0000000010");
  *               TSPL "SET COUNTER @n step" -999999999..999999999 with the content "@n", native = { n, start, end } (the counter number
- *               and where its step sits in the text, for the panel). Barcodes carry it too; QR does not.)
+ *               and where its step sits in the text, for the panel; ZPL ^SNv,n,z: the step is n (default 1, up to 12 digits), native = { n, z } as
+ *               written). Barcodes carry it too; QR does not.)
  *               reverse? = true (ZPL ^FR field reverse print: the viewer draws the text white blended with `difference`, so it reads inverted over
  *               black; absent = normal). ZPL specific: it is NOT the TPCL attribute 'reverse' (a black box behind the text), the two never convert.
  *               ZPL: x, y is the baseline origin (^FT as written; ^FO converted, see js/components/text/zpl.js); font.size = character height in dots.
  *               zeroSuppress? = 1..20 (TPCL PC/PV "Zpp", XB "qq": the number of characters kept after replacing the leading zeros by
- *               spaces; absent = none or 00). The preview applies it to the drawn text only (PB.slices.text.suppressZeros), never to data.
+ *               spaces; absent = none or 00; ZPL ^SN z = N is 1: all the leading zeros, the last digit stays). The preview applies it to the drawn
+ *               text only (PB.slices.text.suppressZeros), never to data.
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)

@@ -245,7 +245,7 @@ test('the fidelity info is written once per label; scalable sizes are kept insid
   assert.ok(r.text.includes('^FT10,300^A0N,10,10^FDx^FS'));
 });
 
-test('rotation not on a quarter turn is rounded with one warning; attributes, alignment, spacing, bold and counters that ZPL text lacks are reported once', () => {
+test('rotation not on a quarter turn is rounded with one warning; attributes, alignment, spacing, bold and zero suppression that ZPL text lacks are reported once (the counters are written as ^SN since Z7)', () => {
   const base = { kind: 'text', ref: 'T', x: 10, y: 100, data: '7', font: { family: 'sans', weight: 700, style: 'normal', size: 40, scaleX: 1 } };
   const items = [
     { ...base, rotation: 100 },
@@ -255,7 +255,9 @@ test('rotation not on a quarter turn is rounded with one warning; attributes, al
   const r = zpl.emit({ size: { width: 800, height: 480 }, items }, { dpi: DPI });
   const texts = r.diagnostics.map(d => `${d.level}: ${d.text}`);
   assert.ok(r.text.includes('^FT10,100^A0R,40,40^FD7^FS'));
-  for (const re of [/rotación/, /atributo/, /alineación/, /espaciado/, /negrita/, /contador/, /ceros/]) assert.equal(texts.filter(t => re.test(t)).length, 1, String(re));
+  assert.ok(r.text.includes('^SN7,1,N^FS') && r.text.includes('^SN7,1,Y^FS'));
+  assert.equal(texts.filter(t => /contador/.test(t)).length, 0);
+  for (const re of [/rotación/, /atributo/, /alineación/, /espaciado/, /negrita/, /ceros/]) assert.equal(texts.filter(t => re.test(t)).length, 1, String(re));
   assert.ok(texts.find(t => /rotación/.test(t)).startsWith('warning'));
   assert.ok(texts.find(t => /atributo/.test(t)).startsWith('warning'));
 });
