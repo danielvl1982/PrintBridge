@@ -46,3 +46,4 @@ behaviour (rotation, magnification, drag) unchanged; `node --test` green after e
 ## Progress
 Branch created; exploration done.
 T1 done: panel `text` field + TSPL content (TEXT/BARCODE/QR); `node --test` 771/771 green; commit a1cf696. Next: T2.
+T2 done: TPCL content (inline =data, RC/RV/RB command, FNC1 >8 round trip, unsafe chars rejected, max 255); `node --test` 792/792 green; commit c81e1a6. Next: T3.
