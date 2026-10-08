@@ -252,11 +252,11 @@ test('unknown commands are one warning each, and ^FX comments and the tolerated 
   assert.match(model.diagnostics[1].text, /\^YY/);
 });
 
-test('fields have no drawing handler yet: each field with a command reports it once and draws nothing', () => {
+test('a field whose command has no handler yet (Z3 onwards) reports it once and draws nothing; the text (Z2) is drawn', () => {
   const model = parse('^XA^FO10,10^A0N,30,30^FDHi^FS^FO10,60^GB100,50,3^FS^XZ');
-  assert.deepEqual(model.items, []);
-  assert.equal(model.diagnostics.filter(d => d.level === 'warning').length, 2);
-  assert.match(model.diagnostics[0].text, /\^A0N,30,30/);
+  assert.deepEqual(model.items.map(i => [i.kind, i.data]), [['text', 'Hi']]);
+  assert.equal(model.diagnostics.filter(d => d.level === 'warning').length, 1);
+  assert.match(model.diagnostics[0].text, /\^GB100,50,3/);
 });
 
 test('several formats: the first one is shown and an info says how many there are', () => {

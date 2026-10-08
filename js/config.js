@@ -129,5 +129,25 @@ BARCODE 40,230,"128",100,1,0,2,2,"100001200001"
 QRCODE 560,240,L,6,A,0,"https://example.com/100001"
 PRINT 1,1`,
     },
+    {
+      id: 'zpl-label-100x60',
+      name: 'Etiqueta ZPL (Zebra) — ejemplo 100×60 a 203 dpi',
+      language: 'zpl',
+      values: { PRODUCTO: 'Muestra 100', LOTE: '200001' },
+      // 100 x 60 mm = 800 x 480 dots at 203 dpi; only text for now (the other components arrive with the next ZPL tasks); ASCII only
+      source: `^XA
+^PW800
+^LL480
+^FX Text fields: top-left origin or baseline origin, fonts 0 (scalable) and A, B, D, E (bitmapped)
+^FO30,25^A0N,60,60^FDETIQUETA ZPL^FS
+^FO30,110^ADN,36,20^FDProducto: <#PRODUCTO#>^FS
+^FO30,165^ABN,22,14^FDLote: #LOTE#^FS
+^FT30,260^AAN,18,10^FDCant: 400 mts^FS
+^FT30,330^A0N,40,30^FDFuente escalable^FS
+^FO30,350^AEN,28,15^FDOCR-B^FS
+^FO740,40^A0R,40,40^FDGIRADO^FS
+^FO400,300^A0N,50,50^FR^FDINVERTIDO^FS
+^XZ`,
+    },
   ]);
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

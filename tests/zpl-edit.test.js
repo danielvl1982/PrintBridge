@@ -13,7 +13,7 @@ const rotationOptions = ROTATIONS.map(value => ({ value, label: `${value}°` }))
 
 PB.components.register({
   kind: 'zfake',
-  order: 10,
+  order: 5,
   label: 'Fake',
   glyph: 'F',
   languages: {
@@ -400,7 +400,8 @@ test('fields flagged reemit are written by the shape hook and win over the edits
 // Palette: componentTemplates / buildComponent
 
 test('componentTemplates lists the slices with a build hook, in slice order', () => {
-  assert.deepEqual(zpl.componentTemplates(), [{ kind: 'zfake', label: 'Fake' }]);
+  // the fake slice has order 5 so that its handlers come before the real text slice (order 10), whose ^A / ^FD handlers it shadows here
+  assert.deepEqual(zpl.componentTemplates(), [{ kind: 'zfake', label: 'Fake' }, { kind: 'text', label: 'Texto' }]);
 });
 
 test('buildComponent inserts a whole field before ^XZ at the drop point, rotated against the view rotation', () => {

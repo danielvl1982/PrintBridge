@@ -24,6 +24,8 @@
  *     switches on the hex escapes before a ^FD). optional: the value of a trailing or empty argument when it is omitted (e.g. ^GB colour B):
  *     describeItem lists it, updateItem fills or appends the argument for any other value and writes nothing for the default.
  *     numberField(), selectField(), stringSelectField(), checkboxField(), textField() and contentField() build the usual ones.
+ *     flag: the field is the PRESENCE of the command `cmd` (no arguments, ^FR): describeItem gives true / false, updateItem adds it before the
+ *     ^FS or removes it. Fields that share one argument (^A: font letter and orientation) are written one over the other's result.
  *     reemit: the field is not written by itself: the shape's reemit hook writes the command again for the new value (barcode type).
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so the other commands of the field, other fields,
@@ -302,6 +304,29 @@
       return edits.length ? applyEdits(text, edits) : text;
     }
 
+    /**
+     * A `flag` field is the presence of a command with no arguments (^FR): true adds it before the ^FS of the field (or after its last
+     * command), false removes every one, with the line break when it sat alone on its line. Pushes the edits into `edits`.
+     */
+    function flagEdits(text, field, f, want, edits) {
+      if (typeof want !== 'boolean') return;
+      const present = field.findAll(f.cmd);
+      if (want && !present.length) {
+        const last = field.cmds[field.cmds.length - 1];
+        const at = last.id === '^FS' ? last.start : last.end;
+        edits.push({ start: at, end: at, value: `^${f.cmd}` });
+      } else if (!want) {
+        for (const cmd of present) {
+          let [start, end] = [cmd.start, cmd.end];
+          const before = text.slice(0, start);
+          const lineStart = Math.max(before.lastIndexOf('\n'), before.lastIndexOf('\r')) + 1;
+          const after = /^[ \t]*(\r\n|\r|\n)/.exec(text.slice(end));
+          if (/^[ \t]*$/.test(before.slice(lineStart)) && after) { start = lineStart; end += after[0].length; }
+          edits.push({ start, end, value: '' });
+        }
+      }
+    }
+
     const shapeOf = (item, field) => (item && field ? editable.find(s => s.applies(item, field)) : undefined);
 
     /**
@@ -316,7 +341,8 @@
       const fields = [];
       for (const f of shape.fields) {
         let value;
-        if (found) {
+        if (f.flag) value = found ? found.field.has(f.cmd) : f.model ? f.model(item, { dpi }) : undefined;
+        else if (found) {
           const cmd = found.field.find(f.cmd);
           const a = cmd && cmd.args[argIndex(f, cmd)];
           if (a) value = a.raw === '' && f.optional !== undefined ? f.optional : f.read(a, cmd, found.field);
@@ -339,12 +365,17 @@
       // field's commands, or null to refuse. They win over the edits of other fields on the same arguments.
       const claimed = shape.reemit && shape.fields.some(f => f.reemit && Object.hasOwn(changes, f.key)) ? shape.reemit(found.field, item, changes, opts || {}) : null;
       const edits = claimed ? [...claimed] : [];
+      // Several fields may share one argument (^A: font letter + orientation): each writes over the result of the previous one
+      const sameArg = new Map();
       for (const f of shape.fields) {
         if (f.reemit || !Object.hasOwn(changes, f.key)) continue;
+        if (f.flag) { flagEdits(text, found.field, f, changes[f.key], edits); continue; }
         const cmd = found.field.find(f.cmd);
         if (!cmd) continue;
         const index = argIndex(f, cmd);
-        const a = cmd.args[index];
+        const original = cmd.args[index];
+        const earlier = original && sameArg.get(original.start);
+        const a = earlier ? { ...original, raw: earlier.value } : original;
         if (a && claimed && claimed.some(e => e.start === a.start)) continue;
         const omitted = !a && f.optional !== undefined && index === cmd.args.length;
         if (omitted || (a && a.raw === '' && f.optional !== undefined)) {
@@ -358,7 +389,14 @@
         }
         if (!a || f.read(a, cmd, found.field) === undefined) continue;
         const w = written(f, changes[f.key], a, cmd, found.field);
-        if (w && w.value !== a.raw) edits.push({ start: a.start, end: a.end, value: w.value }, ...w.edits);
+        if (!w || w.value === a.raw) continue;
+        if (earlier) earlier.value = w.value;
+        else {
+          const edit = { start: a.start, end: a.end, value: w.value };
+          sameArg.set(a.start, edit);
+          edits.push(edit);
+        }
+        edits.push(...w.edits);
       }
       return edits.length ? applyEdits(text, edits) : text;
     }

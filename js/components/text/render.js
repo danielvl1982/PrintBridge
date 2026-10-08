@@ -110,7 +110,9 @@
     const placed = (place.anchor === 'start' ? '' : ` text-anchor="${place.anchor}"`) + (place.textLength ? ` textLength="${n(place.textLength)}" lengthAdjust="spacing"` : '') +
       (letter == null ? '' : ` letter-spacing="${n(letter)}"`);
     // One string element per overprint (the first is the text itself and stays first: layout.js measures it); `shift` moves a copy in the rotated frame
-    const string = (cls, shift) => `<text class="${cls}"${placed} transform="translate(${item.x} ${item.y}) rotate(${item.rotation})${shift ? ` translate(${n(shift.dx)} ${n(shift.dy)})` : ''} scale(${n(f.scaleX)} 1)" ` +
+    // ZPL ^FR (item.reverse): white text blended with `difference`, like the inverted area (js/components/area/render.js): over black it reads white, over white black
+    const inverted = item.reverse === true ? ' style="fill:#fff;mix-blend-mode:difference"' : '';
+    const string = (cls, shift) => `<text class="${cls}"${placed}${inverted} transform="translate(${item.x} ${item.y}) rotate(${item.rotation})${shift ? ` translate(${n(shift.dx)} ${n(shift.dy)})` : ''} scale(${n(f.scaleX)} 1)" ` +
       `font-size="${n(f.size * ctx.textScale)}" xml:space="preserve">${esc(suppressZeros(ctx.value(item.data), item.zeroSuppress))}</text>`;
     const copies = boldShifts(item.bold).map(shift => string(`${classes} text-bold`, shift)).join('');
     return {
