@@ -21,6 +21,8 @@
  * describeItem (optional): the fields updateItem accepts for an item, language-agnostic, so the UI can build a panel:
  *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox' | 'text', value, min, max, step?, options?: [{ value, label }] }] }
  *   with the current values (read from the command in text if given, else from the item) and an empty list if none.
+ *   A 'text' field may carry maxLength. TPCL's `content` edits the data wherever it is stored (inline "=data" or the
+ *   R<C|V|B> data command) and is left out when the item has none; values with | { } or line breaks are rejected.
  * componentTemplates (optional): the neutral component kinds the palette offers, in order (text, barcode, qr, line, box).
  * buildComponent (optional): the text with a new component of that kind whose top-left corner is at x/y (0.1 mm,
  *   clamped); unchanged for an unknown kind or an invalid point. viewRotation (0/90/180/270 degrees clockwise, default 0)

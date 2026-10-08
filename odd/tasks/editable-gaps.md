@@ -27,7 +27,7 @@ Out for now (cost/risk, decide later): G6 barcode type selector, G7 check digit 
 
 ## Tasks
 - [x] T1 Panel `text` field type + TSPL content editing: `type:'text'` control and coercion in js/properties.js, TSPL TEXT content (quote-safe), BARCODE and QRCODE content where the parser keeps the raw data; tests.
-- [ ] T2 TPCL content editing: inline `=data` and the separate RC/RV/RB command (framing-unsafe chars rejected, FNC1 `>8` round trip), PC/PV/XB; tests.
+- [x] T2 TPCL content editing: inline `=data` and the separate RC/RV/RB command (framing-unsafe chars rejected, FNC1 `>8` round trip), PC/PV/XB; tests.
 - [ ] T3 Font: TPCL PC font letter select, TSPL TEXT font id (string select); tests.
 - [ ] T4 TPCL text attribute: parse B/W/F/C (extend the regex) into the item, draw reverse / boxed / stroked in the preview, edit the attribute; tests.
 - [ ] T5 TPCL alignment `P1..P4`: parse, draw in the preview, edit; tests.
