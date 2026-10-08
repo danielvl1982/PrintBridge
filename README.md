@@ -138,8 +138,10 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
       end point and thickness (the fields each command has).
     - **Radio (esquinas redondeadas):** rectangles only (TPCL `LC` type 1, TSPL `BOX`): the corner radius, 0..999 in 0.1 mm for TPCL and in dots for TSPL, drawn clamped to half of the shorter side. A value above 0 adds the optional token at the end of the command; 0 keeps an existing token and writes nothing for an absent one. The TSPL radius argument comes from the TSPL2 manual and is not verified on a printer.
-    - **Contenido:** the data of text, barcodes and QR. TSPL: `TEXT`, `BARCODE` and `QRCODE` (not a counter `@n` (edit its start value in the `@n="..."` line), `BLOCK`,
-      `128M`/`EAN128` or QR manual mode). TPCL: `PC`/`PV` text, barcodes and QR, inline (`=data`) or in the `RC`/`RV`/`RB`
+    - **Data Matrix** (TPCL `XB` type `Q`, TSPL `DMATRIX`): TPCL **Tamaño de módulo** (dots, 1..99), **Rotación** and **Tamaño del símbolo** (automatic or one of the 24 square sizes, 10 x 10 to 144 x 144: the optional `,Ciiijjj` token is added, changed or removed; a rectangular size or a connection setting `J...` is never touched);
+      TSPL **Ancho** and **Alto** (the area), **Módulo** and **Tamaño del símbolo** (rows and columns together; only in the form with `xm,row,col`).
+    - **Contenido:** the data of text, barcodes, QR and Data Matrix. TSPL: `TEXT`, `BARCODE`, `QRCODE` and `DMATRIX` (not a counter `@n` (edit its start value in the `@n="..."` line), `BLOCK`,
+      `128M`/`EAN128` or QR manual mode). TPCL: `PC`/`PV` text, barcodes, QR and Data Matrix, inline (`=data`) or in the `RC`/`RV`/`RB`
       command; values with `| { }` or line breaks are rejected because TPCL has no escape for them.
     - **Fuente:** the PC font letter (A-T) or PV font (`A`, `B`) in TPCL, and the font id of `TEXT` in TSPL. A value not in the
       list is kept and shown. The PC font table is the viewer's simulation, not verified against the printer.
@@ -175,7 +177,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       or a guard bar that the other form cannot hold (a start/stop option towards Code 128, Code 93 or EAN / UPC), TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Postnet...). Content the new type cannot encode
       (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
       new symbology only adds rows.
-  - **Components panel:** drag a component (text, Code128 barcode, QR, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
+  - **Components panel:** drag a component (text, Code128 barcode, QR, Data Matrix, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
@@ -200,6 +202,7 @@ What is lost or approximated (each case is reported in the warnings list):
   TSPL integer multipliers or a scalable font in whole points.
 - Barcodes: types without a counterpart are skipped with a warning (for example TSPL Postnet in TPCL or the other way round, or TSPL `128M` control codes). Code 93 (TPCL `C`, TSPL `93`) and NW7 / Codabar (TPCL `4`, TSPL `CODA`) convert in both directions; MSI and 2 de 5 industrial have no TSPL type (the B-442/443 manual lists none), so they are skipped with a warning when converting to TSPL; a Code 93 without check characters (TPCL option 1 / 2) is written as `93` with a warning (TSPL has no option: the check characters are attached). The twelve EAN / UPC variants (EAN-13, EAN-8, UPC-A, UPC-E, each with +2 / +5) convert exactly in both directions; the TPCL check digit options none / check and the WPC guard bar length have no TSPL equivalent (a warning and an information message; the TSPL type attaches the check digit automatically).
 - QR: the rotation is not converted.
+- Data Matrix (TPCL `XB` type `Q`, TSPL `DMATRIX`): position, module, forced size and data convert both ways. TSPL has no rotation (a rotated TPCL code is written unrotated, with a warning), no ECC type (any ECC other than 200 is written as ECC200, with a warning), and a TPCL cell width `00` (nothing is printed) is skipped with a warning. TPCL to TSPL always writes the form with `xm,row,col` (rows and columns = the symbol the viewer draws, width and height = symbol side x module), so the printer cannot choose another size. TSPL without `xm` to TPCL writes the cell width that fits the area (whole dots). The TPCL format ID and connection setting are not converted.
 - Variables: TPCL `#NAME#` is written literally in TSPL, which has no substitution.
 - Label size: the TPCL pitch and the TSPL gap are **not converted** (TSPL to TPCL writes the height as the pitch; TPCL to TSPL omits `GAP`).
 - TPCL output: the `{XS;…|}` trailer is a default taken from the reference spool and **has not been verified on a printer**.
@@ -214,6 +217,7 @@ What is lost or approximated (each case is reported in the warnings list):
 | `PC` / `RC` | Texts (printer fonts A–T, with magnification, rotation, attribute, alignment, spacing and bold) |
 | `PV` / `RV` | Texts with an outline font (height and width in 0.1 mm; same attribute, alignment and spacing options) |
 | `XB` / `RB` type `T` | QR code (generated for real) |
+| `XB` / `RB` type `Q` | Data Matrix (generated for real: ECC200 with ASCII encodation and square symbols only; `XBnn;x,y,Q,<ECC>,<cell width in dots>,<format ID>,<rotation 0..3>[,Ciiijjj][,Jkkllmmmnnn]`). ECC type `20` is drawn; `00`-`14` (ECC 000-140, which the manual says the printer ignores) are reported and drawn as a hatched box. Cell width `00` draws nothing (as the printer). The format ID is ignored (kept as written, `00` when exported). `Ciiijjj` (number of cells, even, `000` = automatic) forces one of the 24 square sizes; the manual's rectangular codes (18 x 8 ... 48 x 16) are reported and drawn as the smallest square that fits. The connection setting `J...` is reported and not drawn. Rotation turns the symbol around its origin. See limitations |
 | `XB` / `RB` types `9` and `A` | Code128 (generated for real, with the text below if the label asks for it) |
 | `XB` / `RB` type `3` | Code39 (generated for real, with the wide/narrow widths of the command and the text below if the label asks for it) |
 | `XB` / `RB` type `2` | Interleaved 2 of 5 / ITF (generated for real, same widths and text options) |
@@ -231,7 +235,7 @@ What is lost or approximated (each case is reported in the warnings list):
 
 ## TSPL support (TSC TTP)
 
-The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`BITMAP`/`BAR`/`BOX`
+The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`DMATRIX`/`BITMAP`/`BAR`/`BOX`
 followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. The label is drawn, clicking an item selects its line, and, as with TPCL, you can
 **drag items** to move them, edit their properties (numbers, font and content) in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, line, box and image,
 written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (`BLOCK` and `BITMAP` data are never touched, and a counter `@n` keeps its text: only its step in the `SET COUNTER` line is editable).
@@ -244,17 +248,18 @@ It can be exported to TPCL with **Convertir a…**.
 | `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
 | `BARCODE` | Code128 (also `128M` and `EAN128`), Code39, ITF / `25`, Code 93 (`93`), Codabar (`CODA`) and EAN13 / EAN8 / UPCA / UPCE (each also with `+2` and `+5`) are generated for real; the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
+| `DMATRIX` | Data Matrix: `DMATRIX x,y,width,height,[xm,row,col,]"content"` (dots). Generated for real (ECC200, ASCII encodation, square symbols only). Without `xm,row,col` the code fits the width and height (whole dots of the smaller side / symbol side); with them it is drawn with that module, and `row` = `col` forces one of the 24 square sizes (`0,0` = automatic; a rectangle is reported). There is no rotation. Moved, edited (**Ancho**, **Alto**, **Módulo**, **Tamaño del símbolo**, **Contenido**) and inserted from the palette (**Data Matrix**). The command comes from the B-442/443 manual (syntax and one example only) and is **not verified on a printer** |
 | `BAR`, `BOX` | Filled bar and rectangle outline (with thickness and optional corner radius, in dots; the radius argument is from the TSPL2 manual and **not verified on a printer**) |
 | `ELLIPSE`, `CIRCLE` | Ellipse and circle outlines (`x,y` is the top-left corner of the bounding box; size and thickness in dots; stroke centered on the box edge). Drawn, moved, edited (**Ancho/Alto** or **Diámetro**, **Grosor**) and inserted from the palette (**Elipse**, **Círculo**). Both commands are from the TSPL2 manual v3.0 (not available locally) and are **not verified on a printer**. TPCL has no equivalent: converting to TPCL skips them with a warning |
 | `REVERSE`, `ERASE` | Inverts (`REVERSE`) or blots out (`ERASE`) a region of the image: `x,y,width,height` in dots. Like TPCL `XR` they act on what is drawn **before** them in command order, not on what follows. Drawn, moved, edited (**Ancho**, **Alto**) and inserted from the palette (**Área invertida**, a 30 x 10 mm `REVERSE`; `ERASE` has no palette entry). Both come from the B-442/443 manual (syntax only) and are **not verified on a printer**; the inversion is drawn with the SVG blend mode `difference` (**browser check pending**). Converting to TPCL writes `XR` type `B` / `A` (and the other way round) |
 | `BITMAP` | Raw binary graphic (mode 0 overwrite; bit 0 = black, MSB first) |
 | `CLS`, `PRINT`, `DENSITY`, `SPEED`, `SET`, `CODEPAGE`, `FEED`... | Configuration: not drawn |
 
-Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
+Not supported (a warning is shown): `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
 (images stored in the printer). Also:
 
 - **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
-- **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
+- **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), Data Matrix with a module of 4 dots (TPCL, rotated like the barcodes; TSPL, with `xm,row,col` of the symbol its placeholder needs), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
   text alignment parameters are read but not drawn; a TSPL counter `@n` without an assigned start value, a mix such as `"x"+@1` and the counters of `BLOCK` and `QRCODE` are shown literally.
@@ -286,6 +291,14 @@ Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`P
   when the data does not match, whether the printer prints the digits under the bars (TPCL `p` flag, TSPL human readable) with its own layout, the exact meaning of the TPCL WPC
   guard bar length (the viewer extends the start, centre and end guard bars by that length in 0.1 mm; without the field, as in TSPL, by the height of the digits when they are printed) and the TSPL wide
   argument (written equal to the narrow one). Check the placement of the digits, guard bars and add-on in a browser and on a printer.
+- Data Matrix (TPCL `XB` type `Q`, TSPL `DMATRIX`): the encoder is our own (no library) and covers **ECC200 with ASCII encodation and square symbols only** (the 24 sizes from 10 x 10 to 144 x 144;
+  the smallest one that holds the data unless a size is forced). Digit pairs take one codeword, other characters 0-255 one (128-255 with the upper shift), up to 1558 codewords. Not supported, reported and drawn as a hatched box: ECC 000-140,
+  characters above 255, more data than 144 x 144 holds, the connection setting (structured append), FNC1 / GS1 mode and the rectangular sizes (a forced rectangle falls back to the smallest square). C40, Text, X12, EDIFACT and Base 256
+  are not used: **the printer chooses its own encodation and symbol size, so for long or mixed data the printed symbol can differ in size from the drawing** (the drawing is always a valid symbol that decodes to the same data).
+  The ISO/IEC 16022 standard was not available: the size table (capacity, error correction codewords, Reed-Solomon blocks, regions) and the module placement were typed from memory and are validated by properties (see tests/datamatrix-encoder.test.js:
+  capacity against the manual's numeric capacity table, codewords = modules / 8, Reed-Solomon syndromes of every block, every codeword bit placed exactly once, an independent decoder round trip, and the worked example of 123456 remembered from the standard).
+  **Not verified on a scanner or a printer:** scan the drawn symbol with a phone and compare it with a printed label before relying on it. Not documented by the manuals: how TSPL `DMATRIX` places the symbol in `width` x `height`, whether `xm,row,col` can be partly omitted, the module limits of TSPL,
+  and the printer's choice of encodation. The viewer draws no quiet zone (like QR).
 - Code 93, NW7 / Codabar, MSI and Industrial 2 of 5 (TPCL types `C 4 1 O`; TSPL `93` and `CODA`, which are the only ones the B-442/443 manual lists): drawn for real with their usual symbol tables, the module / wide / narrow
   widths of the command and the text under the bars when the label asks for it. What the manuals say: Code 93 is in the generic TPCL form (check option 1 none, 2 check, 3 attach modulus 47); MSI, NW7 and Industrial 2 of 5
   are in the widths form with the check options 1 to 3 (MSI also 4 and 5, see the table above), MSI with the character-to-character space fixed to 00 and Industrial 2 of 5 with the wide space fixed to 00 (the narrow space is
