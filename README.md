@@ -163,14 +163,16 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       content is exactly `@n` with a start value assigned (`@n="0001"`) shows that value, and **Incremento** edits the step of its
       `SET COUNTER @n step` line (-999999999..999999999).
     - **Tipo de código**, **Dígito de control** and **Complemento** (1D barcodes, TPCL `XB` and TSPL `BARCODE`; not QR): the symbology among the ones the viewer draws exactly
-      and the emitters write (Code 128, Code 39, ITF, EAN-13, EAN-8, UPC-A, UPC-E), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
-      so ITF lists a single option and Code 128 no field; EAN / UPC in TPCL: none / check / automatic = options 1 / 2 / 3, in TSPL only automatic, the types have no option),
+      and the emitters write (Code 128, Code 39, ITF, Code 93, NW7 / Codabar, MSI, 2 de 5 industrial, EAN-13, EAN-8, UPC-A, UPC-E; TSPL has no MSI or 2 de 5 industrial type, so it does not offer them), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
+      so ITF lists a single option and Code 128 no field; NW7: none only; EAN / UPC, Code 93 and 2 de 5 industrial in TPCL: none / check / automatic = options 1 / 2 / 3, MSI also 4 = IBM modulus 10 + 10 and 5 = IBM modulus 11 + 10;
+      in TSPL Code 93 and EAN / UPC only automatic, NW7 none, the types have no option),
       and for the EAN / UPC types the add-on (none, +2, +5: part of the TPCL type character and of the TSPL type string, `EAN13+2`). The command is written again for the new type: TPCL replaces the whole `XB` command (the
       Code 128 form and the Code 39 / ITF form have different parameters; position, rotation, height, readable flag, module or widths, counters and any
-      `=data` are kept, the Code 39 / ITF inter-character space follows the manual, 00 for ITF; the `RB` data command is never touched); TSPL replaces the type
+      `=data` are kept, the widths-form inter-character space follows the manual, 00 for ITF and MSI, and the wide space 00 for 2 de 5 industrial; the `RB` data command is never touched); TSPL replaces the type
       string and the wide bar argument only (the other arguments, REFERENCE-relative coordinates and a counter content stay as written). A check option the new
-      type lacks goes back to none (automatic for the EAN / UPC types); the add-on and the TPCL guard bar length are carried between EAN / UPC types. The change is refused (nothing changes) when something would be lost without any warning: a TPCL start/stop option (`T`/`P`/`N`)
-      or a guard bar that the other form cannot hold, TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Code 93...). Content the new type cannot encode
+      type lacks goes back to none (automatic for Code 93 and the EAN / UPC types); the add-on and the TPCL guard bar length are carried between EAN / UPC types; a TPCL start/stop option (`T`/`P`/`N`) is carried between the widths-form types
+      (Code 39, ITF, MSI, NW7, 2 de 5 industrial). TSPL writes the wide argument of the new type (1:2 for Code 93, 3:1 for Code 39 / NW7 / ITF, equal to the narrow one for the rest). The change is refused (nothing changes) when something would be lost without any warning: a TPCL start/stop option
+      or a guard bar that the other form cannot hold (a start/stop option towards Code 128, Code 93 or EAN / UPC), TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Postnet...). Content the new type cannot encode
       (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
       new symbology only adds rows.
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
@@ -196,7 +198,7 @@ What is lost or approximated (each case is reported in the warnings list):
 
 - Text: the TPCL PC bitmap fonts (letter, serif, italic) have no TSPL equivalent; TPCL magnifications in steps of 0.1 become
   TSPL integer multipliers or a scalable font in whole points.
-- Barcodes: types without a counterpart are skipped with a warning (for example TSPL Postnet in TPCL or the other way round, or TSPL `128M` control codes). The twelve EAN / UPC variants (EAN-13, EAN-8, UPC-A, UPC-E, each with +2 / +5) convert exactly in both directions; the TPCL check digit options none / check and the WPC guard bar length have no TSPL equivalent (a warning and an information message; the TSPL type attaches the check digit automatically).
+- Barcodes: types without a counterpart are skipped with a warning (for example TSPL Postnet in TPCL or the other way round, or TSPL `128M` control codes). Code 93 (TPCL `C`, TSPL `93`) and NW7 / Codabar (TPCL `4`, TSPL `CODA`) convert in both directions; MSI and 2 de 5 industrial have no TSPL type (the B-442/443 manual lists none), so they are skipped with a warning when converting to TSPL; a Code 93 without check characters (TPCL option 1 / 2) is written as `93` with a warning (TSPL has no option: the check characters are attached). The twelve EAN / UPC variants (EAN-13, EAN-8, UPC-A, UPC-E, each with +2 / +5) convert exactly in both directions; the TPCL check digit options none / check and the WPC guard bar length have no TSPL equivalent (a warning and an information message; the TSPL type attaches the check digit automatically).
 - QR: the rotation is not converted.
 - Variables: TPCL `#NAME#` is written literally in TSPL, which has no substitution.
 - Label size: the TPCL pitch and the TSPL gap are **not converted** (TSPL to TPCL writes the height as the pitch; TPCL to TSPL omits `GAP`).
@@ -217,6 +219,10 @@ What is lost or approximated (each case is reported in the warnings list):
 | `XB` / `RB` type `2` | Interleaved 2 of 5 / ITF (generated for real, same widths and text options) |
 | `XB` / `RB` type `B` | Code39 full ASCII: only the characters of standard Code39 are drawn (see limitations) |
 | `XB` / `RB` types `5` `7` `8` (EAN-13, +2, +5), `0` `I` `J` (EAN-8), `K` `L` `M` (UPC-A), `6` `G` `H` (UPC-E) | EAN / UPC (generated for real: guard bars, check digit option, digits printed under the bars when the label asks for it, add-on digits above the add-on bars; see limitations) |
+| `XB` / `RB` type `C` | Code 93 (generic form: module, rotation, height; check option 1 none / 2 check / 3 attach C and K, modulo 47; generated for real) |
+| `XB` / `RB` type `4` | NW7 / Codabar (widths form; start/stop letters A-D in the data; generated for real) |
+| `XB` / `RB` type `1` | MSI (widths form; check options 1 none, 2 check, 3 IBM modulus 10, 4 IBM modulus 10 + 10, 5 IBM modulus 11 + 10; generated for real) |
+| `XB` / `RB` type `O` | Industrial 2 of 5 (widths form, wide space 00; check options 1 / 2 / 3; generated for real) |
 | `XB` other types | Other barcodes: drawn approximately |
 | `LC` | Lines and rectangles (a rectangle may carry the optional corner radius `ggg`, 0.1 mm, drawn rounded) |
 | `XR` | Clear area: type `B` inverts white/black and type `A` clears to white, in the rectangle between the start and end corners (0.1 mm; the corners may come in any order). It acts on what is drawn **before** it in command order; what comes after is not affected. Drawn, moved, edited (**Final X**, **Final Y**, **Tipo**: Invertir / Borrar) and inserted from the palette (**Área invertida**, 30 x 10 mm, type `B`; clearing areas have no palette entry). **Browser check pending:** the inversion is drawn with the SVG blend mode `difference` |
@@ -236,7 +242,7 @@ It can be exported to TPCL with **Convertir a…**.
 |---|---|
 | `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SHIFT` | Label setup (size in inches, mm or dots; coordinates in dots). The **Formato** row writes `SIZE` and `GAP` in mm |
 | `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
-| `BARCODE` | Code128 (also `128M` and `EAN128`), Code39, ITF / `25` and EAN13 / EAN8 / UPCA / UPCE (each also with `+2` and `+5`) are generated for real; the other types are drawn approximately and reported |
+| `BARCODE` | Code128 (also `128M` and `EAN128`), Code39, ITF / `25`, Code 93 (`93`), Codabar (`CODA`) and EAN13 / EAN8 / UPCA / UPCE (each also with `+2` and `+5`) are generated for real; the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
 | `BAR`, `BOX` | Filled bar and rectangle outline (with thickness and optional corner radius, in dots; the radius argument is from the TSPL2 manual and **not verified on a printer**) |
 | `ELLIPSE`, `CIRCLE` | Ellipse and circle outlines (`x,y` is the top-left corner of the bounding box; size and thickness in dots; stroke centered on the box edge). Drawn, moved, edited (**Ancho/Alto** or **Diámetro**, **Grosor**) and inserted from the palette (**Elipse**, **Círculo**). Both commands are from the TSPL2 manual v3.0 (not available locally) and are **not verified on a printer**. TPCL has no equivalent: converting to TPCL skips them with a warning |
@@ -280,6 +286,19 @@ Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`P
   when the data does not match, whether the printer prints the digits under the bars (TPCL `p` flag, TSPL human readable) with its own layout, the exact meaning of the TPCL WPC
   guard bar length (the viewer extends the start, centre and end guard bars by that length in 0.1 mm; without the field, as in TSPL, by the height of the digits when they are printed) and the TSPL wide
   argument (written equal to the narrow one). Check the placement of the digits, guard bars and add-on in a browser and on a printer.
+- Code 93, NW7 / Codabar, MSI and Industrial 2 of 5 (TPCL types `C 4 1 O`; TSPL `93` and `CODA`, which are the only ones the B-442/443 manual lists): drawn for real with their usual symbol tables, the module / wide / narrow
+  widths of the command and the text under the bars when the label asks for it. What the manuals say: Code 93 is in the generic TPCL form (check option 1 none, 2 check, 3 attach modulus 47); MSI, NW7 and Industrial 2 of 5
+  are in the widths form with the check options 1 to 3 (MSI also 4 and 5, see the table above), MSI with the character-to-character space fixed to 00 and Industrial 2 of 5 with the wide space fixed to 00 (the narrow space is
+  its element-to-element space), and the start/stop option `T` / `P` / `N` (start only, stop only, none; omitted = attached automatically). **Not documented, so assumed and not verified on a printer:**
+  - Start/stop option `T` / `P` / `N`: kept in the file and carried between the widths-form types, but the viewer always draws the automatic start and stop (it reports it).
+  - Code 93: the viewer draws only the 43 standard characters (full ASCII needs shift characters: other characters are reported and the barcode is not drawn); check "automatic" attaches C and K
+    (weights 1..20 and 1..15 from the right, modulo 47); "check" draws the data as given and reports wrong characters; the human-readable text is the data without start, stop or check characters. TSPL `93` has no check option: the viewer
+    assumes the check characters are attached. TSPL wide argument for Code 93: written as 2 x narrow (the manual's table lists the type with 1:2, 1:3 and 2:5 only).
+  - NW7: the data may carry its own start / stop letters (A-D); when one is missing the viewer adds an A (the manual only says the printer attaches the start / stop code automatically). The text under the bars is the data as written. The manuals document no check option for NW7.
+  - MSI: bit 1 = wide bar + narrow space, bit 0 = narrow bar + wide space, start = wide bar + narrow space, stop = narrow bar + wide space + narrow bar. "IBM modulus 10" is read as the usual MSI modulus 10 (double every second digit from the right,
+    sum the digits of the products); "IBM modulus 11" as weights 2..7 from the right (a result of 10 is written as 0 and reported). Option 2 (check) verifies the last digit as IBM modulus 10.
+  - Industrial 2 of 5: the manual does not give the start / stop patterns (the viewer uses wide-wide-narrow bars and wide-narrow-wide bars, all spaces narrow) nor the "modulus check character" (the viewer uses modulus 10, weights 3 and 1 from the right).
+  - Without explicit widths the wide elements are 3 x the module; TSPL `CODA` follows the manual's ratios (1:2, 1:3, 2:5).
 - ITF: only check digit option `1` (none) is drawn; options 2 to 5 are drawn without check digit and reported. The
   printer's behavior with an **odd number of digits is not verified**: the viewer draws a leading `0` and reports it.
   Non-digit characters are reported and not drawn.

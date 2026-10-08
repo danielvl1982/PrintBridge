@@ -130,14 +130,14 @@ test('quoted commas and the \\" escape in the content', () => {
 });
 
 test('unknown types are unknown with the raw type kept and a validator warning', () => {
-  for (const type of ['93', 'CODA', 'MSI', 'POST', 'EAN13+2x', 'EAN13+3']) {
+  for (const type of ['MSI', 'POST', 'EAN13+2x', 'EAN13+3']) {
     const item = one(bc(type));
     assert.equal(item.symbology, 'unknown', type);
     assert.equal(item.native.type, type);
   }
-  const model = parse(bc('93'));
+  const model = parse(bc('MSI'));
   const warnings = PB.validator.validate(model).filter(d => d.level === 'warning');
-  assert.ok(warnings.some(d => /BARCODE: código "unknown" \(tipo 93\)/.test(d.text)), JSON.stringify(warnings));
+  assert.ok(warnings.some(d => /BARCODE: código "unknown" \(tipo MSI\)/.test(d.text)), JSON.stringify(warnings));
 });
 
 test('EAN / UPC add-on variants are drawn for real (task C1): symbology, add-on and no "not drawn" info; other types still note it', () => {
@@ -200,6 +200,6 @@ test('a parsed TSPL barcode renders with the SVG renderer', () => {
   assert.match(c39.diagnostics[0].text, /^BARCODE: Code39: /);
   const gs1 = draw('SIZE 100 mm,60 mm\r\nBARCODE 16,40,"EAN128",80,1,0,2,4,"0112345678901231"');
   assert.equal(gs1.svg.includes(FNC1), false);
-  const unk = draw('SIZE 100 mm,60 mm\r\nBARCODE 16,40,"93",80,0,0,2,4,"ABC"');
+  const unk = draw('SIZE 100 mm,60 mm\r\nBARCODE 16,40,"POST",80,0,0,2,4,"ABC"');
   assert.match(unk.diagnostics[0].text, /\(aprox\.\)/);
 });

@@ -227,9 +227,9 @@ const valueOf = (d, key) => (d.fields.find(f => f.key === key) || {}).value;
 const optionsOf = (d, key) => ((d.fields.find(f => f.key === key) || {}).options || []).map(o => o.value);
 const xbOf = text => /\{XB01;[^|]*\|\}/.exec(text)[0];
 
-test('selector: the data-driven labels list the new symbologies in order, after Code 128 / 39 / ITF', () => {
-  assert.deepEqual(Object.keys(selector.LABELS), ['code128', 'code39', 'itf', 'ean13', 'ean8', 'upca', 'upce']);
-  assert.deepEqual(Object.keys(selector.CHECK_LABELS), ['none', 'mod43', 'check', 'auto']);
+test('selector: the data-driven labels list the new symbologies in order (C2 added Code 93, NW7, MSI and Industrial 2 of 5 before the EAN / UPC ones)', () => {
+  assert.deepEqual(Object.keys(selector.LABELS), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce']);
+  assert.deepEqual(Object.keys(selector.CHECK_LABELS), ['none', 'mod43', 'check', 'auto', 'mod1010', 'mod1110']);
   assert.deepEqual(Object.keys(selector.ADDON_LABELS), ['0', '2', '5']);
   assert.equal(selector.LABELS.ean13, 'EAN-13');
 });
@@ -237,7 +237,7 @@ test('selector: the data-driven labels list the new symbologies in order, after 
 test('TPCL describeItem: Tipo de código offers the four symbologies, Dígito de control none / check / auto, Complemento 0 / 2 / 5', () => {
   for (const withText of [true, false]) {
     const d = describeT(tpclDoc(XB.ean13), withText);
-    assert.deepEqual(optionsOf(d, 'symbology'), ['code128', 'code39', 'itf', 'ean13', 'ean8', 'upca', 'upce']);
+    assert.deepEqual(optionsOf(d, 'symbology'), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce']);
     assert.deepEqual([valueOf(d, 'symbology'), valueOf(d, 'check'), valueOf(d, 'addon')], ['ean13', 'auto', 0]);
     assert.deepEqual(optionsOf(d, 'check'), ['none', 'check', 'auto']);
     assert.deepEqual(optionsOf(d, 'addon'), [0, 2, 5]);
@@ -297,12 +297,12 @@ const lineOf = text => /BARCODE [^\r\n]*/.exec(text)[0];
 test('TSPL describeItem: Tipo de código offers the four symbologies, the check is automatic only, Complemento 0 / 2 / 5', () => {
   for (const withText of [true, false]) {
     const d = describeS(tsplText(BARCODE_S('EAN13+2')), withText);
-    assert.deepEqual(optionsOf(d, 'symbology'), ['code128', 'code39', 'itf', 'ean13', 'ean8', 'upca', 'upce']);
+    assert.deepEqual(optionsOf(d, 'symbology'), ['code128', 'code39', 'itf', 'code93', 'codabar', 'ean13', 'ean8', 'upca', 'upce']);
     assert.deepEqual([valueOf(d, 'symbology'), valueOf(d, 'check'), valueOf(d, 'addon')], ['ean13', 'auto', 2]);
     assert.deepEqual(optionsOf(d, 'check'), ['auto']);
     assert.deepEqual(optionsOf(d, 'addon'), [0, 2, 5]);
     assert.equal(valueOf(describeS(tsplText(BARCODE_S('128')), withText), 'addon'), undefined);
-    assert.equal(valueOf(describeS(tsplText(BARCODE_S('93')), withText), 'symbology'), undefined, 'types without a row stay without a selector');
+    assert.equal(valueOf(describeS(tsplText(BARCODE_S('POST')), withText), 'symbology'), undefined, 'types without a row stay without a selector');
   }
 });
 
@@ -319,7 +319,7 @@ test('TSPL updateItem: the type string follows the symbology and add-on; the oth
   assert.equal(setS(doc, { addon: 0 }), doc);
   assert.equal(setS(doc, { addon: 3 }), doc);
   assert.equal(setS(doc, { check: 'none' }), doc, 'TSPL has no such option for these types');
-  assert.equal(setS(tsplText(BARCODE_S('93')), { symbology: 'ean13' }), tsplText(BARCODE_S('93')));
+  assert.equal(setS(tsplText(BARCODE_S('POST')), { symbology: 'ean13' }), tsplText(BARCODE_S('POST')));
 });
 
 test('TSPL updateItem: Code 128 / 39 / ITF <-> WPC adjust the wide argument; an add-on cannot go to a type without one', () => {

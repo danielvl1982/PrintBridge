@@ -8,7 +8,9 @@
  *   - human readable 0 = none, 1/2/3 (left/center/right) = shown (the alignment is kept in native.align);
  *   - type 128, 128M (manual mode: !102 = FNC1, !103/!104/!105 start codes dropped), EAN128 (leading FNC1), 39/39C/39S,
  *     25/25C/ITF14/EAN14, EAN13, EAN8, UPCA and UPCE (each also with +2 / +5, the add-on kept in item.addon; the check digit is
- *     'auto': the manual gives no option, the viewer attaches / validates it) have a neutral symbology; every other type is 'unknown'
+ *     'auto': the manual gives no option, the viewer attaches / validates it), 93 (Code 93, check 'auto': its two check characters are part of
+ *     the symbology) and CODA (Codabar, wide / narrow, no check) have a neutral symbology; every other type (the manual has no MSI or
+ *     Industrial 2 of 5) is 'unknown'
  *     (drawn approximately, the validator of the slice warns) and keeps its TSPL type in native.type. The data of a type with an
  *     add-on is the base digits followed by the add-on digits (the manual does not document it).
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
@@ -16,6 +18,8 @@
  * Emit (the inverse): `emit(item, ctx)` writes a BARCODE command.
  *   - code128 -> "128"; a leading FNC1 only -> "EAN128" (FNC1 removed from the data); FNC1 elsewhere -> "128M" with !102
  *     at each FNC1 (the parser drops start codes, so none is written);
+ *   - code93 -> "93" (wide = 2 x narrow, the 1:2 ratio of the manual's table; a check other than auto is written as auto with a warning);
+ *     codabar -> "CODA" (wide from the ratio of its widths, like Code 39);
  *   - code39 -> "39", or "39C" for a mod43 check; itf -> "25" (a check digit cannot be represented: warning); ean13 / ean8 / upca /
  *     upce -> "EAN13" / "EAN8" / "UPCA" / "UPCE" plus "+2" / "+5" for the add-on (check 'none' / 'check' have no counterpart: warning);
  *   - any other symbology has no TSPL type and is skipped with a warning (never guessed);
@@ -41,6 +45,8 @@
     '39': { symbology: 'code39', check: 'none' },
     '39C': { symbology: 'code39', check: 'mod43' },
     '39S': { symbology: 'code39', check: 'none' },
+    '93': { symbology: 'code93', check: 'auto' },
+    'CODA': { symbology: 'codabar', check: 'none' },
     '25': { symbology: 'itf', check: 'none' },
     '25C': { symbology: 'itf', check: 'unsupported' },
     'ITF14': { symbology: 'itf', check: 'none' },
@@ -55,7 +61,7 @@
   const ADD_ON = /^(.+)\+[25]$/;
   const isWpc = symbology => Object.hasOwn(PB.ean.NAMES, symbology);
   const ADDONS = Object.freeze([0, 2, 5]);
-  const defaultCheck = symbology => (isWpc(symbology) ? 'auto' : 'none');
+  const defaultCheck = symbology => (isWpc(symbology) || symbology === 'code93' ? 'auto' : 'none');
 
   /** Counter/variable content: "@1", "x"+@1+"y". */
   const COUNTER = /(?:^|\+)\s*@\d+/;
@@ -76,24 +82,30 @@
   const DEFAULT_RATIO = 3;
 
   /** TSPL type of each selectable symbology and, for the ones with a check digit option, of each check (the selector's tables). */
-  const TYPE_CODES = Object.freeze({ code128: '128', code39: '39', itf: '25', ean13: 'EAN13', ean8: 'EAN8', upca: 'UPCA', upce: 'UPCE' });
+  const TYPE_CODES = Object.freeze({ code128: '128', code39: '39', itf: '25', code93: '93', codabar: 'CODA', ean13: 'EAN13', ean8: 'EAN8', upca: 'UPCA', upce: 'UPCE' });
   const CHECK_CODES = Object.freeze({
-    code39: { none: '39', mod43: '39C' }, itf: { none: '25' },
+    code39: { none: '39', mod43: '39C' }, itf: { none: '25' }, code93: { auto: '93' }, codabar: { none: 'CODA' },
     ean13: { auto: 'EAN13' }, ean8: { auto: 'EAN8' }, upca: { auto: 'UPCA' }, upce: { auto: 'UPCE' },
   });
   const CHECK_WARNING = Object.freeze({ itf: 'no se puede representar en TSPL' });
 
   /** Symbologies whose wide bar is a real parameter (the others write wide = narrow). */
-  const WIDE_NARROW = Object.freeze(['code39', 'itf']);
+  const WIDE_NARROW = Object.freeze(['code39', 'itf', 'codabar']);
+  /** Symbologies written with a fixed wide / narrow ratio (the manual's table lists 93 with 1:2, 1:3 and 2:5, not 1:1): Code 93 uses 1:2. */
+  const FIXED_RATIO = Object.freeze({ code93: 2 });
+  /** The symbologies whose data this slice can validate besides EAN / UPC (PB[symbology].encode). */
+  const LINEAR = Object.freeze(['code93', 'codabar']);
 
   /** Symbologies with a TSPL type. */
-  const EMITTABLE = Object.freeze(['code128', 'code39', 'itf', 'ean13', 'ean8', 'upca', 'upce']);
+  const EMITTABLE = Object.freeze(['code128', 'code39', 'itf', 'code93', 'codabar', 'ean13', 'ean8', 'upca', 'upce']);
 
   /** FNC1 in the manual mode of 128M. */
   const FNC1_MANUAL = '!102';
 
   /** The wide/narrow ratio closest to `ratio` among the manual ones. */
   const nearestRatio = ratio => RATIOS.reduce((best, r) => (Math.abs(r - ratio) < Math.abs(best - ratio) ? r : best), RATIOS[0]);
+  /** How the wide argument depends on the symbology: its own ratio (Code 39 / ITF / NW7), a fixed one (Code 93) or = narrow. */
+  const wideClass = symbology => (WIDE_NARROW.includes(symbology) ? 'ratio' : Object.hasOwn(FIXED_RATIO, symbology) ? 'fixed' : 'narrow');
 
   function tspl(helpers) {
     const {
@@ -140,21 +152,26 @@
       const { symbology } = item;
       const check = item.check ?? defaultCheck(symbology);
       const types = CHECK_CODES[symbology];
-      if (isWpc(symbology)) wpcWarnings(ctx, item);
+      dataWarnings(ctx, item);
       if (Object.hasOwn(types, check)) return withAddon(types[check], symbology, item.addon);
       const fallback = defaultCheck(symbology);
-      ctx.once(`tspl-check-${symbology}`, () => diag.warning(`Código de barras ${symbology}: dígito de control "${check}" ${CHECK_WARNING[symbology] || 'sin equivalente en TSPL'}, se escribe ${isWpc(symbology) ? 'con dígito de control automático' : 'sin dígito de control'}`));
+      ctx.once(`tspl-check-${symbology}`, () => diag.warning(`Código de barras ${symbology}: dígito de control "${check}" ${CHECK_WARNING[symbology] || 'sin equivalente en TSPL'}, se escribe ${fallback === 'auto' ? 'con dígito de control automático' : 'sin dígito de control'}`));
       return withAddon(types[fallback], symbology, item.addon);
     }
 
-    /** EAN / UPC: one warning per symbology when the data cannot be encoded (variables stand for values not known here), one info for the TPCL guard bar length. */
-    function wpcWarnings(ctx, item) {
+    /** EAN / UPC / Code 93 / NW7: one warning per symbology when the data cannot be encoded (variables stand for values not known here), one info for the TPCL guard bar length. */
+    function dataWarnings(ctx, item) {
       const data = String(item.data ?? '');
-      if (!PB.variables.namesIn(data).length) {
-        const encoded = PB.ean.encode(item.symbology, data, { check: item.check, addon: item.addon });
+      let encoded = null;
+      if (isWpc(item.symbology)) encoded = PB.ean.encode(item.symbology, data, { check: item.check, addon: item.addon });
+      else if (LINEAR.includes(item.symbology)) {
+        const out = PB[item.symbology].encode(data, { check: 'none' });
+        encoded = { ok: (out.widths || out.elements).length > 0, warnings: out.warnings };
+      }
+      if (encoded && !PB.variables.namesIn(data).length) {
         if (!encoded.ok) ctx.once(`tspl-wpc-${item.symbology}`, () => diag.warning(`Hay códigos de barras con datos que no son válidos para su tipo (${encoded.warnings[0]}): la impresora puede rechazarlos`));
       }
-      if (item.guard > 0) ctx.once('tspl-guard', () => diag.info('La longitud de la barra de guarda de los códigos EAN / UPC de TPCL no se escribe en TSPL'));
+      if (isWpc(item.symbology) && item.guard > 0) ctx.once('tspl-guard', () => diag.info('La longitud de la barra de guarda de los códigos EAN / UPC de TPCL no se escribe en TSPL'));
     }
 
     /**
@@ -178,6 +195,8 @@
         const explicit = w && w.narrowBar > 0 && Number.isFinite(w.wideBar);
         if (!explicit) ctx.once('tspl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
         wide = roundDots(narrow * nearestRatio(explicit ? w.wideBar / w.narrowBar : DEFAULT_RATIO));
+      } else if (Object.hasOwn(FIXED_RATIO, item.symbology)) {
+        wide = roundDots(narrow * FIXED_RATIO[item.symbology]);
       }
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
       const height = Math.max(1, toDots(ctx, item.height));
@@ -288,11 +307,11 @@
       if (!rawContent(cmd.args[2].value) && to !== from) return null;
       const type = withAddon(Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to][check] : TYPE_CODES[to], to, addon);
       const edits = [{ start: cmd.args[2].start, end: cmd.args[2].end, value: `"${type}"` }];
-      const [wasWide, isWide] = [WIDE_NARROW.includes(from), WIDE_NARROW.includes(to)];
-      if (wasWide !== isWide) {
+      if (wideClass(from) !== wideClass(to)) {
         const narrow = num(cmd.args[6]);
         if (narrow === null || !Number.isInteger(narrow) || narrow < 1) return null;
-        edits.push({ start: cmd.args[7].start, end: cmd.args[7].end, value: String(isWide ? roundDots(narrow * nearestRatio(DEFAULT_RATIO)) : narrow) });
+        const wide = { ratio: roundDots(narrow * nearestRatio(DEFAULT_RATIO)), fixed: roundDots(narrow * (FIXED_RATIO[to] || 1)), narrow }[wideClass(to)];
+        edits.push({ start: cmd.args[7].start, end: cmd.args[7].end, value: String(wide) });
       }
       return edits;
     }
@@ -316,7 +335,7 @@
     const isWideNarrow = (item, cmd) => {
       const type = cmd ? cmd.args[2] && cmd.args[2].value : item.native && item.native.type;
       const known = TYPES[String(type).toUpperCase().replace(ADD_ON, '$1')];
-      return !!known && (known.symbology === 'code39' || known.symbology === 'itf');
+      return !!known && WIDE_NARROW.includes(known.symbology);
     };
 
     return {
@@ -364,7 +383,7 @@
             if (typeKey === 'EAN128') data = barcodeData.FNC1 + data;
 
             const { x, y } = ctx.pos(px, py);
-            const wideNarrow = known.symbology === 'code39' || known.symbology === 'itf';
+            const wideNarrow = WIDE_NARROW.includes(known.symbology);
             const dotWide = (wide !== null && wide > 0 ? wide : narrow * 3) * ctx.dot;
             const item = {
               kind: 'barcode', ref, source: sourceOf(cmd), x, y, raw: { x: String(px), y: String(py) },
