@@ -252,16 +252,16 @@ test('describeItem: PC magnifications come from the text; without text only rota
 test('describeItem: generic barcode', () => {
   const d = tpcl.describeItem(tpcl.parse(XB4).items[0], XB4);
   assert.equal(d.kind, 'barcode');
-  assert.deepEqual(keys(d), ['module', 'height', 'rotation', 'counter', 'humanReadable', 'zeroSuppress']);
-  assert.deepEqual(d.fields.map(f => f.value), [2, 80, 0, 0, true, 0]);
+  assert.deepEqual(keys(d), ['symbology', 'module', 'height', 'rotation', 'counter', 'humanReadable', 'zeroSuppress']);
+  assert.deepEqual(d.fields.map(f => f.value), ['code128', 2, 80, 0, 0, true, 0]);
   assert.equal(field(d, 'humanReadable').type, 'checkbox');
   assert.deepEqual(d.fields.map(f => f.value), tpcl.describeItem(tpcl.parse(XB4).items[0]).fields.map(f => f.value));
 });
 
 test('describeItem: Code39 has no module field', () => {
   const d = tpcl.describeItem(tpcl.parse(C39).items[0], C39);
-  assert.deepEqual(keys(d), ['height', 'rotation', 'counter', 'humanReadable', 'zeroSuppress']);
-  assert.deepEqual(d.fields.map(f => f.value), [80, 0, 0, true, 0]);
+  assert.deepEqual(keys(d), ['symbology', 'check', 'height', 'rotation', 'counter', 'humanReadable', 'zeroSuppress']);
+  assert.deepEqual(d.fields.map(f => f.value), ['code39', 'mod43', 80, 0, 0, true, 0]);
 });
 
 test('describeItem: QR has cell and ecc options but no rotation', () => {

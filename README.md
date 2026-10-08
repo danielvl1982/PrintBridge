@@ -162,7 +162,16 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       preview, the data written to the code never changes, and the barcode bars always draw the full data. TSPL: a TEXT or BARCODE whose
       content is exactly `@n` with a start value assigned (`@n="0001"`) shows that value, and **Incremento** edits the step of its
       `SET COUNTER @n step` line (-999999999..999999999).
-    - Not editable yet: the barcode type and the check digit.
+    - **Tipo de código** and **Dígito de control** (1D barcodes, TPCL `XB` and TSPL `BARCODE`; not QR): the symbology among the ones the viewer draws exactly
+      and the emitters write (Code 128, Code 39, ITF), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
+      so ITF lists a single option and Code 128 no field). The command is written again for the new type: TPCL replaces the whole `XB` command (the
+      Code 128 form and the Code 39 / ITF form have different parameters; position, rotation, height, readable flag, module or widths, counters and any
+      `=data` are kept, the Code 39 / ITF inter-character space follows the manual, 00 for ITF; the `RB` data command is never touched); TSPL replaces the type
+      string and the wide bar argument only (the other arguments, REFERENCE-relative coordinates and a counter content stay as written). A check option the new
+      type lacks goes back to none. The change is refused (nothing changes) when something would be lost without any warning: a TPCL start/stop option (`T`/`P`/`N`)
+      or a guard bar that the other form cannot hold, TSPL `128M`/`EAN128` content, add-on types and symbologies without a row (EAN13...). Content the new type cannot encode
+      (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
+      new symbology only adds rows.
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.

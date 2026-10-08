@@ -28,6 +28,7 @@
   PB.slices.barcode = PB.slices.barcode || {};
 
   const { diagnostics: diag, barcodeData } = PB;
+  const { selector } = PB.slices.barcode;
 
   /** Neutral symbology and check option of each TSPL type (the types not listed are 'unknown'). */
   const TYPES = Object.freeze({
@@ -64,6 +65,14 @@
 
   const RATIOS = Object.freeze([2, 2.5, 3]);
   const DEFAULT_RATIO = 3;
+
+  /** TSPL type of each selectable symbology and, for the ones with a check digit option, of each check (the selector's tables). */
+  const TYPE_CODES = Object.freeze({ code128: '128', code39: '39', itf: '25' });
+  const CHECK_CODES = Object.freeze({ code39: { none: '39', mod43: '39C' }, itf: { none: '25' } });
+  const CHECK_WARNING = Object.freeze({ itf: 'no se puede representar en TSPL' });
+
+  /** Symbologies whose wide bar is a real parameter (the others write wide = narrow). */
+  const WIDE_NARROW = Object.freeze(['code39', 'itf']);
 
   /** Symbologies with a TSPL type. */
   const EMITTABLE = Object.freeze(['code128', 'code39', 'itf', 'ean13']);
@@ -114,14 +123,11 @@
     /** TSPL type of a Code39 / ITF / EAN13 item (warns once when the check digit or the data cannot be written). */
     function typeOf(ctx, item) {
       const { symbology, check } = item;
-      if (symbology === 'code39') {
-        if (check === 'mod43') return '39C';
-        if (check && check !== 'none') ctx.once('tspl-check-code39', () => diag.warning(`Código de barras code39: dígito de control "${check}" sin equivalente en TSPL, se escribe sin dígito de control`));
-        return '39';
-      }
-      if (symbology === 'itf') {
-        if (check && check !== 'none') ctx.once('tspl-check-itf', () => diag.warning(`Código de barras itf: dígito de control "${check}" no se puede representar en TSPL, se escribe sin dígito de control`));
-        return '25';
+      const types = Object.hasOwn(CHECK_CODES, symbology) ? CHECK_CODES[symbology] : null;
+      if (types) {
+        if (Object.hasOwn(types, check ?? 'none')) return types[check ?? 'none'];
+        ctx.once(`tspl-check-${symbology}`, () => diag.warning(`Código de barras ${symbology}: dígito de control "${check}" ${CHECK_WARNING[symbology] || 'sin equivalente en TSPL'}, se escribe sin dígito de control`));
+        return types.none;
       }
       if (!/^\d{12,13}$/.test(String(item.data ?? ''))) {
         ctx.once('tspl-ean13-digits', () => diag.warning('Hay códigos EAN13 cuyos datos no son 12 o 13 dígitos: la impresora puede rechazarlos'));
@@ -145,7 +151,7 @@
 
       const narrow = Math.max(1, toDots(ctx, item.module));
       let wide = narrow;
-      if (item.symbology === 'code39' || item.symbology === 'itf') {
+      if (WIDE_NARROW.includes(item.symbology)) {
         const w = item.widths;
         const explicit = w && w.narrowBar > 0 && Number.isFinite(w.wideBar);
         if (!explicit) ctx.once('tspl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
@@ -188,8 +194,74 @@
     /** 128M and EAN128 data is rewritten by the parser (control codes, FNC1), so it cannot be edited as plain text. */
     const rawContent = type => !['128M', 'EAN128'].includes(String(type).toUpperCase());
 
+    // --- Type selector: the symbology and check digit fields rewrite the type and wide arguments of the command ---
+
+    /** { symbology, check } of a type string when it is a selectable one (not an add-on variant), else undefined. */
+    const knownType = type => {
+      const key = String(type).toUpperCase();
+      const known = ADD_ON.test(key) ? undefined : TYPES[key];
+      return known && Object.hasOwn(TYPE_CODES, known.symbology) ? known : undefined;
+    };
+    const typeOfCommand = cmd => knownType(cmd && cmd.args[2] && cmd.args[2].value);
+    const typeOfItem = item => (item.native && item.native.type !== undefined ? knownType(item.native.type) : undefined);
+
+    const symbologyField = {
+      key: 'symbology', label: 'Tipo de código', type: 'select', arg: 2, reemit: true,
+      options: selector.symbologyOptions(TYPE_CODES),
+      model: item => (typeOfItem(item) ? item.symbology : undefined),
+      read: (a, cmd) => (typeOfCommand(cmd) || {}).symbology,
+      write: () => null,
+    };
+    const checkField = {
+      key: 'check', label: 'Dígito de control', type: 'select', arg: 2, reemit: true,
+      optionsFor: (value, item, cmd) => {
+        const known = cmd ? typeOfCommand(cmd) : typeOfItem(item);
+        const options = selector.checkOptions(CHECK_CODES, known ? known.symbology : item.symbology);
+        return options.some(o => o.value === value) ? options : [...options, { value, label: 'Otro (no editable)' }];
+      },
+      model: item => (typeOfItem(item) && Object.hasOwn(CHECK_CODES, item.symbology) ? (item.check ?? 'none') : undefined),
+      read: (a, cmd) => {
+        const known = typeOfCommand(cmd);
+        return known && Object.hasOwn(CHECK_CODES, known.symbology) ? (known.check ?? 'none') : undefined;
+      },
+      write: () => null,
+    };
+
+    /**
+     * Changes the symbology and / or check digit of a BARCODE: the type string and the wide argument are emitted again (the same
+     * tables as emit(): "128", "39" / "39C", "25"; wide = narrow x the default ratio when the new type has a wide bar and the old
+     * one had none, = narrow when it has none, the written one between Code 39 and ITF). The other arguments (coordinates with
+     * REFERENCE / SHIFT, height, readable, rotation, narrow, alignment, the content, counters) stay as written: all types share one
+     * layout, so these two arguments are all that depends on the type. null (refuse, text unchanged): the type or the new value has
+     * no row, an add-on, 128M / EAN128 content (the parser rewrites it, so it cannot move to another type), an invalid value or
+     * nothing changes. The editors have no diagnostics path, so nothing is dropped silently.
+     */
+    function reemit(cmd, item, changes) {
+      const known = typeOfCommand(cmd);
+      if (!known) return null;
+      const from = known.symbology;
+      const to = Object.hasOwn(changes, 'symbology') ? changes.symbology : from;
+      if (!selector.symbologyOptions(TYPE_CODES).some(o => o.value === to)) return null;
+      const checks = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to] : {};
+      if (Object.hasOwn(changes, 'check') && !Object.hasOwn(checks, changes.check)) return null;
+      if (to === from && !Object.hasOwn(changes, 'check')) return null;
+      const check = Object.hasOwn(changes, 'check') ? changes.check : (Object.hasOwn(checks, known.check) ? known.check : 'none');
+      if (to === from && check === (known.check ?? 'none')) return null;
+      if (!rawContent(cmd.args[2].value) && to !== from) return null;
+      const type = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to][check] : TYPE_CODES[to];
+      const edits = [{ start: cmd.args[2].start, end: cmd.args[2].end, value: `"${type}"` }];
+      const [wasWide, isWide] = [WIDE_NARROW.includes(from), WIDE_NARROW.includes(to)];
+      if (wasWide !== isWide) {
+        const narrow = num(cmd.args[6]);
+        if (narrow === null || !Number.isInteger(narrow) || narrow < 1) return null;
+        edits.push({ start: cmd.args[7].start, end: cmd.args[7].end, value: String(isWide ? roundDots(narrow * nearestRatio(DEFAULT_RATIO)) : narrow) });
+      }
+      return edits;
+    }
+
     /** Properties of BARCODE (type untouched). The wide bar only matters for the wide/narrow symbologies. */
     const barcodeFields = wideNarrow => [
+      symbologyField, checkField,
       numberField('height', 'Alto (puntos)', 3, 1, MAX_DOTS, (item, { dpi }) => dots(dpi, item.height)),
       selectField('readable', 'Texto legible', 4, [
         { value: 0, label: 'No' }, { value: 1, label: 'Izquierda' }, { value: 2, label: 'Centro' }, { value: 3, label: 'Derecha' },
@@ -217,8 +289,8 @@
       // Move: BARCODE x,y are arguments 0 and 1 (dots)
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BARCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       editable: [
-        { applies: (item, cmd) => isBarcode(item, cmd) && isWideNarrow(item, cmd), fields: barcodeFields(true) },
-        { applies: isBarcode, fields: barcodeFields(false) },
+        { applies: (item, cmd) => isBarcode(item, cmd) && isWideNarrow(item, cmd), fields: barcodeFields(true), reemit },
+        { applies: isBarcode, fields: barcodeFields(false), reemit },
       ],
       handlers: [
         {

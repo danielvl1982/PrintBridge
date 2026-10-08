@@ -416,7 +416,7 @@
     if (typeof text !== 'string' || !span) return { shape, match: null };
     const original = text.slice(span.start, span.end);
     const { stripped, map } = stripNewlines(original);
-    return { shape, original, map, span, match: shape.pattern.exec(stripped) };
+    return { shape, original, stripped, map, span, match: shape.pattern.exec(stripped) };
   }
 
   /**
@@ -434,7 +434,9 @@
         const value = match ? f.read(match[f.group], item) : f.model && f.model(item);
         if (value === undefined || value === null) continue;
         const { key, label, type, min, max, step } = f;
-        const options = f.optionsFor ? f.optionsFor(value) : f.options; // optionsFor lists a current value outside the options
+        // optionsFor lists a current value outside the options; it also gets the item and the matched command text (the
+        // options of the barcode check digit depend on the symbology written there)
+        const options = f.optionsFor ? f.optionsFor(value, item, match ? match[f.group] : undefined) : f.options;
         fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
       }
     }
@@ -452,9 +454,22 @@
    * digit width and clamping numbers to their range (rounded). Unknown keys, invalid values, items without source or
    * of a kind without editable fields are ignored: the text is returned unchanged if nothing changes.
    */
-  function updateItem(text, item, changes) {
+  function updateItem(text, item, changes, { dpi = PB.config.resolutions[0] } = {}) {
     if (!changes) return text;
     const found = editableOf(item, text);
+    // Fields flagged `reemit` (the barcode type and check digit) rewrite the whole format command through the shape's `reemit`
+    // hook: (found, item, changes, { dpi }) -> the new text, or null to refuse (text unchanged). The remaining changes of the same
+    // call are then applied to the new command, which is parsed again (the type moves the parameters).
+    const reemitKeys = found && found.shape.reemit ? found.shape.fields.filter(f => f.reemit && Object.hasOwn(changes, f.key)).map(f => f.key) : [];
+    if (reemitKeys.length) {
+      const command = found.match ? found.shape.reemit(found, item, changes, { dpi }) : null;
+      const rewritten = command === null ? null : text.slice(0, found.span.start) + command + text.slice(found.span.end);
+      const rest = Object.fromEntries(Object.entries(changes).filter(([k]) => !reemitKeys.includes(k)));
+      if (rewritten === null || rewritten === text) return Object.keys(rest).length ? updateItem(text, item, rest, { dpi }) : text;
+      if (!Object.keys(rest).length) return rewritten;
+      const again = parse(rewritten, { dpi }).items.find(i => i.ref === item.ref);
+      return again ? updateItem(rewritten, again, rest, { dpi }) : rewritten;
+    }
     // Edits as absolute ranges of the text: { start, end, value }
     const edits = [];
     if (found && found.match) {

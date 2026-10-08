@@ -15,6 +15,7 @@
   PB.slices.barcode = PB.slices.barcode || {};
 
   const { diagnostics: diag, barcodeData } = PB;
+  const { selector } = PB.slices.barcode;
 
   /** Neutral symbology of each TPCL barcode type (the other types are 'unknown'). */
   const SYMBOLOGIES = Object.freeze({ 2: 'itf', 3: 'code39', B: 'code39', 9: 'code128', A: 'code128', T: 'qr' });
@@ -28,6 +29,9 @@
 
   /** Check digit option (field e) of each neutral check: the inverse of CHECK_OPTIONS, per wide/narrow symbology. */
   const CHECK_CODES = Object.freeze({ code39: { none: '1', mod43: '3' }, itf: { none: '1' } });
+
+  /** Form of the XB command of each emittable symbology: the generic one (module, rotation, height) or the one with explicit widths. */
+  const FORM_OF = Object.freeze({ code128: 'generic', code39: 'widths', itf: 'widths' });
 
   /** Code 39 / ITF without explicit widths: wide elements are this many narrow ones (the renderer's default ratio). */
   const DEFAULT_RATIO = 3;
@@ -152,22 +156,38 @@
      * skipped with a warning. Only neutral fields are read: native (e.g. the TSPL type) is ignored.
      */
     function emit(item, ctx) {
-      const type = TYPE_CODES[item.symbology];
-      if (!type) {
+      if (!TYPE_CODES[item.symbology]) {
         ctx.report(diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
         return [];
       }
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
-      const rotation = rotationDigit(ctx, item.rotation);
-      const height = pad4(Math.max(1, clampCoord(Number.isFinite(item.height) ? item.height : 0)));
-      const readable = item.humanReadable ? '1' : '0';
+      const shared = sharedValues(item, ctx);
       const id = allocId(ctx, 'XB');
-      const module = dotsText(ctx, item.module, 1);
-      const head = `XB${id};${x},${y},${type}`;
       const data = wrap(`RB${id};${barcodeText(ctx, item.data)}`);
-      if (item.symbology === 'code128') {
+      return [wrap(`XB${id};${x},${y},${parameters(item, ctx, shared)}`), data];
+    }
+
+    /** The values of a command that do not depend on its form: rotation digit, height, readable flag and module (dots, 2 digits). */
+    function sharedValues(item, ctx) {
+      return {
+        rotation: rotationDigit(ctx, item.rotation),
+        height: pad4(Math.max(1, clampCoord(Number.isFinite(item.height) ? item.height : 0))),
+        readable: item.humanReadable ? '1' : '0',
+        module: dotsText(ctx, item.module, 1),
+      };
+    }
+
+    /**
+     * The parameters of the XB command after the coordinates, from the type character on, for the symbology of the item (the form
+     * follows it: Code 128 the generic one, Code 39 / ITF the widths one). `keep` carries what the neutral model does not hold, when
+     * the caller rewrites an existing command: { type, checkDigit, startStop } (the type character as written, e.g. B; the check
+     * digit character of the generic form; the start/stop option of the widths form).
+     */
+    function parameters(item, ctx, { rotation, height, readable, module }, keep = {}) {
+      const type = keep.type || TYPE_CODES[item.symbology];
+      if (FORM_OF[item.symbology] === 'generic') {
         const [inc, zero] = [hasCounter(item) ? counterToken(item.counter.step) : '0', item.zeroSuppress > 0 ? zeroDigits(item.zeroSuppress) : '00'];
-        return [wrap(`${head},0,${module},${rotation},${height},${inc},000,${readable},${zero}`), data];
+        return `${type},${keep.checkDigit ?? '0'},${module},${rotation},${height},${inc},000,${readable},${zero}`;
       }
       const w = item.widths;
       if (!w) ctx.once('tpcl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
@@ -181,7 +201,80 @@
       // The increment sits right after the height (manual: llll(,mnnnnnnnnnn,p,qq)(,r)); a zero suppression is written after the readable flag
       const inc = hasCounter(item) ? `,${counterToken(item.counter.step)}` : '';
       const zero = item.zeroSuppress > 0 ? `,${zeroDigits(item.zeroSuppress)}` : '';
-      return [wrap(`${head},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpace},${gap},${rotation},${height}${inc},${readable}${zero}`), data];
+      return `${type},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpace},${gap},${rotation},${height}${inc},${readable}${zero}${keep.startStop ? `,${keep.startStop}` : ''}`;
+    }
+
+    // --- Type selector: the symbology and check digit fields rewrite the whole format command ---
+
+    /** The type character and check digit field of a command (from its first characters), as { symbology, check } of the tables. */
+    const TYPE_AND_CHECK = /^\{XB\d+;\d+,\d+,([^,]),([^,]*)/;
+    const symbologyOfCommand = raw => {
+      const m = TYPE_AND_CHECK.exec(raw || '');
+      return m && TYPE_CODES[symbologyOf(m[1])] ? symbologyOf(m[1]) : undefined;
+    };
+
+    const symbologyField = {
+      key: 'symbology', label: 'Tipo de código', type: 'select', group: 0, reemit: true,
+      options: selector.symbologyOptions(TYPE_CODES),
+      model: item => (TYPE_CODES[item.symbology] ? item.symbology : undefined),
+      read: raw => symbologyOfCommand(raw),
+      write: () => null,
+    };
+
+    /** Check digit options of the symbology written in the command (or of the item); the current value is listed even if it is not one. */
+    const checkOptionsOf = (value, item, raw) => {
+      const options = selector.checkOptions(CHECK_CODES, symbologyOfCommand(raw) || (item && item.symbology));
+      return options.some(o => o.value === value) ? options : [...options, { value, label: 'Otro (no editable)' }];
+    };
+    const checkField = {
+      key: 'check', label: 'Dígito de control', type: 'select', group: 0, reemit: true,
+      optionsFor: checkOptionsOf,
+      model: item => (Object.hasOwn(CHECK_CODES, item.symbology) ? (item.check ?? 'none') : undefined),
+      read: raw => {
+        const m = TYPE_AND_CHECK.exec(raw || '');
+        const options = m && CHECK_OPTIONS[symbologyOf(m[1])];
+        return options ? (options[m[2]] ?? 'unsupported') : undefined;
+      },
+      write: () => null,
+    };
+
+    /**
+     * Changes the symbology and / or check digit of a barcode: the format command is emitted again for the item with the new
+     * values (parameters() above) and replaces the old one (its {XBnn;x,y, head, its coordinates and any "=data" / ";link" after
+     * the parameters stay as written; the RB data command is not touched). Carried over: position, rotation, height, readable
+     * flag, module / widths, counters; the check digit when the new type has that option, else none; the type character (B) and
+     * the Code 39 / ITF start/stop option when staying in the widths form. Code 39 -> ITF writes the inter-character space 00 (manual).
+     * null (refuse, text unchanged): the current or new symbology has no row, an invalid value, a start/stop option or a guard bar
+     * that the generic form cannot hold, or nothing changes. The editors have no diagnostics path, so nothing is dropped silently.
+     */
+    function reemit({ stripped, span }, item, changes, { dpi }) {
+      const from = item.symbology;
+      const to = Object.hasOwn(changes, 'symbology') ? changes.symbology : from;
+      if (!TYPE_CODES[from] || !selector.symbologyOptions(TYPE_CODES).some(o => o.value === to)) return null;
+      const checks = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to] : {};
+      if (Object.hasOwn(changes, 'check') && !Object.hasOwn(checks, changes.check)) return null;
+      if (to === from && !Object.hasOwn(changes, 'check')) return null;
+      const check = Object.hasOwn(changes, 'check') ? changes.check : (Object.hasOwn(checks, item.check) ? item.check : 'none');
+      if (to === from && check === (item.check ?? 'none')) return null;
+      const head = /^\{XB\d+;\d+,\d+,/.exec(stripped);
+      if (!head || !stripped.endsWith('|}')) return null;
+      const native = item.native || {};
+      const rest = stripped.slice(head[0].length);
+      const cut = rest.search(/[=;]/);
+      // Guard bar (ooo) of the generic form: the 7th parameter from the type character on
+      const guard = (rest.slice(0, cut < 0 ? -2 : cut).split(',')[6] || '');
+      const [fromForm, toForm] = [FORM_OF[from], FORM_OF[to]];
+      if (fromForm === 'widths' && toForm !== 'widths' && native.startStop) return null;
+      if (fromForm === 'generic' && toForm !== 'generic' && /[1-9]/.test(guard)) return null;
+      const next = { ...item, symbology: to, check, interCharGap: to === 'itf' ? 0 : (from === 'itf' ? undefined : item.interCharGap) };
+      const ctx = PB.emit.createContext({ dpi, language: 'tpcl' });
+      const keep = {
+        ...(to === from && native.type && { type: native.type }),
+        checkDigit: '1',
+        ...(fromForm === 'widths' && toForm === 'widths' && native.startStop && { startStop: native.startStop }),
+      };
+      const suffix = cut < 0 ? '' : rest.slice(cut, -2);
+      return `${head[0]}${parameters(next, ctx, sharedValues(next, ctx), keep)}${suffix}|}`;
     }
 
     return {
@@ -252,12 +345,15 @@
         { // Code 39 / ITF: …,<type>,e,ff,gg,hh,ii,jj,<rotation>,<height>(,<increment>),<human readable>(,<zero suppression>) (module widths not editable)
           applies: item => item.kind === 'barcode' && ['2', '3', 'B'].includes(item.native && item.native.type),
           pattern: /^\{XB\d+;\d+,\d+,[23B],(?:[^,]*,){6}(\d+),(\d+)((?:,[+-]\d{10})?),([^,;|]*)((?:,\d{2})?)/d,
-          fields: [barcodeHeight(2), rotationField(1), counterField(3, true), humanReadableField(4), zeroField(5)],
+          fields: [symbologyField, checkField, barcodeHeight(2), rotationField(1), counterField(3, true), humanReadableField(4), zeroField(5)],
+          reemit,
         },
         { // Other 1D barcodes: …,<type>,<check>,<module>,<rotation>,<height>,<increment>,<000>,<human readable>(,<zero suppression>)
           applies: item => item.kind === 'barcode',
           pattern: /^\{XB\d+;\d+,\d+,[^,],[^,]*,(\d+),(\d+),(\d+),([^,]*),[^,]*,([^,;|]*)((?:,\d{2})?)/d,
+          reemit,
           fields: [
+            symbologyField, checkField,
             numberField('module', 'Módulo (puntos)', 1, 1, 99, item => item.native.module),
             barcodeHeight(3), rotationField(2), counterField(4, false), humanReadableField(5), zeroField(6),
           ],

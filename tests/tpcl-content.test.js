@@ -147,7 +147,7 @@ test('content: describeItem without text uses the item data; the field comes las
   assert.equal(d.fields[8].value, 'HOLA');
   assert.deepEqual(tpcl.describeItem(itemsOf(PC_RC)[0], PC_RC).fields.map(f => f.key), ['hMag', 'vMag', 'rotation', 'font', 'spacing', 'attribute', 'boldH', 'boldV', 'counter', 'zeroSuppress', 'align', 'content']);
   assert.deepEqual(tpcl.describeItem(itemsOf(QR_RB)[0], QR_RB).fields.map(f => f.key), ['cell', 'ecc', 'content']);
-  assert.deepEqual(tpcl.describeItem(itemsOf(XB_128)[0], XB_128).fields.map(f => f.key), ['module', 'height', 'rotation', 'counter', 'humanReadable', 'zeroSuppress', 'content']);
+  assert.deepEqual(tpcl.describeItem(itemsOf(XB_128)[0], XB_128).fields.map(f => f.key), ['symbology', 'module', 'height', 'rotation', 'counter', 'humanReadable', 'zeroSuppress', 'content']);
 });
 
 test('content: several changes at once all apply, whatever their positions', () => {
