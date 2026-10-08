@@ -92,14 +92,15 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 - **Imagen (paleta):** the component palette has an **Imagen** entry (when the label language can insert images); the chosen file replaces the previous image and is drawn at its natural pixel size for the selected **Resolución**. Click it (or press Enter) to pick a file and place it at the default point; dragging it onto the label only works if the browser allows opening the file picker from a drop, otherwise click the entry.
 - **Posición X / Posición Y:** top left corner of the image, in mm from the label origin.
 - **Ancho:** optional width in mm (empty = natural size); the height keeps the proportion. It is the width of the picture before rotating.
-- **Rotación:** 0°, 90°, 180° or 270° clockwise on the label, the same convention as text. TPCL `SG` and TSPL `BITMAP` have no rotation parameter, so the converted dots are rotated before they are previewed and written. For a new image, and every time **Giro** changes until you pick a value for that image, it is `(360 − Giro) % 360`, so the picture looks upright in the current view; choosing a value keeps it for that image. **Posición X / Y** is the top left corner of the rotated picture. Images already in the code (`SG` / `BITMAP`) have no rotation control.
+- **Rotación:** 0°, 90°, 180° or 270° clockwise on the label, the same convention as text. TPCL `SG`, TSPL `BITMAP` and ZPL `^GF` have no rotation parameter, so the converted dots are rotated before they are previewed and written. For a new image, and every time **Giro** changes until you pick a value for that image, it is `(360 − Giro) % 360`, so the picture looks upright in the current view; choosing a value keeps it for that image. **Posición X / Y** is the top left corner of the rotated picture. Images already in the code (`SG` / `BITMAP` / `^GF`) have no rotation control.
 - **Umbral:** slider 0-100 % (default 50 %), enabled with the image. A dot is black when its luminance is below the
   threshold: raise it to thicken thin lines, lower it to drop light gray background. While an image is loaded, the
   preview shows the converted black and white result (the same dots that get inserted), so you see the effect of the
   threshold, the width and the resolution before inserting. If the conversion fails, the plain picture is shown with an error.
 - **Insertar en el código:** converts the picture to black and white and writes it into the label code as a TPCL
   `{SG;xxxx,yyyy,wwww,hhhh,0,<data>|}` command, placed before `{XS;…|}` (or at the end if there is none), or as a TSPL
-  `BITMAP x,y,widthBytes,height,0,<data>` command placed before `PRINT` (bit 0 = black, the payload is raw bytes). Then the
+  `BITMAP x,y,widthBytes,height,0,<data>` command placed before `PRINT` (bit 0 = black, the payload is raw bytes), or as a ZPL
+  `^FOx,y^GFA,<total>,<total>,<bytes per row>,<data>^FS` field placed before `^XZ` (ASCII hexadecimal, 1 = black, compressed when shorter: see *Images* in the ZPL section). Then the
   preview image is removed and the picture is drawn from the code, so it survives editing and reloading.
   - Conversion: the picture is resampled to the width in dots (width in mm at the selected **Resolución**; empty = natural
     pixels), shrinking in successive halves (each step at most 2:1, high-quality smoothing) so thin lines survive;
@@ -182,7 +183,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       or a guard bar that the other form cannot hold (a start/stop option towards Code 128, Code 93 or EAN / UPC), TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Postnet...). Content the new type cannot encode
       (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
       new symbology only adds rows.
-  - **Components panel:** drag a component (text, Code128 barcode, QR, Data Matrix, line, box, **Área invertida**, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
+  - **Components panel:** drag a component (text, Code128 barcode, QR, Data Matrix, line, box, **Área invertida**, for TSPL **Elipse** and **Círculo**, and, for the three languages, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
 
@@ -211,7 +212,7 @@ What is lost or approximated (each case is reported in the warnings list):
 - Variables: TPCL `#NAME#` is written literally in TSPL, which has no substitution.
 - Label size: the TPCL pitch and the TSPL gap are **not converted** (TSPL to TPCL writes the height as the pitch; TPCL to TSPL omits `GAP`).
 - TPCL output: the `{XS;…|}` trailer is a default taken from the reference spool and **has not been verified on a printer**.
-- Images: a TSPL `BITMAP` whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet
+- Images: a TSPL `BITMAP` (or a ZPL `^GF`) whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet
   inserted in the code is not part of the conversion.
 - TPCL fields have 4 digits and 2-digit ids, and coordinates are rounded between 0.1 mm and dots.
 
@@ -263,7 +264,7 @@ It can be exported to TPCL with **Convertir a…**.
 Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`PUTPNG`
 (images stored in the printer). Also:
 
-- **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG` or a TSPL `BITMAP` command, depending on the label's language (neither format is verified on a real printer yet). A preview image can still be overlaid to check positions.
+- **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG`, a TSPL `BITMAP` or a ZPL `^GF` command, depending on the label's language (none of the formats is verified on a real printer yet). A preview image can still be overlaid to check positions.
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), Data Matrix with a module of 4 dots (TPCL, rotated like the barcodes; TSPL, with `xm,row,col` of the symbol its placeholder needs), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
@@ -278,8 +279,8 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
 
 ## ZPL support (Zebra)
 
-**Work in progress: the language core, the text, the linear barcodes, QR, Data Matrix and the shapes are in place, the other components are added next** (images,
-counters and the conversion of the rest to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
+**Work in progress: the language core, the text, the linear barcodes, QR, Data Matrix, the shapes and the images are in place, the other components are added next** (counters,
+variables and the conversion of the rest to and from TPCL / TSPL). Based on the ZPL II Programming Guide, Volume One (2003). **Nothing here has been verified on a printer.**
 
 The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL.
 What works now:
@@ -373,6 +374,15 @@ What works now:
   a **circle** has diameter, thickness, colour and reverse; an **ellipse** width, height, thickness, colour and reverse; an **area** has width, height (the thickness follows the shorter side so it stays solid) and the **mode** (Invertir = `^FR`, Borrar = colour `W`).
   Under `^LRY` the reverse checkbox reads checked (the field is reversed) and checking it adds nothing; to turn it off edit the `^LR` commands. All shapes move with `^FO` / `^FT`.
   **Palette:** *Línea* inserts `^FO x,y^GB<40 mm>,3,3^FS`, *Caja* `^GB<30 mm>,<20 mm>,3,B,0`, *Elipse* `^GE<30 mm>,<20 mm>,3`, *Círculo* `^GC<20 mm>,3` and *Área invertida* `^GB<30 mm>,<10 mm>,<10 mm>^FR`, all at the drop point (sizes in dots at the label's resolution).
+- **Images (`^GF`):** `^FO x,y ^GFa,b,c,d,data ^FS` is drawn as an image (`a` format, `b` bytes sent, `c` total bytes of the image, `d` bytes per row; the bitmap is `d * 8` dots wide and `c / d` rows high,
+  1 = black, the leftmost dot is the highest bit). `^FO` is the top-left corner and `^FT` the **bottom-left** corner (the guide says it for images). **Read:** format **A** (ASCII hexadecimal, two digits per byte; line breaks may be inserted; a comma pads the row with 0),
+  plain or with the **run-length compression** (`G`..`Y` = repeat 1..19, `g`..`z` = 20..400 in steps of 20, added together; `,` fills the rest of the row with 0, `!` with 1, `:` repeats the previous row). Counts out of 1..99999 are set to the nearest limit with a warning;
+  a missing `b`, `c` or `d` ignores the command (warning); `b` and `c` that differ, a total that is not a multiple of the row size, characters that are not hex, data that is too short (padded with white) or too long (ignored after `c` bytes) are warnings.
+  **Not supported (one warning each, nothing is drawn):** the binary forms `^GFB` / `^GFC` (binary data does not fit in a text box), Z64 / B64 data (`:Z64:`), and the images stored in the printer (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`: the data is not in the label).
+  **Writing:** `^FO x,y^GFA,<total>,<total>,<bytes per row>,<data>^FS` with ASCII hexadecimal data, run-length compressed when that is shorter than the plain hex (deterministic; the same scheme the viewer reads); rows are whole bytes, so a width that is not a multiple of 8 gains white columns;
+  a bitmap over **99999 bytes** (the guide's limit) is skipped with a warning when writing a file, and refused with an error when inserting. An image only moves (`^FO` / `^FT`): its `^GF` data is never rewritten and it has no properties.
+  **Insertion:** the **Imagen** palette entry and **Insertar en el código** (with the **Rotación** and **Umbral** controls) write the picture as a `^FO x,y^GFA…^FS` field before `^XZ`; the rotated dots are what is written.
+  **Not in the 2003 guide (so not verified on a printer):** the compression scheme above (it is in the later guides; the 2003 guide only documents the comma), the behaviour of `:` or a repeat count in odd places, and whether a printer accepts the compressed form in a `^GFA` field. **Nothing here has been verified on a printer.**
 - **Convertir a…** lists **ZPL (Zebra)** as a target (file `.zpl`, UTF-8) and reads ZPL as a source. Text converts both ways with TPCL and TSPL (position, rotation, size, data;
   fonts are mapped to the nearest one with one information message, mono multiples of a matrix become a bitmapped font, the rest the scalable `0`); the TPCL text attributes,
   alignment, spacing, bold and counters are reported and written without them. Linear barcodes convert both ways with TPCL and TSPL (position, rotation, height, module, data, human readable line, check digit option; the ratio of the wide / narrow ones):
@@ -384,7 +394,7 @@ What works now:
   **Shapes** convert both ways with TPCL and TSPL: lines and boxes (TPCL `LC`, TSPL `BAR` / `BOX`: a ZPL box is the outer box of the neutral rectangle, so the border grows outward by `t / 2` from the TPCL / TSPL corners), the corner radius
   (ZPL has only the 9 rounding degrees: the radius is **quantised** to the nearest one with one information message; TPCL / TSPL take the radius in their own units), the areas (TPCL `XR`, TSPL `REVERSE` / `ERASE` <-> `^GB ... ^FR` / white `^GB`), circles and ellipses with TSPL
   (`CIRCLE` / `ELLIPSE`; TPCL has none: skipped with the existing warning) and the slanted lines with TPCL (TSPL has none: skipped with the existing warning). White (colour `W`) and reversed outlines, diagonals and ellipses have no TPCL / TSPL form: written as plain black shapes with one warning each.
-  The other components (images) are reported as "no se puede exportar" until their tasks are done.
+  **Images** convert both ways with TPCL `SG` and TSPL `BITMAP` (position and bitmap: ZPL 1 = black, TPCL nibble data, TSPL inverted bits; a width that is not a multiple of 8 gains white padding columns in ZPL and TSPL; the images stored in the ZPL printer are not converted). The other components are reported as "no se puede exportar" until their tasks are done.
 - Files are read and written as UTF-8 (the 2003 guide ties characters above ASCII to `^CI` and the printer font, and does not mention UTF-8: not verified).
 
 ## Limitations
