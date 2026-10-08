@@ -1,6 +1,6 @@
 # Contributing to PrintBridge
 
-PrintBridge is a static HTML + vanilla JavaScript app (no build step, no dependencies to install). Live app:
+PrintBridge is a static HTML + vanilla JavaScript app (no build step, no dependencies to install) that draws labels written in three printer languages: TPCL (Toshiba TEC), TSPL (TSC TTP) and ZPL (Zebra). Live app:
 <https://danielvl1982.github.io/PrintBridge/>.
 
 ## Get started
@@ -17,33 +17,55 @@ Open `index.html` in a browser to try the app. There is nothing to install.
 
 ## Where to look
 
-- `README.md`: what the app does and what each file contains.
-- `odd/tasks/multi-printer-language-support.md`: the development plan, the task list and what is done, with the evidence for
-  each step. Check it before starting something new, and update it when you finish a task.
-- `js/core/`: the neutral label model (documented in `js/core/model.js`) and the language registry. A printer language (TPCL and TSPL, ZPL later) lives in
+- `README.md`: what the app does, what each file contains and, per language, what is drawn, edited and written.
+- `odd/tasks/`: one plan per feature with its task list and the evidence for each step (`multi-printer-language-support.md` is the foundation, `zpl-support.md` the ZPL language and the three-way conversion). Check the one that applies before starting something new, and update it when you finish a task.
+- `js/core/`: the neutral label model (documented in `js/core/model.js`) and the language registry. A printer language (TPCL, TSPL and ZPL) lives in
   `js/languages/` and registers itself with the registry. The drawing code only knows the neutral model.
-- `js/components/`: vertical slices, one folder per label component. Each slice owns its constants, drawing, validation and, per language,
-  its parse, build, move and edit pieces (`<name>/tpcl.js`), and registers in `PB.components` from `<name>/index.js`. See the contract at the top of
-  `js/components/registry.js`. To add a component, create its folder, then list its files in `js/manifest.json` and `index.html` (same order).
-- Adding a language to a component: write `js/components/<name>/<lang>.js` (a factory called with the language's helpers that returns `{ handlers, ... }`, see `text/tspl.js` and `js/components/compose.js`) and
-  register it in the component's `index.js` as `languages: { tpcl, tspl, <lang> }`. The language file in `js/languages/<lang>.js` builds its handler table
-  with `PB.composeSlices('<lang>', helpers, { handlers })`, which collects the slices registered for that language (list the slice files before the language file in the manifest).
-  Hooks for editing (`moveItem`, `updateItem`, `describeItem`, `componentTemplates`, `buildComponent`, `insertCommand`, `applySize`) are optional: the app
-  disables moving, the properties panel, the palette and size writing for a language that lacks them (TPCL and TSPL have them all; the image entry needs the extra `insertImage: true`, which only TPCL sets, see `js/core/languages.js`).
-  A slice gets the palette entry by returning `build(text, point, options)` from its factory; TSPL's slices use the shared helpers `dropDots`, `itemRotation`, `freePlaceholder` and `insertCommand` of `js/languages/tspl.js`.
+- `js/components/`: vertical slices, one folder per label component (`text`, `barcode`, `qr`, `datamatrix`, `line`, `box`, `ellipse`, `area`, `image`). Each slice owns its constants, drawing and validation and, per language,
+  its parse, build, move, edit and emit pieces (`<name>/tpcl.js`, `<name>/tspl.js`, `<name>/zpl.js`), and registers in `PB.components` from `<name>/index.js`. See the contract at the top of
+  `js/components/registry.js`. To add a component, create its folder, then list its files in `js/manifest.json` and `index.html`.
+- **Script order.** `js/manifest.json` and the `<script>` tags of `index.html` list every script in the same order (the tests load from the manifest, the browser from the page): a slice's files before its `index.js`, the slice files before the language files that compose them
+  (`js/languages/tspl-edit.js`, `tspl.js`, `zpl-edit.js`, `zpl.js`) and the languages before `js/ui.js`. `tests/components-registry.test.js` pins that the two lists are equal.
+- **Adding a language to a component:** write `js/components/<name>/<lang>.js`, a factory called with the language's helpers that returns `{ handlers, ... }` (see `text/tspl.js`, `text/zpl.js` and `js/components/compose.js`), and
+  register it in the component's `index.js` as `languages: { tpcl, tspl, zpl }`. A component a language does not have simply omits the key (the ellipse has no useful TPCL piece: its `tpcl` factory only reports the skipped item).
+  A slice gets its palette entry by returning `build(text, point, options)` from its factory.
+- **Registering a language** (`js/languages/<lang>.js`): `PB.languages.register({ id, name, detect, parse, ... })`; the file builds its handler table with `PB.composeSlices('<lang>', helpers, { handlers })`, which collects the slices registered for it.
+  The required hooks are `detect` and `parse`. The optional ones switch app features on, and the app disables moving, the properties panel, the palette, the image entry and size writing for a language that lacks them (TPCL, TSPL and ZPL have them all):
+  `emit` (the language becomes a conversion target, see below), `sizeCommands` / `applySize` (the Formato row), `insertCommand`, `moveItem`, `describeItem` / `updateItem` (Propiedades), `componentTemplates` / `buildComponent` (palette) and `insertImage: true` with `imageCommand`
+  (the **Imagen** entry; TPCL, TSPL and ZPL set it, see `js/core/languages.js`). The newest and most complete reference is ZPL: `js/languages/zpl.js` (tokenizer, field grouping, setup commands, emit skeleton, registration) and `js/languages/zpl-edit.js` (the generic move / describe / update engines driven by field descriptors).
+  TSPL's slices use the shared helpers `dropDots`, `itemRotation`, `freePlaceholder` and `insertCommand` of `js/languages/tspl.js`; ZPL's use `PB.zpl.SLICE_HELPERS`.
+- **ZPL deferred dispatch:** in ZPL a drawing is a field (`^FO` / `^FT` ... `^FS`) whose command and data can come in either order, so nothing becomes an item when it is read: the driver accumulates the commands of the open field and calls the slice handler registered for its main command when the field closes.
+  Setup commands (`^PW`, `^LL`, `^CF`, `^BY`...) run immediately, and the field modifiers (`^FD`, `^FR`, `^FN`, `^SN`...) are stored in the field instead of dispatched (see the header of `js/languages/zpl.js`).
 - Label sizes: `config.sizes` is a language-agnostic catalog of standard sizes (`{ id, name, w, h, p }` in mm, pitch = height + 3), with no
   printer data. The drawing always follows the size the label declares (`PB.sizes.view`); the Formato row shows it and writes edits back through the
-  language's `applySize`, which must only write what declares the size (TPCL: `{D…|}`, never `{AX…|}`).
+  language's `applySize`, which must only write what declares the size (TPCL: `{D…|}`, never `{AX…|}`; TSPL: `SIZE` / `GAP`; ZPL: `^PW` / `^LL`).
 - Emitters (neutral model to printer text, used by "Convertir a…"): a language becomes a conversion target by adding the optional hook
   `emit(model, { dpi }) -> { text, diagnostics }` (contract in `js/core/languages.js`). It owns the header, trailer, id numbering and order of
   the output; each item is written by its slice, which returns `emit` next to `handlers` from its `languages.<id>` factory:
   `emit(item, ctx)` returns the line(s) for that item and reports fidelity losses with `ctx.report(PB.diagnostics.warning(...))` (see
-  `text/tspl.js`, and `js/core/emit.js` for the shared helpers). `PB.composeSlices` collects them in `emitters`. Optional `fileEncoding`
-  (`'latin1'` for binary-safe files) and `fileExtension` tell `PB.convert` how to save the output. `js/convert-panel.js` lists the targets
+  `text/tspl.js`, `text/zpl.js` and `js/core/emit.js` for the shared helpers). `PB.composeSlices` collects them in `emitters`. Optional `fileEncoding`
+  (`'latin1'` for binary-safe files, as TSPL) and `fileExtension` tell `PB.convert` how to save the output. `js/convert-panel.js` lists the targets
   from the registry, so no UI change is needed for a new language.
-- Round-trip test pattern for an emitter: `parse(emit(parse(x)))` must equal `parse(x)` on the neutral items (ignore `source`, `raw` and
-  `native`; allow at most 1 dot of rounding across languages), at 203 and 300 dpi, on every example of that language; see
+
+## Tests
+
+`node --test` runs everything under `tests/` (about 80 files, a few seconds). A file is named after what it covers: `tests/<area>.test.js` (`zpl-text.test.js`, `tspl-emit-barcode-qr-image.test.js`...). The tests load the browser scripts in Node through `tests/helpers/load.js`,
+so parsers, encoders, emitters, editors and the SVG renderer are all testable without a browser. Write the test first and see it fail.
+
+- **Round trip of an emitter:** `parse(emit(parse(x)))` must equal `parse(x)` on the neutral items (ignore `source`, `raw` and `native`; allow at most 1 dot of rounding across languages), at 203 and 300 dpi, on every example of that language; see
   `tests/tspl-emit-barcode-qr-image.test.js` and `tests/cross-conversion.test.js`. Whatever cannot be written must produce a diagnostic, never silent loss.
+- **Conversion matrix:** `tests/conversion-matrix.test.js` converts every component, one feature per case, in the six directions between TPCL, TSPL and ZPL at both resolutions, reads the output back and compares it item by item with a table of expected results
+  (exact, degraded with its diagnostic, or skipped with its diagnostic). **Every new component or feature must add its rows there** (a case, and a rule when it is not exact in some direction), and a change to what a conversion loses must also update the loss table of the README (*Convertir a…*).
+- Tests that pin documentation text (for example that the README names the ZPL barcode commands) fail if a section is renamed: keep the headings and the key terms they look for.
+
+## Line endings
+
+The repository stores LF and `core.autocrlf=true` checks files out as CRLF on Windows, so most working-tree files are CRLF. Files that are legitimately LF in the working tree (they are never converted) include `js/lib/qrcode-generator.min.js`, `.gitignore` and
+`odd/tasks/multi-printer-language-support.md`. Editors and tools may rewrite a file as LF: before committing, `git ls-files --eol` shows the index and working-tree endings, and a file that shows as modified with an empty diff only needs its endings restored (`git checkout -- <file>`).
+
+## Printer manuals
+
+`docs/` holds the vendor manuals the code follows, but they are copyrighted: they are **git-ignored** (every `*.pdf` under `docs/`) and never committed. Only `docs/README.md`, which says which manual goes in which folder (`tpcl/`, `tspl/`, `zpl/`), is versioned. Keep your copies local and cite them in code comments.
 
 ## Workflow
 
