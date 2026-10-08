@@ -127,17 +127,17 @@ test('updateItem: CRLF is preserved and no stray CR appears', () => {
 
 test('describeItem: BARCODE lists height, readable, rotation and narrow (wide only for Code 39 / ITF)', () => {
   const code128 = describe(doc('BARCODE 100,200,"128",80,1,0,2,2,"ABC,123"'));
-  assert.deepEqual(pairs(code128), [['height', 80], ['readable', 1], ['rotation', 0], ['narrow', 2], ['content', 'ABC,123']]);
+  assert.deepEqual(pairs(code128), [['symbology', 'code128'], ['height', 80], ['readable', 1], ['rotation', 0], ['narrow', 2], ['content', 'ABC,123']]);
   assert.equal(byKey(code128, 'readable').type, 'select');
   assert.deepEqual(byKey(code128, 'readable').options.map(o => o.value), [0, 1, 2, 3]);
   const code39 = describe(doc('BARCODE 100,200,"39",60,0,90,3,6,"ABC"'));
-  assert.deepEqual(pairs(code39), [['height', 60], ['readable', 0], ['rotation', 90], ['narrow', 3], ['wide', 6], ['content', 'ABC']]);
+  assert.deepEqual(pairs(code39), [['symbology', 'code39'], ['check', 'none'], ['height', 60], ['readable', 0], ['rotation', 90], ['narrow', 3], ['wide', 6], ['content', 'ABC']]);
   const itf = describe(doc('BARCODE 100,200,"25",60,0,0,2,5,"1234"'));
   assert.equal(byKey(itf, 'wide').value, 5);
 });
 
 test('describeItem: BARCODE with an alignment argument is described the same way', () => {
-  assert.deepEqual(pairs(describe(doc('BARCODE 100,200,"128",50,2,180,2,2,1,"X"'))), [['height', 50], ['readable', 2], ['rotation', 180], ['narrow', 2], ['content', 'X']]);
+  assert.deepEqual(pairs(describe(doc('BARCODE 100,200,"128",50,2,180,2,2,1,"X"'))), [['symbology', 'code128'], ['height', 50], ['readable', 2], ['rotation', 180], ['narrow', 2], ['content', 'X']]);
 });
 
 test('updateItem: BARCODE rewrites only the requested arguments; content with commas untouched', () => {

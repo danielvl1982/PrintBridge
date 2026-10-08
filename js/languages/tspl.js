@@ -195,6 +195,47 @@
   }
 
   // ---------------------------------------------------------------------------------------------------------------
+  // Counters (B-442/443 manual, SET COUNTER): "SET COUNTER @n step" declares the increment of counter n (0..49 for text and barcode,
+  // -999999999..999999999), "@n="0001"" assigns its start value and a TEXT / BARCODE content "@n" prints it, incremented per label.
+  // The viewer shows the start value; the manual documents nothing else (no expressions, no per-label evaluation).
+
+  const COUNTER_ARG = /^@(\d+)$/;
+  const COUNTER_SLOTS = 50;
+  const COUNTER_STEP_MAX = 999999999;
+  const SET_COUNTER = /^SET\s+COUNTER\s+@(\d+)\s+([+-]?\d+)\s*$/id;
+  const COUNTER_ASSIGNMENT = /^@(\d+)\s*=\s*([\s\S]*)$/;
+  const COUNTER_NOTE = 'Los campos con incremento muestran su valor inicial: la impresora los incrementa en cada etiqueta';
+
+  /** Value of the right side of "@n=value" when it is one quoted string (an expression is not documented: null). */
+  function assignedValue(text) {
+    const raw = text.trim();
+    return raw.length >= 2 && raw[0] === '"' && raw.endsWith('"') && !raw.endsWith('\\"') ? unquote(raw) : null;
+  }
+
+  /**
+   * Emit side of a counter item: { ref: '@n', lines: ['SET COUNTER @n step', '@n="start"'] } to write before its command, which then
+   * uses ref as content; null when the item has no counter (0 is none), or when the 50 counters of the printer are used up (the
+   * start value is written as plain text, with a warning once). A step beyond +-999999999 is clamped (warning once). A TPCL zero
+   * suppression has no TSPL equivalent: one info per emit.
+   */
+  function counterSetup(ctx, item, data) {
+    if (item.zeroSuppress > 0) ctx.once('tspl-zero-suppress', () => diag.info('Los ceros suprimidos de TPCL no tienen equivalente en TSPL: los contadores se escriben sin supresión de ceros'));
+    const c = item.counter;
+    if (!c || !Number.isFinite(c.step) || Math.trunc(c.step) === 0) return null;
+    const n = Number(ctx.ids.next('COUNTER'));
+    if (n >= COUNTER_SLOTS) {
+      ctx.once('tspl-counters-max', () => diag.warning(`Hay más de ${COUNTER_SLOTS} contadores: TSPL solo tiene @0 a @${COUNTER_SLOTS - 1}, los demás se escriben con su valor inicial como texto`));
+      return null;
+    }
+    let step = Math.trunc(c.step);
+    if (Math.abs(step) > COUNTER_STEP_MAX) {
+      ctx.once('tspl-counter-step', () => diag.warning(`Hay incrementos fuera de ±${COUNTER_STEP_MAX} (límite de SET COUNTER): se ajustan al límite de TSPL`));
+      step = Math.sign(step) * COUNTER_STEP_MAX;
+    }
+    return { ref: `@${n}`, lines: [`SET COUNTER @${n} ${step}`, `@${n}=${quoted(data)}`] };
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
   // Helpers of the palette `build` hooks
 
   /** <#NAME{k}#> with the smallest k >= 1 that does not appear in the text (as #NAME{k}# or <#NAME{k}#>), like TPCL's. */
@@ -219,7 +260,7 @@
   /** Helpers the slices' TSPL hooks share with this file. Passed once to each slice's `languages.tspl` factory. */
   const SLICE_HELPERS = Object.freeze({
     sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
-    quoted, roundDots, exactDots, toDots, safeData,
+    quoted, roundDots, exactDots, toDots, safeData, counterSetup,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField, stringSelectField: PB.tsplEdit.stringSelectField, textField: PB.tsplEdit.textField,
   });
@@ -300,6 +341,28 @@
       handle() {},
     },
     {
+      // SET COUNTER @n step: the increment of counter n (the viewer keeps it for the items that use "@n")
+      pattern: /^SET\s+COUNTER\b/i,
+      handle(m, cmd, ctx) {
+        const parsed = SET_COUNTER.exec(cmd.raw);
+        const [n, step] = parsed ? [Number(parsed[1]), Number(parsed[2])] : [NaN, NaN];
+        if (!parsed || n >= COUNTER_SLOTS || Math.abs(step) > COUNTER_STEP_MAX) {
+          ctx.report(diag.warning(`SET COUNTER no válido: ${cmd.raw.slice(0, 40)}`));
+          return;
+        }
+        // where the step sits in the text, for the panel (cmd.raw starts at cmd.start)
+        ctx.counters.set(n, { step, start: cmd.start + parsed.indices[2][0], end: cmd.start + parsed.indices[2][1] });
+      },
+    },
+    {
+      // @n="start value": the start value of counter n (any other right side, an expression, is not documented and is left alone)
+      pattern: COUNTER_ASSIGNMENT,
+      handle(m, cmd, ctx) {
+        const value = assignedValue(m[2]);
+        if (value !== null) ctx.values.set(Number(m[1]), value);
+      },
+    },
+    {
       // Commands for the printer only (and the counters, "@1="0001"")
       pattern: new RegExp(`^(?:(?:${IGNORED_COMMANDS.join('|')})\\b|@\\d+\\s*=)`, 'i'),
       handle() {},
@@ -317,7 +380,26 @@
       direction: 1,
       reference: { x: 0, y: 0 },
       shift: { x: 0, y: 0 },
+      /** Declared counters (SET COUNTER) and assigned start values (@n="..."), by number, as the commands appear. */
+      counters: new Map(),
+      values: new Map(),
       report: d => model.diagnostics.push(d),
+      /**
+       * A content argument that is exactly "@n" with n assigned a start value: { n, data (the start value), counter? } where
+       * counter = { step, native: { n, start, end } } when n was declared with a step other than 0 (start/end = the step in the
+       * text). Anything else (unassigned counter, mixed content "x"+@1): null, the caller keeps the literal text. One info per label.
+       */
+      counterContent(arg) {
+        const m = arg && COUNTER_ARG.exec(arg.raw);
+        if (!m || !this.values.has(Number(m[1]))) return null;
+        const n = Number(m[1]);
+        const declared = this.counters.get(n);
+        if (!this.counterShown) {
+          this.counterShown = true;
+          this.report(diag.info(COUNTER_NOTE));
+        }
+        return { n, data: this.values.get(n), ...(declared && declared.step !== 0 && { counter: { step: declared.step, native: { n, start: declared.start, end: declared.end } } }) };
+      },
       addItem(item) { model.items.push(item); return item; },
       sourceOf,
       /** Dots -> 0.1 mm. */
@@ -353,6 +435,44 @@
   const ALL_HANDLERS = COMPOSED.handlers;
   // Move / describe / update engines (js/languages/tspl-edit.js) driven by the slices' coordinates and editable definitions
   const EDITING = PB.tsplEdit.createTsplEditing({ coordinates: COMPOSED.coordinates, editable: COMPOSED.editable, commands });
+
+  // The counter step lives in the SET COUNTER line, not in the item's command: the panel field is added here and its write goes to
+  // that line (item.counter.native holds where the step is, so the text must be the one the item was parsed from).
+  const isCounterItem = item => !!(item && item.counter && item.counter.native && Number.isInteger(item.counter.native.n));
+
+  /** Step as written in the SET COUNTER line of the item's counter, or undefined if the text does not have it where it was parsed. */
+  function stepInText(text, { native }) {
+    const head = text.slice(0, native.start);
+    const line = head.slice(Math.max(head.lastIndexOf('\n'), head.lastIndexOf('\r')) + 1);
+    const m = /^[ \t]*SET\s+COUNTER\s+@(\d+)\s+$/i.exec(line);
+    const raw = text.slice(native.start, native.end);
+    return m && Number(m[1]) === native.n && /^[+-]?\d+$/.test(raw) ? Number(raw) : undefined;
+  }
+
+  function describeItem(item, text, opts) {
+    const base = EDITING.describeItem(item, text, opts);
+    if (!isCounterItem(item)) return base;
+    const value = typeof text === 'string' ? stepInText(text, item.counter) : item.counter.step;
+    if (value === undefined) return base;
+    const field = { key: 'counter', label: 'Incremento', type: 'number', value, min: -COUNTER_STEP_MAX, max: COUNTER_STEP_MAX, step: 1 };
+    return { ...base, fields: [...base.fields, field] };
+  }
+
+  function updateItem(text, item, changes, opts) {
+    if (!isCounterItem(item) || !changes || !Object.hasOwn(changes, 'counter')) return EDITING.updateItem(text, item, changes, opts);
+    const rest = { ...changes };
+    delete rest.counter;
+    const v = changes.counter;
+    const { native } = item.counter;
+    const value = typeof v === 'number' && Number.isFinite(v) && stepInText(text, item.counter) !== undefined
+      ? String(Math.min(COUNTER_STEP_MAX, Math.max(-COUNTER_STEP_MAX, Math.round(v)))) : null;
+    const replace = s => (value === null ? s : s.slice(0, native.start) + value + s.slice(native.end));
+    const span = item.source && item.source.spans && item.source.spans[0];
+    // The later of the two edits goes first so the offsets of the earlier one stay valid
+    return span && native.start > span.start
+      ? EDITING.updateItem(replace(text), item, rest, opts)
+      : replace(EDITING.updateItem(text, item, rest, opts));
+  }
 
   /** Lines that only TSPL writes: SIZE <n>, CLS, or a drawing command followed by a number. TPCL text ({…|}) is never TSPL. */
   const TSPL_LINE = /^[ \t]*(?:SIZE[ \t]+\d|CLS[ \t]*$|(?:TEXT|BARCODE|QRCODE|BITMAP|BAR|BOX|ELLIPSE|CIRCLE)[ \t]+\d)/im;
@@ -482,6 +602,6 @@
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize,
-    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem, updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

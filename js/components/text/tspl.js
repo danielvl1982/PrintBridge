@@ -9,7 +9,8 @@
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
  *   factory(helpers) -> { handlers, emit, build, coordinates, editable }. Registered by js/components/text/index.js as `languages: { tpcl, tspl }`.
  * Limits (reported as info diagnostics): the model has no alignment nor word wrap, so alignment 2/3 draws left and BLOCK
- * is drawn as one line of text; counters/variables ("@1", "x"+@1) are kept as literal text.
+ * is drawn as one line of text; a counter "@n" content shows the start value assigned with @n="..." (SET COUNTER gives the step, the
+ * printer increments it per label); an unassigned counter, a mix ("x"+@1) and a BLOCK content keep the literal text.
  * Emit (the inverse): `emit(item, ctx)` writes a TEXT command. A mono font whose size and width are whole multiples of a
  * built-in bitmap font becomes that font "1".."8"; anything else becomes the scalable font "0" with POINT sizes (the
  * exact inverse of fontOf), with one info that the TSPL fonts differ from the source font when family, weight or style
@@ -84,7 +85,7 @@
   function tspl(helpers) {
     const {
       sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField, stringSelectField, textField,
-      insertCommand, freePlaceholder, itemRotation, dropDots,
+      insertCommand, freePlaceholder, itemRotation, dropDots, counterSetup,
     } = helpers;
 
     /**
@@ -142,7 +143,11 @@
       if (item.spacing) ctx.once('tspl-text-spacing', () => diag.info('Hay textos con espaciado entre caracteres, que TEXT de TSPL no escribe: se escriben sin él'));
       if (item.bold) ctx.once('tspl-text-bold', () => diag.info('Hay textos en negrita (sobreimpresión), que TEXT de TSPL no escribe: se escriben sin ella'));
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
-      return `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${quoted(safeData(ctx, item.data))}`;
+      const data = safeData(ctx, item.data);
+      // A counter writes SET COUNTER and the start value before the command, which then prints "@n"
+      const counter = counterSetup(ctx, item, data);
+      const line = `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${counter ? counter.ref : quoted(data)}`;
+      return counter ? [...counter.lines, line] : line;
     }
 
     /** Multiplier or point size: a positive number, 1 (with a warning) otherwise. */
@@ -232,7 +237,7 @@
           // Font id (argument 2, a quoted string): the ids the viewer knows; any other id is listed as the current value
           stringSelectField('font', 'Fuente', 2, FONT_OPTIONS, item => item.native && item.native.font),
           // The content is argument 6, or 7 when an alignment argument precedes it; counters are left out
-          textField('content', 'Contenido', cmd => (cmd.args.length >= 8 ? 7 : 6), item => (COUNTER.test(String(item.data)) ? undefined : item.data)),
+          textField('content', 'Contenido', cmd => (cmd.args.length >= 8 ? 7 : 6), item => (COUNTER.test(String(item.data)) || (item.native && item.native.counterN !== undefined) ? undefined : item.data)),
         ],
       };
     };
@@ -260,7 +265,13 @@
             const hasAlign = cmd.args.length >= 8;
             if (hasAlign) noteAlignment(ctx, 'TEXT', num(cmd.args[6]));
             const content = cmd.args[hasAlign ? 7 : 6];
-            const item = textItem(ctx, 'TEXT', cmd, p, cmd.args.slice(2, 6), contentOf(ctx, 'TEXT', content));
+            // A counter with an assigned start value shows it (the printer increments it per label); else the literal text
+            const shown = ctx.counterContent(content);
+            const item = textItem(ctx, 'TEXT', cmd, p, cmd.args.slice(2, 6), shown ? shown.data : contentOf(ctx, 'TEXT', content));
+            if (shown) {
+              item.native.counterN = shown.n;
+              if (shown.counter) item.counter = shown.counter;
+            }
             if (hasAlign) item.native.align = num(cmd.args[6]);
             ctx.addItem(item);
           },

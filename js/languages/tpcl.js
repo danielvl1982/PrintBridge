@@ -303,6 +303,46 @@
     return { text: [...header, ...lines, wrap(DEFAULT_XS)].join('\n'), diagnostics: ctx.diagnostics };
   }
 
+  // --- Counters: increment / decrement "noooooooooo" (PC, PV, XB) and zero suppression "Zpp" / "qq" (manual 6.3.7 to 6.3.9) ---
+
+  /** Increment token: a sign and the skip value 0000000000..9999999999 (+ increments, - decrements). */
+  const COUNTER_TOKEN = /^[+-]\d{10}$/;
+  const COUNTER_MAX = 9999999999;
+  /** Number of zeros to be suppressed: 00..20. */
+  const ZERO_MAX = 20;
+
+  /** Increment token ("+0000000010", "-0000000003") of a signed step, clamped to the manual range; 0 gives "+0000000000". */
+  function counterToken(step) {
+    const n = clampInt(Number.isFinite(step) ? step : 0, -COUNTER_MAX, COUNTER_MAX);
+    return `${n < 0 ? '-' : '+'}${String(Math.abs(n)).padStart(10, '0')}`;
+  }
+
+  /** Zero suppression digits ("05") of a count, clamped to 0..20. */
+  const zeroDigits = n => String(clampInt(Number.isFinite(n) ? n : 0, 0, ZERO_MAX)).padStart(2, '0');
+
+  /** Signed step of an increment token as found in a command: 0 for "" / "0" (no counter), undefined when it is anything else. */
+  function readCounterStep(raw) {
+    if (raw === '' || raw === '0') return 0;
+    return COUNTER_TOKEN.test(raw) ? Number(raw) : undefined;
+  }
+
+  /**
+   * { counter?, zeroSuppress? } of the item from the increment token and the zero suppression digits as written (undefined when
+   * omitted). A step of 0 and Z00 are the same as omitting them, so neither is stored. The parse reports ONE info per label
+   * (ctx.once-like flag on the parse context) that the viewer shows the start value, not the incremented one.
+   */
+  function counterFields(ctx, token, zero) {
+    const out = {};
+    if (COUNTER_TOKEN.test(token || '') && Number(token) !== 0) out.counter = { step: Number(token), native: token };
+    const pp = /^\d{2}$/.test(zero || '') ? Math.min(+zero, ZERO_MAX) : 0;
+    if (pp > 0) out.zeroSuppress = pp;
+    if (out.counter && !ctx.counterNoted) {
+      ctx.counterNoted = true;
+      ctx.report(diag.info('Los campos con incremento muestran su valor inicial: la impresora los incrementa en cada etiqueta'));
+    }
+    return out;
+  }
+
   /**
    * Helpers the slices' TPCL hooks share with this file (they stay here because other kinds use them too).
    * Passed once to each slice's `languages.tpcl` factory.
@@ -311,6 +351,7 @@
     sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
     wrap, safeData, coordText, allocId,
+    COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, zeroDigits, readCounterStep, counterFields,
   });
 
   // The tables above hold the kinds not migrated to a slice yet; the generic composition (js/components/compose.js)
@@ -375,7 +416,7 @@
     if (typeof text !== 'string' || !span) return { shape, match: null };
     const original = text.slice(span.start, span.end);
     const { stripped, map } = stripNewlines(original);
-    return { shape, original, map, span, match: shape.pattern.exec(stripped) };
+    return { shape, original, stripped, map, span, match: shape.pattern.exec(stripped) };
   }
 
   /**
@@ -393,7 +434,9 @@
         const value = match ? f.read(match[f.group], item) : f.model && f.model(item);
         if (value === undefined || value === null) continue;
         const { key, label, type, min, max, step } = f;
-        const options = f.optionsFor ? f.optionsFor(value) : f.options; // optionsFor lists a current value outside the options
+        // optionsFor lists a current value outside the options; it also gets the item and the matched command text (the
+        // options of the barcode check digit depend on the symbology written there)
+        const options = f.optionsFor ? f.optionsFor(value, item, match ? match[f.group] : undefined) : f.options;
         fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
       }
     }
@@ -411,9 +454,22 @@
    * digit width and clamping numbers to their range (rounded). Unknown keys, invalid values, items without source or
    * of a kind without editable fields are ignored: the text is returned unchanged if nothing changes.
    */
-  function updateItem(text, item, changes) {
+  function updateItem(text, item, changes, { dpi = PB.config.resolutions[0] } = {}) {
     if (!changes) return text;
     const found = editableOf(item, text);
+    // Fields flagged `reemit` (the barcode type and check digit) rewrite the whole format command through the shape's `reemit`
+    // hook: (found, item, changes, { dpi }) -> the new text, or null to refuse (text unchanged). The remaining changes of the same
+    // call are then applied to the new command, which is parsed again (the type moves the parameters).
+    const reemitKeys = found && found.shape.reemit ? found.shape.fields.filter(f => f.reemit && Object.hasOwn(changes, f.key)).map(f => f.key) : [];
+    if (reemitKeys.length) {
+      const command = found.match ? found.shape.reemit(found, item, changes, { dpi }) : null;
+      const rewritten = command === null ? null : text.slice(0, found.span.start) + command + text.slice(found.span.end);
+      const rest = Object.fromEntries(Object.entries(changes).filter(([k]) => !reemitKeys.includes(k)));
+      if (rewritten === null || rewritten === text) return Object.keys(rest).length ? updateItem(text, item, rest, { dpi }) : text;
+      if (!Object.keys(rest).length) return rewritten;
+      const again = parse(rewritten, { dpi }).items.find(i => i.ref === item.ref);
+      return again ? updateItem(rewritten, again, rest, { dpi }) : rewritten;
+    }
     // Edits as absolute ranges of the text: { start, end, value }
     const edits = [];
     if (found && found.match) {

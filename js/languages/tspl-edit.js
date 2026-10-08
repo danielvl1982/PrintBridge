@@ -15,7 +15,9 @@
  *     optional?: the value of a trailing argument when it is omitted (e.g. the BOX radius, 0): describeItem lists that value,
  *     updateItem appends the argument (",value" after the last one) for any other value and writes nothing for the default.
  *     numberField(), selectField(), stringSelectField() and textField() build the usual ones; a field may give
- *     optionsFor(value) -> options to list the current value when it is not one of them.
+ *     optionsFor(value, item, cmd) -> options to list the current value when it is not one of them.
+ *   a shape may give reemit(cmd, item, changes, { dpi }) -> [{ start, end, value }] | null for the fields flagged `reemit`: they do not
+ *     edit one argument but ask the shape to write the command again for the new value (the barcode type moves other arguments).
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so quoted strings (commas inside), counters
  * (@1), BLOCK content, BITMAP bytes and every other line stay byte for byte. An argument that is not a plain number is
@@ -201,21 +203,25 @@
         else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
         const { key, label, type, min, max, step } = f;
-        const options = f.optionsFor ? f.optionsFor(value) : f.options;
+        const options = f.optionsFor ? f.optionsFor(value, item, found ? found.cmd : undefined) : f.options;
         fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
       }
       return { kind, fields };
     }
 
     /** Rewrites only the fields in changes ({ key: value }, see describeItem); unknown keys and invalid values are ignored. */
-    function updateItem(text, item, changes) {
+    function updateItem(text, item, changes, opts) {
       const found = changes && locate(text, item);
       const shape = found && shapeOf(item, found.cmd);
       if (!shape) return text;
-      const edits = [];
+      // Fields flagged `reemit` (the barcode type and check digit) are written by the shape's hook: (cmd, item, changes, opts) ->
+      // edits [{ start, end, value }] of that command, or null to refuse. They win over the edits of other fields on the same arguments.
+      const claimed = shape.reemit && shape.fields.some(f => f.reemit && Object.hasOwn(changes, f.key)) ? shape.reemit(found.cmd, item, changes, opts || {}) : null;
+      const edits = claimed ? [...claimed] : [];
       for (const f of shape.fields) {
         const a = argOf(f, found.cmd);
-        if (!Object.hasOwn(changes, f.key)) continue;
+        if (f.reemit || !Object.hasOwn(changes, f.key)) continue;
+        if (a && claimed && claimed.some(e => e.start === a.start)) continue;
         if (!a && isOmittedOptional(f, found.cmd)) {
           // Omitted trailing argument: a value other than its default is appended right after the last argument
           const value = f.write(changes[f.key]);

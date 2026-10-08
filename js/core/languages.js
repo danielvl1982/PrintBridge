@@ -17,7 +17,9 @@
  *   if the item has no source.
  * updateItem (optional): the text with only the fields in changes ({ key: value }) rewritten in that item's command, with
  *   each field's width kept and numbers clamped to their range; unknown keys, invalid values, items without source or
- *   without editable fields are ignored (unchanged text if nothing changes).
+ *   without editable fields are ignored (unchanged text if nothing changes). The barcode `symbology` / `check` fields (select) rewrite
+ *   the whole format command instead (the type moves other parameters; see js/components/barcode); a change that would lose
+ *   information (nothing in the model holds it) is refused: the text comes back unchanged.
  * describeItem (optional): the fields updateItem accepts for an item, language-agnostic, so the UI can build a panel:
  *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox' | 'text', value, min, max, step?, options?: [{ value, label }] }] }
  *   with the current values (read from the command in text if given, else from the item) and an empty list if none.

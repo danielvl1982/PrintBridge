@@ -340,14 +340,74 @@
   const SPACING_SLOT = String.raw`((?:[+-]\d+,)?)`;
   /** PC only: the bold token (",Jkkll", possibly empty) that follows the attribute before the other optional parameters. */
   const BOLD_SLOT = String.raw`((?:,J\d{4})?)`;
+  /**
+   * Increment (",noooooooooo") and zero suppression (",Zpp") tokens, in the manual's order: ...(,Jkkll)(,Mm)(,n)(,Z)(,Pq). They are
+   * not followed by another token character (so a longer token never matches). MISC skips what lies between the bold and the
+   * increment (M, or a J of the outline font), then each slot is possibly empty (an insertion point).
+   */
+  const COUNTER_TOKEN_RE = String.raw`[+-]\d{10}(?![^,=;|])`;
+  const ZERO_TOKEN_RE = String.raw`Z\d{2}(?![^,=;|])`;
+  const MISC_SLOT = String.raw`(?:,(?!${COUNTER_TOKEN_RE}|${ZERO_TOKEN_RE}|P)[^,=;|]*)*`;
+  const COUNTER_SLOT = String.raw`((?:,${COUNTER_TOKEN_RE})?)`;
+  const ZERO_SLOT = String.raw`((?:,${ZERO_TOKEN_RE})?)`;
   /** Optional parameters between the attribute and the data (J, M, n, Z, never P), then the alignment token, possibly empty. */
   const ALIGN_SLOT = String.raw`(?:,(?!P)[^,=;|]*)*((?:,P(?:[123]|4\d{4}))?)`;
+  /** The increment, the zero suppression and the alignment slots (capture groups, in this order). */
+  const TAIL_SLOTS = MISC_SLOT + COUNTER_SLOT + ZERO_SLOT + ALIGN_SLOT;
+
+  /** The increment token as its own comma-separated token among the optional parameters (spacing is before the rotation, never here). */
+  const COUNTER_PARAM = /(?:^|,)([+-]\d{10})(?=,|;|$)/;
+  const ZERO_PARAM = /(?:^|,)Z(\d{2})(?=,|;|$)/;
 
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
       ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, wrap, safeData, coordText, allocId,
+      COUNTER_MAX, ZERO_MAX, counterToken, zeroDigits, readCounterStep, counterFields,
     } = helpers;
+
+    /** { counter?, zeroSuppress? } of the optional parameters between the attribute and the data (see counterFields). */
+    function parseCounter(ctx, params) {
+      const inc = COUNTER_PARAM.exec(params || '');
+      const zero = ZERO_PARAM.exec(params || '');
+      return counterFields(ctx, inc && inc[1], zero && zero[1]);
+    }
+
+    /** Increment and zero suppression tokens of an item (with their commas), empty without them. */
+    const counterText = item => (item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0 ? `,${counterToken(item.counter.step)}` : '');
+    const zeroText = item => (item.zeroSuppress > 0 ? `,Z${zeroDigits(item.zeroSuppress)}` : '');
+
+    /**
+     * The two panel fields over the optional increment and zero suppression tokens (written whole with their comma: `exact`,
+     * empty when omitted so a change inserts them in the manual's order). 0 on an omitted token writes nothing; 0 on an existing
+     * one keeps it as +0000000000 / Z00 (the printer then does not increment / suppress). The zero field takes the next group.
+     */
+    function counterFieldsOf(group) {
+      return [
+        {
+          key: 'counter', label: 'Incremento', type: 'number', min: -COUNTER_MAX, max: COUNTER_MAX, step: 1, group, exact: true,
+          read: raw => readCounterStep(raw.replace(/^,/, '')),
+          model: item => (item.counter && Number.isFinite(item.counter.step) ? item.counter.step : 0),
+          write: (v, width, raw) => {
+            if (!isOffset(v)) return null;
+            const n = clampInt(v, -COUNTER_MAX, COUNTER_MAX);
+            if (n === 0 && raw === '') return null;
+            return `,${counterToken(n)}`;
+          },
+        },
+        {
+          key: 'zeroSuppress', label: 'Ceros suprimidos', type: 'number', min: 0, max: ZERO_MAX, step: 1, group: group + 1, exact: true,
+          read: raw => (raw === '' ? 0 : Number(raw.slice(2))),
+          model: item => item.zeroSuppress || 0,
+          write: (v, width, raw) => {
+            if (!isOffset(v)) return null;
+            const n = clampInt(v, 0, ZERO_MAX);
+            if (n === 0 && raw === '') return null;
+            return `,Z${zeroDigits(n)}`;
+          },
+        },
+      ];
+    }
 
     /** Text rotation code (00/11/22/33): the nearest quarter turn, with a warning once if the item was not on one. */
     function rotationCode(ctx, rotation) {
@@ -398,7 +458,7 @@
       if (choice) {
         const id = allocId(ctx, 'PC');
         const mag = n => String(n).padStart(2, '0');
-        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${align}`), wrap(`RC${id};${data}`)];
+        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item)}${zeroText(item)}${align}`), wrap(`RC${id};${data}`)];
       }
       if (item.bold) ctx.once('tpcl-bold-pv', () => diag.info('Hay textos en negrita (J) que se escriben con la fuente vectorial (PV), que no tiene ese parámetro: se escriben sin negrita'));
       // The outline font is always drawn sans bold: any other family, weight or style is lost
@@ -407,7 +467,7 @@
       }
       const id = allocId(ctx, 'PV');
       const dim = n => pad4(Math.max(1, clampCoord(n)));
-      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${align}`), wrap(`RV${id};${data}`)];
+      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${counterText(item)}${zeroText(item)}${align}`), wrap(`RV${id};${data}`)];
     }
 
     function textRotation(ctx, ref, rotationCode) {
@@ -471,6 +531,7 @@
               ...parseSpacing(m[7], ctx.dot),
               ...textAttribute(ctx, m[9], m[10], Math.max(magnification(m[4]), magnification(m[5])) * PC_DEFAULT_DOTS),
               ...parseBold(m[11], ctx.dot),
+              ...parseCounter(ctx, m[11]),
               ...parseAlign(m[11]),
               data: m[12] ?? null,
             });
@@ -488,6 +549,7 @@
               rotation: textRotation(ctx, ref, m[8]),
               ...parseSpacing(m[7], ctx.dot),
               ...textAttribute(ctx, m[9], m[10], (Math.max(+m[4], +m[5]) / 10) * PV_DEFAULT_DOTS_PER_MM),
+              ...parseCounter(ctx, m[11]),
               ...parseAlign(m[11]),
               data: m[12] ?? null,
             });
@@ -506,7 +568,7 @@
       editable: [
         { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
-          pattern: new RegExp(String.raw`^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + ALIGN_SLOT, 'd'),
+          pattern: new RegExp(String.raw`^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + TAIL_SLOTS, 'd'),
           fields: [
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
@@ -514,12 +576,13 @@
             fontField(3, OUTLINE_FONT_OPTIONS),
             spacingField(4, 'PV'),
             ...attributeFields(6),
-            ...alignFields(7),
+            ...counterFieldsOf(7),
+            ...alignFields(9),
           ],
         },
         { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
-          pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + ALIGN_SLOT, 'd'),
+          pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + TAIL_SLOTS, 'd'),
           fields: [
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
@@ -528,7 +591,8 @@
             spacingField(4, 'PC'),
             ...attributeFields(6),
             ...boldFields(7),
-            ...alignFields(8),
+            ...counterFieldsOf(8),
+            ...alignFields(10),
           ],
         },
       ],
