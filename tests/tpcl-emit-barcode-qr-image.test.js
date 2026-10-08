@@ -147,7 +147,7 @@ test('barcode without data still gets an empty RB', () => {
 });
 
 test('symbologies TPCL cannot express are skipped with a Spanish warning naming them', () => {
-  for (const symbology of ['ean13', 'unknown', 'qr']) {
+  for (const symbology of ['unknown', 'qr']) {
     const out = emit(model([barcode({ symbology }), barcode()]));
     assert.equal(out.text.split('\n').filter(l => /^\{XB/.test(l)).length, 1, symbology);
     assert.ok(levels(out.diagnostics, 'warning').some(d => d.text.includes(symbology)), symbology);

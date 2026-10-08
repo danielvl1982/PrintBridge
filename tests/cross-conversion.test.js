@@ -162,20 +162,20 @@ test('the scalable font rounding info appears only when a size really changes', 
 const TSPL_UNSUPPORTED = [
   'SIZE 100 mm,60 mm', 'GAP 3 mm,0 mm', 'DIRECTION 1', 'CLS',
   'TEXT 40,30,"3",0,1,1,"Hola"',
-  'BARCODE 40,100,"EAN13",80,1,0,2,2,"123456789012"',
+  'BARCODE 40,100,"POST",80,1,0,2,2,"12345"',
   'BARCODE 40,200,"128M",80,1,0,2,2,"01!10223"',
   'BARCODE 40,300,"EAN128",80,1,0,2,2,"0112345678901231"',
   'PRINT 1,1',
 ].join('\r\n');
 
 for (const dpi of [203, 300]) {
-  test(`TSPL -> TPCL at ${dpi} dpi: an EAN13 has no TPCL counterpart, is absent and is named in a Spanish warning; FNC1 barcodes survive`, () => {
+  test(`TSPL -> TPCL at ${dpi} dpi: a Postnet barcode has no TPCL counterpart, is absent and is named in a Spanish warning; FNC1 barcodes survive`, () => {
     const { result, original, converted } = cross(TSPL_UNSUPPORTED, 'tpcl', dpi);
-    assert.deepEqual(original.items.map(i => i.symbology || i.kind), ['text', 'ean13', 'code128', 'code128']);
+    assert.deepEqual(original.items.map(i => i.symbology || i.kind), ['text', 'unknown', 'code128', 'code128']);
     assert.deepEqual(converted.items.map(i => i.symbology || i.kind), ['text', 'code128', 'code128']);
     const warnings = levels(result.diagnostics, 'warning');
     assert.equal(warnings.length, 1);
-    assert.match(warnings[0].text, /ean13/);
+    assert.match(warnings[0].text, /unknown/);
     assert.match(warnings[0].text, /sin equivalente en TPCL/);
     assert.deepEqual(converted.items.slice(1).map(i => i.data), ['01' + FNC1 + '23', FNC1 + '0112345678901231']);
     assert.deepEqual(levels(converted.diagnostics, 'error', 'warning'), []);

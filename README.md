@@ -162,14 +162,15 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       preview, the data written to the code never changes, and the barcode bars always draw the full data. TSPL: a TEXT or BARCODE whose
       content is exactly `@n` with a start value assigned (`@n="0001"`) shows that value, and **Incremento** edits the step of its
       `SET COUNTER @n step` line (-999999999..999999999).
-    - **Tipo de código** and **Dígito de control** (1D barcodes, TPCL `XB` and TSPL `BARCODE`; not QR): the symbology among the ones the viewer draws exactly
-      and the emitters write (Code 128, Code 39, ITF), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
-      so ITF lists a single option and Code 128 no field). The command is written again for the new type: TPCL replaces the whole `XB` command (the
+    - **Tipo de código**, **Dígito de control** and **Complemento** (1D barcodes, TPCL `XB` and TSPL `BARCODE`; not QR): the symbology among the ones the viewer draws exactly
+      and the emitters write (Code 128, Code 39, ITF, EAN-13, EAN-8, UPC-A, UPC-E), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
+      so ITF lists a single option and Code 128 no field; EAN / UPC in TPCL: none / check / automatic = options 1 / 2 / 3, in TSPL only automatic, the types have no option),
+      and for the EAN / UPC types the add-on (none, +2, +5: part of the TPCL type character and of the TSPL type string, `EAN13+2`). The command is written again for the new type: TPCL replaces the whole `XB` command (the
       Code 128 form and the Code 39 / ITF form have different parameters; position, rotation, height, readable flag, module or widths, counters and any
       `=data` are kept, the Code 39 / ITF inter-character space follows the manual, 00 for ITF; the `RB` data command is never touched); TSPL replaces the type
       string and the wide bar argument only (the other arguments, REFERENCE-relative coordinates and a counter content stay as written). A check option the new
-      type lacks goes back to none. The change is refused (nothing changes) when something would be lost without any warning: a TPCL start/stop option (`T`/`P`/`N`)
-      or a guard bar that the other form cannot hold, TSPL `128M`/`EAN128` content, add-on types and symbologies without a row (EAN13...). Content the new type cannot encode
+      type lacks goes back to none (automatic for the EAN / UPC types); the add-on and the TPCL guard bar length are carried between EAN / UPC types. The change is refused (nothing changes) when something would be lost without any warning: a TPCL start/stop option (`T`/`P`/`N`)
+      or a guard bar that the other form cannot hold, TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Code 93...). Content the new type cannot encode
       (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
       new symbology only adds rows.
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
@@ -195,7 +196,7 @@ What is lost or approximated (each case is reported in the warnings list):
 
 - Text: the TPCL PC bitmap fonts (letter, serif, italic) have no TSPL equivalent; TPCL magnifications in steps of 0.1 become
   TSPL integer multipliers or a scalable font in whole points.
-- Barcodes: types without a counterpart are skipped with a warning (for example EAN13 in TPCL, UPC-E, or TSPL `128M` control codes).
+- Barcodes: types without a counterpart are skipped with a warning (for example TSPL Postnet in TPCL or the other way round, or TSPL `128M` control codes). The twelve EAN / UPC variants (EAN-13, EAN-8, UPC-A, UPC-E, each with +2 / +5) convert exactly in both directions; the TPCL check digit options none / check and the WPC guard bar length have no TSPL equivalent (a warning and an information message; the TSPL type attaches the check digit automatically).
 - QR: the rotation is not converted.
 - Variables: TPCL `#NAME#` is written literally in TSPL, which has no substitution.
 - Label size: the TPCL pitch and the TSPL gap are **not converted** (TSPL to TPCL writes the height as the pitch; TPCL to TSPL omits `GAP`).
@@ -215,6 +216,7 @@ What is lost or approximated (each case is reported in the warnings list):
 | `XB` / `RB` type `3` | Code39 (generated for real, with the wide/narrow widths of the command and the text below if the label asks for it) |
 | `XB` / `RB` type `2` | Interleaved 2 of 5 / ITF (generated for real, same widths and text options) |
 | `XB` / `RB` type `B` | Code39 full ASCII: only the characters of standard Code39 are drawn (see limitations) |
+| `XB` / `RB` types `5` `7` `8` (EAN-13, +2, +5), `0` `I` `J` (EAN-8), `K` `L` `M` (UPC-A), `6` `G` `H` (UPC-E) | EAN / UPC (generated for real: guard bars, check digit option, digits printed under the bars when the label asks for it, add-on digits above the add-on bars; see limitations) |
 | `XB` other types | Other barcodes: drawn approximately |
 | `LC` | Lines and rectangles (a rectangle may carry the optional corner radius `ggg`, 0.1 mm, drawn rounded) |
 | `XR` | Clear area: type `B` inverts white/black and type `A` clears to white, in the rectangle between the start and end corners (0.1 mm; the corners may come in any order). It acts on what is drawn **before** it in command order; what comes after is not affected. Drawn, moved, edited (**Final X**, **Final Y**, **Tipo**: Invertir / Borrar) and inserted from the palette (**Área invertida**, 30 x 10 mm, type `B`; clearing areas have no palette entry). **Browser check pending:** the inversion is drawn with the SVG blend mode `difference` |
@@ -234,7 +236,7 @@ It can be exported to TPCL with **Convertir a…**.
 |---|---|
 | `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SHIFT` | Label setup (size in inches, mm or dots; coordinates in dots). The **Formato** row writes `SIZE` and `GAP` in mm |
 | `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
-| `BARCODE` | Code128 (also `128M` and `EAN128`), Code39 and ITF / `25` are generated for real; EAN13 and the other types are drawn approximately and reported |
+| `BARCODE` | Code128 (also `128M` and `EAN128`), Code39, ITF / `25` and EAN13 / EAN8 / UPCA / UPCE (each also with `+2` and `+5`) are generated for real; the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
 | `BAR`, `BOX` | Filled bar and rectangle outline (with thickness and optional corner radius, in dots; the radius argument is from the TSPL2 manual and **not verified on a printer**) |
 | `ELLIPSE`, `CIRCLE` | Ellipse and circle outlines (`x,y` is the top-left corner of the bounding box; size and thickness in dots; stroke centered on the box edge). Drawn, moved, edited (**Ancho/Alto** or **Diámetro**, **Grosor**) and inserted from the palette (**Elipse**, **Círculo**). Both commands are from the TSPL2 manual v3.0 (not available locally) and are **not verified on a printer**. TPCL has no equivalent: converting to TPCL skips them with a warning |
@@ -249,7 +251,7 @@ Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`P
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
-  text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; a TSPL counter `@n` without an assigned start value, a mix such as `"x"+@1` and the counters of `BLOCK` and `QRCODE` are shown literally.
+  text alignment parameters are read but not drawn; a TSPL counter `@n` without an assigned start value, a mix such as `"x"+@1` and the counters of `BLOCK` and `QRCODE` are shown literally.
 - Counters: TPCL increment `n` and TSPL `SET COUNTER @n step` / `@n="start"` are converted both ways (the start value is the data; TSPL has 50 counters, `@0`-`@49`, with steps up to 999999999). The TPCL zero suppression has no TSPL equivalent and is dropped with one information message; QR codes have no counter in either language.
 - **Resolución:** the dots-per-mm of a TSPL label are not in the file, so the **Resolución** selector (203 or 300 dpi) must match
   the printer: coordinates are in dots, so the same label is drawn smaller at 300 dpi.
@@ -269,6 +271,15 @@ Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`P
   character and reported. Full ASCII (type `B`) is not supported: characters outside standard Code39 (for example
   lowercase letters) are reported and the barcode is not drawn. The start/stop option (`T`, `P`, `N`) has not been
   verified: the viewer always draws the automatic `*`.
+- EAN-13, EAN-8, UPC-A and UPC-E (TPCL types `5 7 8 0 I J K L M 6 G H`, TSPL `EAN13 EAN13+2 EAN13+5 EAN8... UPCA... UPCE...`): the bars, guard bars and digit layout follow the usual symbology
+  (95, 67, 95 and 51 modules; the add-on starts 9 modules after the symbol; EAN-13 / UPC / UPC-E digits outside the bars are drawn in the quiet zone, the add-on digits above its bars).
+  The data is the digits (12 or 13 for EAN-13, 7 or 8 for EAN-8, 11 or 12 for UPC-A, 6, 7 or 8 for UPC-E: number system 0 or 1, six digits, check digit), followed by the 2 or 5 add-on digits;
+  a missing check digit is computed (modulus 10) and a wrong one is reported (the digits are drawn as given); UPC-E gets its check digit through the equivalent UPC-A. TPCL check options
+  `1` (none), `2` (check) and `3` (auto attach) are drawn; the price check digit options `4` / `5` are drawn as automatic and reported. **Not documented by the manuals, so
+  not verified on a printer:** how the data of an add-on type is given (the viewer takes base digits + add-on digits), the number of digits the printer accepts for each type, what `2` / `1` do
+  when the data does not match, whether the printer prints the digits under the bars (TPCL `p` flag, TSPL human readable) with its own layout, the exact meaning of the TPCL WPC
+  guard bar length (the viewer extends the start, centre and end guard bars by that length in 0.1 mm; without the field, as in TSPL, by the height of the digits when they are printed) and the TSPL wide
+  argument (written equal to the narrow one). Check the placement of the digits, guard bars and add-on in a browser and on a printer.
 - ITF: only check digit option `1` (none) is drawn; options 2 to 5 are drawn without check digit and reported. The
   printer's behavior with an **odd number of digits is not verified**: the viewer draws a leading `0` and reports it.
   Non-digit characters are reported and not drawn.

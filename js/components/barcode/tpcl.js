@@ -1,9 +1,13 @@
 /**
  * Barcode slice, TPCL language: everything the 1D barcode XB commands need (Code 39 / ITF with explicit bar widths and the
- * alternative form with a module), plus the RB data command's palette template.
+ * alternative form with a module, which also carries Code 128 and the WPC types EAN-13 / EAN-8 / UPC-A / UPC-E with their +2 / +5
+ * add-ons), plus the RB data command's palette template.
  *   Code 39 / ITF: XBnn;x,y,<type>,<e check digit>,<ff narrow bar>,<gg narrow space>,<hh wide bar>,<ii wide space>,
  *     <jj inter-character space>,<k rotation>,<llll height 0.1 mm>,<p human readable>[,<qq zero suppression>][,<r T|P|N start/stop>]
  *   1D barcode: XBnn;x,y,<type>,<check digit>,<module>,<rotation>,<height>,<increment>,<000>,<human readable text>,<00>
+ *     (WPC types, B-SV4 spec 6.3.9: 5 EAN-13, 7 +2, 8 +5; 0 EAN-8, I +2, J +5; K UPC-A, L +2, M +5; 6 UPC-E, G +2, H +5. The check digit
+ *     option e is 1 none, 2 check, 3 auto attach (modulus 10), 4 / 5 attach with a price check digit (not drawn: unsupported). The
+ *     000 is the WPC guard bar length in 0.1 mm, omitted = no guard bar; p prints the digits under the bars.)
  * The hooks are built by a factory because they need the shared helpers of js/languages/tpcl.js, which loads after
  * this file: factory(helpers) -> { handlers, build, coordinates, editable } (see js/components/registry.js).
  * The RB data handler is shared with the other kinds and stays in js/languages/tpcl.js; the XB QR command is the qr slice's.
@@ -19,19 +23,41 @@
 
   /** Neutral symbology of each TPCL barcode type (the other types are 'unknown'). */
   const SYMBOLOGIES = Object.freeze({ 2: 'itf', 3: 'code39', B: 'code39', 9: 'code128', A: 'code128', T: 'qr' });
-  const symbologyOf = type => SYMBOLOGIES[type] || 'unknown';
+
+  /** The WPC types: neutral symbology and add-on digits (0, 2 or 5) of each TPCL type character. */
+  const WPC_TYPES = Object.freeze({
+    5: { symbology: 'ean13', addon: 0 }, 7: { symbology: 'ean13', addon: 2 }, 8: { symbology: 'ean13', addon: 5 },
+    0: { symbology: 'ean8', addon: 0 }, I: { symbology: 'ean8', addon: 2 }, J: { symbology: 'ean8', addon: 5 },
+    K: { symbology: 'upca', addon: 0 }, L: { symbology: 'upca', addon: 2 }, M: { symbology: 'upca', addon: 5 },
+    6: { symbology: 'upce', addon: 0 }, G: { symbology: 'upce', addon: 2 }, H: { symbology: 'upce', addon: 5 },
+  });
+  const symbologyOf = type => (Object.hasOwn(WPC_TYPES, type) ? WPC_TYPES[type].symbology : SYMBOLOGIES[type] || 'unknown');
+  const isWpc = symbology => Object.hasOwn(PB.ean.NAMES, symbology);
+  const ADDONS = Object.freeze([0, 2, 5]);
 
   /** Check digit option (field e of Code 39 / ITF) -> neutral check; the options not listed are 'unsupported'. */
-  const CHECK_OPTIONS = Object.freeze({ code39: { 1: 'none', 3: 'mod43' }, itf: { 1: 'none' } });
+  const WPC_CHECK_OPTIONS = Object.freeze({ 1: 'none', 2: 'check', 3: 'auto' });
+  const CHECK_OPTIONS = Object.freeze({ code39: { 1: 'none', 3: 'mod43' }, itf: { 1: 'none' }, ean13: WPC_CHECK_OPTIONS, ean8: WPC_CHECK_OPTIONS, upca: WPC_CHECK_OPTIONS, upce: WPC_CHECK_OPTIONS });
 
   /** TPCL barcode type of each emittable neutral symbology (the inverse of SYMBOLOGIES). */
-  const TYPE_CODES = Object.freeze({ itf: '2', code39: '3', code128: '9' });
+  const TYPE_CODES = Object.freeze({ itf: '2', code39: '3', code128: '9', ean13: '5', ean8: '0', upca: 'K', upce: '6' });
+
+  /** TPCL type character of each WPC symbology with an add-on of 2 or 5 digits. */
+  const ADDON_TYPE_CODES = Object.freeze({ ean13: { 2: '7', 5: '8' }, ean8: { 2: 'I', 5: 'J' }, upca: { 2: 'L', 5: 'M' }, upce: { 2: 'G', 5: 'H' } });
+  const typeChar = (symbology, addon) => (isWpc(symbology) && ADDON_TYPE_CODES[symbology][addon] ? ADDON_TYPE_CODES[symbology][addon] : TYPE_CODES[symbology]);
 
   /** Check digit option (field e) of each neutral check: the inverse of CHECK_OPTIONS, per wide/narrow symbology. */
-  const CHECK_CODES = Object.freeze({ code39: { none: '1', mod43: '3' }, itf: { none: '1' } });
+  const WPC_CHECK_CODES = Object.freeze({ none: '1', check: '2', auto: '3' });
+  const CHECK_CODES = Object.freeze({ code39: { none: '1', mod43: '3' }, itf: { none: '1' }, ean13: WPC_CHECK_CODES, ean8: WPC_CHECK_CODES, upca: WPC_CHECK_CODES, upce: WPC_CHECK_CODES });
+
+  /** Check option of a symbology whose item has none (the WPC types attach the check digit by default). */
+  const defaultCheck = symbology => (isWpc(symbology) ? 'auto' : 'none');
 
   /** Form of the XB command of each emittable symbology: the generic one (module, rotation, height) or the one with explicit widths. */
-  const FORM_OF = Object.freeze({ code128: 'generic', code39: 'widths', itf: 'widths' });
+  const FORM_OF = Object.freeze({ code128: 'generic', code39: 'widths', itf: 'widths', ean13: 'generic', ean8: 'generic', upca: 'generic', upce: 'generic' });
+
+  /** Largest WPC guard bar length (0.1 mm). */
+  const MAX_GUARD = 100;
 
   /** Code 39 / ITF without explicit widths: wide elements are this many narrow ones (the renderer's default ratio). */
   const DEFAULT_RATIO = 3;
@@ -134,7 +160,7 @@
 
     /** Check digit option of a wide/narrow barcode; a check TPCL cannot express is written as none, with a warning. */
     function checkCode(ctx, symbology, check) {
-      const code = CHECK_CODES[symbology][check ?? 'none'];
+      const code = CHECK_CODES[symbology][check ?? defaultCheck(symbology)];
       if (code) return code;
       ctx.once(`tpcl-check-${symbology}`, () => diag.warning(`Código de barras ${symbology}: dígito de control "${check}" sin equivalente en TPCL, se escribe sin dígito de control`));
       return CHECK_CODES[symbology].none;
@@ -161,11 +187,23 @@
         return [];
       }
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
+      if (isWpc(item.symbology)) wpcDataWarning(ctx, item);
       const shared = sharedValues(item, ctx);
       const id = allocId(ctx, 'XB');
       const data = wrap(`RB${id};${barcodeText(ctx, item.data)}`);
       return [wrap(`XB${id};${x},${y},${parameters(item, ctx, shared)}`), data];
     }
+
+    /** One warning per symbology when the data of an EAN / UPC barcode cannot be encoded (a variable stands for its value, which is not known here). */
+    function wpcDataWarning(ctx, item) {
+      const data = String(item.data ?? '');
+      if (PB.variables.namesIn(data).length) return;
+      const encoded = PB.ean.encode(item.symbology, data, { check: item.check, addon: item.addon });
+      if (!encoded.ok) ctx.once(`tpcl-wpc-${item.symbology}`, () => diag.warning(`Hay códigos de barras con datos que no son válidos para su tipo (${encoded.warnings[0]}): la impresora puede rechazarlos`));
+    }
+
+    /** The WPC guard bar length as 3 digits (0.1 mm, 0..100; 000 = none). */
+    const guardText = item => String(Math.min(MAX_GUARD, Math.max(0, Math.round(Number.isFinite(item.guard) ? item.guard : 0)))).padStart(3, '0');
 
     /** The values of a command that do not depend on its form: rotation digit, height, readable flag and module (dots, 2 digits). */
     function sharedValues(item, ctx) {
@@ -180,14 +218,16 @@
     /**
      * The parameters of the XB command after the coordinates, from the type character on, for the symbology of the item (the form
      * follows it: Code 128 the generic one, Code 39 / ITF the widths one). `keep` carries what the neutral model does not hold, when
-     * the caller rewrites an existing command: { type, checkDigit, startStop } (the type character as written, e.g. B; the check
-     * digit character of the generic form; the start/stop option of the widths form).
+     * the caller rewrites an existing command: { type, checkDigit, startStop, guard } (the type character as written, e.g. B; the check
+     * digit character of the generic form (Code 128; the WPC types write theirs from item.check); the start/stop option of the widths
+     * form; the guard bar length of the generic form as written).
      */
     function parameters(item, ctx, { rotation, height, readable, module }, keep = {}) {
-      const type = keep.type || TYPE_CODES[item.symbology];
+      const type = keep.type || typeChar(item.symbology, item.addon);
       if (FORM_OF[item.symbology] === 'generic') {
         const [inc, zero] = [hasCounter(item) ? counterToken(item.counter.step) : '0', item.zeroSuppress > 0 ? zeroDigits(item.zeroSuppress) : '00'];
-        return `${type},${keep.checkDigit ?? '0'},${module},${rotation},${height},${inc},000,${readable},${zero}`;
+        const check = isWpc(item.symbology) ? checkCode(ctx, item.symbology, item.check) : (keep.checkDigit ?? '0');
+        return `${type},${check},${module},${rotation},${height},${inc},${keep.guard ?? (isWpc(item.symbology) ? guardText(item) : '000')},${readable},${zero}`;
       }
       const w = item.widths;
       if (!w) ctx.once('tpcl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
@@ -229,7 +269,7 @@
     const checkField = {
       key: 'check', label: 'Dígito de control', type: 'select', group: 0, reemit: true,
       optionsFor: checkOptionsOf,
-      model: item => (Object.hasOwn(CHECK_CODES, item.symbology) ? (item.check ?? 'none') : undefined),
+      model: item => (Object.hasOwn(CHECK_CODES, item.symbology) ? (item.check ?? defaultCheck(item.symbology)) : undefined),
       read: raw => {
         const m = TYPE_AND_CHECK.exec(raw || '');
         const options = m && CHECK_OPTIONS[symbologyOf(m[1])];
@@ -238,14 +278,30 @@
       write: () => null,
     };
 
+    /** The add-on (0, 2 or 5 digits) of the WPC types: written in the type character, so changing it re-emits the command. */
+    const addonField = {
+      key: 'addon', label: 'Complemento', type: 'select', group: 0, reemit: true,
+      options: selector.addonOptions(),
+      model: item => (isWpc(item.symbology) ? (item.addon ?? 0) : undefined),
+      read: raw => {
+        const m = TYPE_AND_CHECK.exec(raw || '');
+        return m && Object.hasOwn(WPC_TYPES, m[1]) ? WPC_TYPES[m[1]].addon : undefined;
+      },
+      write: () => null,
+    };
+
     /**
-     * Changes the symbology and / or check digit of a barcode: the format command is emitted again for the item with the new
+     * Changes the symbology, check digit and / or add-on of a barcode: the format command is emitted again for the item with the new
      * values (parameters() above) and replaces the old one (its {XBnn;x,y, head, its coordinates and any "=data" / ";link" after
      * the parameters stay as written; the RB data command is not touched). Carried over: position, rotation, height, readable
-     * flag, module / widths, counters; the check digit when the new type has that option, else none; the type character (B) and
-     * the Code 39 / ITF start/stop option when staying in the widths form. Code 39 -> ITF writes the inter-character space 00 (manual).
+     * flag, module / widths, counters; the check digit when the new type has that option (within the same family: EAN / UPC to EAN /
+     * UPC, or Code 39 / ITF / Code 128 among themselves), else the default of the new type (none; automatic for EAN / UPC); the add-on
+     * of the EAN / UPC types (it is part of the type character); the type character (B) and the Code 39 / ITF start/stop option when
+     * staying in the widths form; the guard bar length when staying in the generic form. Code 39 -> ITF writes the inter-character
+     * space 00 (manual).
      * null (refuse, text unchanged): the current or new symbology has no row, an invalid value, a start/stop option or a guard bar
-     * that the generic form cannot hold, or nothing changes. The editors have no diagnostics path, so nothing is dropped silently.
+     * that the generic form cannot hold, an add-on that the new type cannot carry, an EAN / UPC price check digit (4 / 5) that is not
+     * replaced, or nothing changes. The editors have no diagnostics path, so nothing is dropped silently.
      */
     function reemit({ stripped, span }, item, changes, { dpi }) {
       const from = item.symbology;
@@ -253,9 +309,14 @@
       if (!TYPE_CODES[from] || !selector.symbologyOptions(TYPE_CODES).some(o => o.value === to)) return null;
       const checks = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to] : {};
       if (Object.hasOwn(changes, 'check') && !Object.hasOwn(checks, changes.check)) return null;
-      if (to === from && !Object.hasOwn(changes, 'check')) return null;
-      const check = Object.hasOwn(changes, 'check') ? changes.check : (Object.hasOwn(checks, item.check) ? item.check : 'none');
-      if (to === from && check === (item.check ?? 'none')) return null;
+      const addonFrom = isWpc(from) ? (item.addon ?? 0) : 0;
+      const addon = Object.hasOwn(changes, 'addon') ? changes.addon : addonFrom;
+      if (!ADDONS.includes(addon) || (addon > 0 && !isWpc(to))) return null;
+      if (to === from && addon === addonFrom && !Object.hasOwn(changes, 'check')) return null;
+      if (isWpc(from) && item.check === 'unsupported' && !Object.hasOwn(changes, 'check')) return null;
+      const sameFamily = isWpc(from) === isWpc(to);
+      const check = Object.hasOwn(changes, 'check') ? changes.check : (sameFamily && Object.hasOwn(checks, item.check) ? item.check : defaultCheck(to));
+      if (to === from && addon === addonFrom && check === (item.check ?? defaultCheck(from))) return null;
       const head = /^\{XB\d+;\d+,\d+,/.exec(stripped);
       if (!head || !stripped.endsWith('|}')) return null;
       const native = item.native || {};
@@ -266,12 +327,13 @@
       const [fromForm, toForm] = [FORM_OF[from], FORM_OF[to]];
       if (fromForm === 'widths' && toForm !== 'widths' && native.startStop) return null;
       if (fromForm === 'generic' && toForm !== 'generic' && /[1-9]/.test(guard)) return null;
-      const next = { ...item, symbology: to, check, interCharGap: to === 'itf' ? 0 : (from === 'itf' ? undefined : item.interCharGap) };
+      const next = { ...item, symbology: to, check, addon, interCharGap: to === 'itf' ? 0 : (from === 'itf' ? undefined : item.interCharGap) };
       const ctx = PB.emit.createContext({ dpi, language: 'tpcl' });
       const keep = {
-        ...(to === from && native.type && { type: native.type }),
+        ...(to === from && addon === addonFrom && native.type && { type: native.type }),
         checkDigit: '1',
         ...(fromForm === 'widths' && toForm === 'widths' && native.startStop && { startStop: native.startStop }),
+        ...(fromForm === 'generic' && toForm === 'generic' && guard !== '' && { guard }),
       };
       const suffix = cut < 0 ? '' : rest.slice(cut, -2);
       return `${head[0]}${parameters(next, ctx, sharedValues(next, ctx), keep)}${suffix}|}`;
@@ -322,10 +384,13 @@
           handle(m, cmd, ctx) {
             const ref = 'XB' + m[1];
             const p = m[5].split(',');
+            const wpc = Object.hasOwn(WPC_TYPES, m[4]) ? WPC_TYPES[m[4]] : null;
             ctx.addField(ref, {
               kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
               symbology: symbologyOf(m[4]), module: (+p[1] || 2) * ctx.dot, rotation: ROTATIONS[p[2]] ?? 0, height: +p[3] || 100,
-              native: { type: m[4], module: +p[1] || 2 },
+              // WPC types: the add-on is part of the type, the check digit option and the guard bar length (0.1 mm) are neutral fields
+              ...(wpc && { addon: wpc.addon, check: CHECK_OPTIONS[wpc.symbology][p[0]] ?? 'unsupported', guard: DIGITS.test(p[5]) ? +p[5] : 0 }),
+              native: { type: m[4], module: +p[1] || 2, ...(wpc && { checkDigit: p[0] }) },
               ...counterFields(ctx, p[4], p[7]),
               humanReadable: p[6] === '1', data: null,
             });
@@ -353,7 +418,7 @@
           pattern: /^\{XB\d+;\d+,\d+,[^,],[^,]*,(\d+),(\d+),(\d+),([^,]*),[^,]*,([^,;|]*)((?:,\d{2})?)/d,
           reemit,
           fields: [
-            symbologyField, checkField,
+            symbologyField, checkField, addonField,
             numberField('module', 'Módulo (puntos)', 1, 1, 99, item => item.native.module),
             barcodeHeight(3), rotationField(2), counterField(4, false), humanReadableField(5), zeroField(6),
           ],

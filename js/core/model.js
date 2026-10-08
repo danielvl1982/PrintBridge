@@ -35,10 +35,18 @@
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)
  *       barcode { ref, x, y, rotation, module, height, humanReadable, symbology, native:{ type, module }, data,
- *                 widths?, interCharGap?, check? }
+ *                 widths?, interCharGap?, check?, addon?, guard? }
  *               module = width of the narrowest module and height = height of the bars, both in 0.1 mm
- *               neutral symbology: code128 | code39 | itf | ean13 | qr | unknown; native.type = the language's code.
- *               Exact (generated for real): code128, code39, itf; the others are drawn approximately.
+ *               neutral symbology: code128 | code39 | itf | ean13 | ean8 | upca | upce | qr | unknown; native.type = the language's code.
+ *               Exact (generated for real): code128, code39, itf, ean13, ean8, upca, upce; the others are drawn approximately.
+ *               EAN / UPC only (ean13, ean8, upca, upce; module based like Code 128):
+ *                 addon = 0 | 2 | 5 (the digits of the EAN-2 / EAN-5 add-on; TPCL types 7 8 I J L M G H, TSPL "EAN13+2"...). The data
+ *                 is the base digits followed by the add-on digits.
+ *                 check = 'none' | 'check' | 'auto' | 'unsupported' (TPCL option e = 1 | 2 | 3 | the price check digits 4, 5; the
+ *                 TSPL types have no option and read as 'auto'): auto attaches the check digit to data without it and validates data
+ *                 with it, check only validates, none draws the data as it is; unsupported is drawn as auto and reported. Default: auto.
+ *                 guard? = TPCL "WPC guard bar" length in 0.1 mm (000 = none; the digits are printed under the bars when humanReadable);
+ *                 absent (TSPL) = the standard guard bars when the digits are printed.
  *               Code 39 and ITF only (wide/narrow symbologies), all optional:
  *                 widths = { narrowBar, narrowSpace, wideBar, wideSpace } in 0.1 mm. Without them the renderer uses
  *                 module for the narrow elements and 3 x module for the wide ones (ratio 3:1).
