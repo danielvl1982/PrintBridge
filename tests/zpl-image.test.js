@@ -254,10 +254,33 @@ test('emit: an image is ^FOx,y^GFA,<total>,<total>,<bytes per row>,<hex>^FS (pla
   assert.deepEqual(emitDiag([imageItem(bm)]), []);
 });
 
-test('emit: the data is compressed when that is shorter (empty and repeated rows become , and :)', () => {
-  assert.deepEqual(emitLines([imageItem(bits(['0'.repeat(16), '0'.repeat(16)]), { x: 10, y: 20 })]), ['^FO10,20^GFA,4,4,2,,:^FS']);
-  assert.deepEqual(emitLines([imageItem(bits(['1'.repeat(16), '1'.repeat(16), '0'.repeat(16)]))]), ['^FO0,0^GFA,6,6,2,!:,^FS']);
-  assert.deepEqual(emitLines([imageItem(bits(['1111111111000000', '1000000000000000']))]), ['^FO0,0^GFA,4,4,2,HFC,8,^FS']);
+test('emit: by default only the comma of the 2003 guide shortens the data (trailing 00 bytes of a row become one comma, a zero row is just a comma)', () => {
+  assert.deepEqual(emitLines([imageItem(bits(['0'.repeat(16), '0'.repeat(16)]), { x: 10, y: 20 })]), ['^FO10,20^GFA,4,4,2,,,^FS']);
+  assert.deepEqual(emitLines([imageItem(bits(['1'.repeat(16), '1'.repeat(16), '0'.repeat(16)]))]), ['^FO0,0^GFA,6,6,2,FFFFFFFF,^FS']);
+  assert.deepEqual(emitLines([imageItem(bits(['1111111111000000', '1000000000000000']))]), ['^FO0,0^GFA,4,4,2,FFC080,^FS']);
+  assert.deepEqual(emitLines([imageItem(bits(['0000000011111111', '1111111100000000']))]), ['^FO0,0^GFA,4,4,2,00FFFF,^FS']);
+});
+
+test('emit: an item read from a compressed ^GF is written with the full scheme again (lossless style); the same bitmap without native uses commas only', () => {
+  const bm = bits(['0'.repeat(16), '0'.repeat(16)]);
+  assert.deepEqual(emitLines([imageItem(bm, { x: 10, y: 20, native: { compressed: true } })]), ['^FO10,20^GFA,4,4,2,,:^FS']);
+  assert.deepEqual(emitLines([imageItem(bm, { native: { compressed: false } })]), ['^FO0,0^GFA,4,4,2,,,^FS']);
+  const rows = bits(['1111111111000000', '1000000000000000']);
+  assert.deepEqual(emitLines([imageItem(rows, { native: { compressed: true } })]), ['^FO0,0^GFA,4,4,2,HFC,8,^FS']);
+  // a parsed compressed field keeps its style, a parsed plain field stays plain
+  assert.deepEqual(emitLines([one('^FO0,0^GFA,4,4,2,HFC,8,^FS')]), ['^FO0,0^GFA,4,4,2,HFC,8,^FS']);
+  assert.deepEqual(emitLines([one('^FO0,0^GFA,4,4,2,FFC08000^FS')]), ['^FO0,0^GFA,4,4,2,FFC080,^FS']);
+});
+
+test('emit: the default data of a bitmap with trailing zero bytes uses commas and parses back to the same bitmap', () => {
+  const bm = bits(['1010101000000000', '0000000000000000', '1111111100000000', '0000000011110000', '1111111111111111']);
+  const line = emitLines([imageItem(bm)])[0];
+  assert.equal(line, '^FO0,0^GFA,10,10,2,AA,,FF,00F0FFFF^FS');
+  const parsed = parse(BASE(line));
+  assert.deepEqual(loud(parsed.diagnostics), []);
+  assert.deepEqual(rowsOf(parsed.items[0].bitmap), rowsOf(bm));
+  assert.equal(parsed.items[0].native.compressed, false);
+  assert.match(slice.graphicCommand(bm), /^\^GFA,10,10,2,[0-9A-F,]+$/);
 });
 
 test('the encoder: runs of 1, 2, 19, 20, 21, 39, 40, 399, 400, 401, 419 and 420 digits use the shortest count letters and split above 419', () => {
@@ -269,6 +292,11 @@ test('the encoder: runs of 1, 2, 19, 20, 21, 39, 40, 399, 400, 401, 419 and 420 
   assert.equal(slice.compressRows(['ABC00000']), 'ABC,');
   assert.equal(slice.compressRows(['ABFFFFFF']), 'AB!');
   assert.equal(slice.compressRows(['00000000', 'FFFFFFFF', 'FFFFFFFF', '12345678', '12345678']), ',!:12345678:');
+  // graphicCommand: plain commas by default, the full scheme only on request and only when it is shorter
+  const two = bits(['0'.repeat(16), '0'.repeat(16)]);
+  assert.equal(slice.graphicCommand(two), '^GFA,4,4,2,,,');
+  assert.equal(slice.graphicCommand(two, { compress: true }), '^GFA,4,4,2,,:');
+  assert.equal(slice.graphicCommand(fromHex('1A2B3C4D5E67', 3), { compress: true }), '^GFA,6,6,3,1A2B3C4D5E67');
 });
 
 test('the encoder and the decoder are inverse: every run length and the row codes round trip through parse', () => {
@@ -292,8 +320,14 @@ test('round trip parse -> emit -> parse keeps the bitmap exactly (compressed and
     assert.deepEqual(second, first);
     assert.deepEqual(emitLines([imageItem(bm, { x: 130, y: 70 })]), first);
   }
-  assert.match(emitLines([imageItem(banner(64, 20))])[0], /^\^FO0,0\^GFA,160,160,8,[0-9A-Za-z,!:]+\^FS$/);
+  assert.match(emitLines([imageItem(banner(64, 20))])[0], /^\^FO0,0\^GFA,160,160,8,[0-9A-F,]+\^FS$/);
   assert.ok(emitLines([imageItem(banner(64, 20))])[0].length < 160 * 2);
+  // an image read compressed round trips in the compressed style, byte for byte
+  const compressed = emitLines([imageItem(banner(64, 20), { native: { compressed: true } })]);
+  assert.match(compressed[0], /[G-Zg-z!:]/);
+  const again = parse(BASE(compressed[0]));
+  assert.deepEqual(rowsOf(again.items[0].bitmap), rowsOf(banner(64, 20)));
+  assert.deepEqual(emitLines(again.items), compressed);
 });
 
 test('emit: a width that is not a multiple of 8 gains white padding columns (the row is whole bytes), the rest is exact', () => {
@@ -338,8 +372,17 @@ const LABEL = '^XA\r\n^PW812\r\n^LL1218\r\n^FO10,10^A0N,30,30^FDHi^FS\r\n^XZ\r\n
 
 test('imageCommand: x / y in mm become dots at the dpi, the bitmap a ^FO..^GFA..^FS field', () => {
   // 10 mm at 203 dpi = 80 dots, 5 mm = 40 dots; rows FFC0 and 8000
-  assert.equal(zpl.imageCommand({ xMm: '10', yMm: '5', ...M, dpi: 203 }), '^FO80,40^GFA,4,4,2,HFC,8,^FS');
-  assert.equal(zpl.imageCommand({ xMm: 10, yMm: 5, ...M, dpi: 300 }), '^FO118,59^GFA,4,4,2,HFC,8,^FS');
+  assert.equal(zpl.imageCommand({ xMm: '10', yMm: '5', ...M, dpi: 203 }), '^FO80,40^GFA,4,4,2,FFC080,^FS');
+  assert.equal(zpl.imageCommand({ xMm: 10, yMm: 5, ...M, dpi: 300 }), '^FO118,59^GFA,4,4,2,FFC080,^FS');
+});
+
+test('imageCommand: only the syntax of the 2003 guide is written (hex digits A-F and commas: no count letters, no ! and no :)', () => {
+  const samples = [M, banner(64, 20), bits(['0'.repeat(40)]), bits(['1'.repeat(40)]), bits(['0'.repeat(16), '0'.repeat(16), '1'.repeat(16)])];
+  for (const bm of samples) {
+    const data = zpl.imageCommand({ xMm: 3, yMm: 4, ...bm, dpi: 203 }).split(',').slice(4).join(',').replace(/\^FS$/, '');
+    assert.match(data, /^[0-9A-F,]*$/);
+    assert.doesNotMatch(data, /[G-Zg-z!:]/);
+  }
 });
 
 test('imageCommand: a comma decimal is accepted, an empty or invalid position is 0, a negative one never goes below 0', () => {

@@ -6,9 +6,11 @@
  * match c"; c / d = the rows); the ASCII data is two hex digits per image byte (1 = black, the leftmost dot is the highest bit; the guide's ~DG: four white dots
  * then four black = 0F), CR and LF may be inserted, "any numbers sent after count is satisfied are ignored" and "a comma in the data pads the current line with 00
  * (white space)"; B is binary and C is compressed binary (host side, Zebra's algorithm); the origin of an image is its bottom-left corner with ^FT.
- * NOT in the 2003 guide (it is in the later guides): the run-length COMPRESSION of the ASCII data. The viewer reads and writes the scheme of the later guides
+ * NOT in the 2003 guide (it is in the later guides): the run-length COMPRESSION of the ASCII data. The viewer READS the scheme of the later guides
  * (NOT VERIFIED ON A PRINTER): a repeat count before a hex digit (G..Y = 1..19, g..z = 20..400 in steps of 20, the letters add up: gG = 21, at most 419 per
- * token), `,` fills the rest of the row with 0, `!` fills it with 1 and `:` repeats the previous row. The encoder only uses it when it makes the data shorter.
+ * token), `,` fills the rest of the row with 0, `!` fills it with 1 and `:` repeats the previous row. By default it WRITES only what the guide documents: plain
+ * hex where the trailing 00 bytes of a row become one comma. The full scheme is written back only for an image that was read compressed (native.compressed),
+ * and then only when it is shorter (graphicCommand option `compress`).
  * Out of scope (one warning each, nothing drawn): ^GFB / ^GFC binary data (it cannot live in a text box), Z64 / B64 data (":Z64:...") and the images stored in
  * the printer (~DG, ~DY, ^IM, ^IL, ^XG: the data is not in the stream).
  *
@@ -147,13 +149,23 @@
   /** Total bytes of a bitmap (whole bytes per row). */
   const totalBytes = bm => Math.ceil(bm.w / 8) * bm.h;
 
-  /** ^GFA command (no origin) of a bitmap: the compressed data when it is shorter than the plain hex. */
-  function graphicCommand(bm) {
+  /** Rows of hex digits -> plain data where the trailing 00 bytes of a row become ONE comma (the only shortening the 2003 guide documents). */
+  const commaRows = rows => rows.map(row => row.replace(/(?:00)+$/, ',')).join('');
+
+  /**
+   * ^GFA command (no origin) of a bitmap. Default: ASCII hex with the documented comma only. `compress: true`: the full scheme of the later guides, used only
+   * when it is shorter than the plain hex (otherwise the comma form).
+   */
+  function graphicCommand(bm, options) {
     const rows = hexRows(bm);
-    const plain = rows.join('');
-    const packed = compressRows(rows);
+    const plain = commaRows(rows);
     const total = totalBytes(bm);
-    return `^GFA,${total},${total},${Math.ceil(bm.w / 8)},${packed.length < plain.length ? packed : plain}`;
+    let data = plain;
+    if (options && options.compress) {
+      const packed = compressRows(rows);
+      if (packed.length < rows.join('').length) data = packed;
+    }
+    return `^GFA,${total},${total},${Math.ceil(bm.w / 8)},${data}`;
   }
 
   /** The whole field of a bitmap with its top-left corner at x, y (dots): ^FOx,y^GFA,...^FS. */
@@ -250,7 +262,7 @@
       }
       const [x, y] = [toDots(ctx, item.x || 0), toDots(ctx, item.y || 0)];
       const origin = item.native && item.native.origin === 'FT' ? `^FT${x},${y + bm.h}` : `^FO${x},${y}`;
-      return [`${origin}${graphicCommand(bm)}^FS`];
+      return [`${origin}${graphicCommand(bm, { compress: Boolean(item.native && item.native.compressed) })}^FS`];
     }
 
     return {
