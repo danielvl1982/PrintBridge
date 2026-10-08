@@ -208,7 +208,11 @@ test('flipping one codeword of a block breaks the syndromes (any position, any s
   }
 });
 
-test('interleaving: codeword i of the data goes to block i mod blocks, ecc k of block b to data + k x blocks + b', () => {
+// The slot of block b inside each round of the error-correction interleave: b, except for 144x144 where the round starts with the
+// first shorter block (block 8): slot = (b + 2) mod 10. Verified against zxing's DataMatrix decoder (see the 144x144 test below).
+const eccSlot = (size, b) => (size.side === 144 ? (b + 2) % size.blocks : b);
+
+test('interleaving: codeword i of the data goes to block i mod blocks, ecc k of block b to data + k x blocks + slot of b', () => {
   const s = dm.SIZES.at(-1); // 144x144: 10 blocks, the first 8 hold 156 data codewords and the last 2 hold 155
   const data = randomCodewords(s.data, 7);
   const out = dm.stream('', s, { codewords: data });
@@ -217,8 +221,19 @@ test('interleaving: codeword i of the data goes to block i mod blocks, ecc k of 
   assert.deepEqual(out.stream.slice(0, s.data), data, 'data codewords stay in order in the stream');
   out.blocks.forEach((block, b) => {
     block.data.forEach((word, k) => assert.equal(data[k * s.blocks + b], word, `data of block ${b}`));
-    block.ecc.forEach((word, k) => assert.equal(out.stream[s.data + k * s.blocks + b], word, `ecc of block ${b}`));
+    block.ecc.forEach((word, k) => assert.equal(out.stream[s.data + k * s.blocks + eccSlot(s, b)], word, `ecc of block ${b}`));
   });
+});
+
+test('144x144: the error-correction interleave starts with the shorter blocks (8 and 9), the other sizes start with block 0', () => {
+  const big = dm.SIZES.at(-1);
+  const out = dm.stream('', big, { codewords: randomCodewords(big.data, 11) });
+  // first round of the ecc: blocks 8, 9, 0, 1, ..., 7
+  const order = [8, 9, 0, 1, 2, 3, 4, 5, 6, 7];
+  order.forEach((b, j) => assert.equal(out.stream[big.data + j], out.blocks[b].ecc[0], `first ecc round, slot ${j} holds block ${b}`));
+  const small = dm.SIZES.find(s => s.blocks === 6);
+  const o2 = dm.stream('', small, { codewords: randomCodewords(small.data, 12) });
+  for (let b = 0; b < small.blocks; b++) assert.equal(o2.stream[small.data + b], o2.blocks[b].ecc[0], `size ${small.side} starts at block 0`);
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------
@@ -423,7 +438,11 @@ function decode(symbol) {
   // de-interleave and verify every block
   const blocks = Array.from({ length: size.blocks }, () => ({ data: [], ecc: [] }));
   for (let i = 0; i < size.data; i++) blocks[i % size.blocks].data.push(words[i]);
-  for (let i = 0; i < size.ecc; i++) blocks[i % size.blocks].ecc.push(words[size.data + i]);
+  for (let i = 0; i < size.ecc; i++) {
+    const slot = i % size.blocks;
+    const b = size.side === 144 ? (slot + 8) % size.blocks : slot; // inverse of the 144x144 start at block 8 (zxing decodes it this way)
+    blocks[b].ecc.push(words[size.data + i]);
+  }
   for (const b of blocks) assert.ok(syndromes([...b.data, ...b.ecc], b.ecc.length).every(v => v === 0), 'Reed-Solomon of the decoded block');
   // ASCII decode: stop at the first pad
   const data = words.slice(0, size.data);

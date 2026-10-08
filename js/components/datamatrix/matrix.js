@@ -65,7 +65,10 @@
     data.forEach((word, i) => blocks[i % size.blocks].data.push(word));
     for (const block of blocks) block.ecc = rs.encode(block.data, eccPerBlock);
     const out = [...data, ...new Array(size.ecc).fill(0)];
-    blocks.forEach((block, b) => block.ecc.forEach((word, k) => { out[size.data + k * size.blocks + b] = word; }));
+    // 144x144 is the one size whose error-correction interleave does not start at block 0: it starts at the first of the two shorter
+    // blocks (block 8), so block b takes the slot (b + 2) mod 10 of each round (checked against an independent decoder, zxing)
+    const slotOf = b => (size.side === 144 ? (b + 2) % size.blocks : b);
+    blocks.forEach((block, b) => block.ecc.forEach((word, k) => { out[size.data + k * size.blocks + slotOf(b)] = word; }));
     return { data, blocks, stream: out };
   }
 

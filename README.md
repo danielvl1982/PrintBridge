@@ -297,7 +297,10 @@ Not supported (a warning is shown): `PDF417` and `PUTBMP`/`PUTPCX`/`PUTPNG`
   are not used: **the printer chooses its own encodation and symbol size, so for long or mixed data the printed symbol can differ in size from the drawing** (the drawing is always a valid symbol that decodes to the same data).
   The ISO/IEC 16022 standard was not available: the size table (capacity, error correction codewords, Reed-Solomon blocks, regions) and the module placement were typed from memory and are validated by properties (see tests/datamatrix-encoder.test.js:
   capacity against the manual's numeric capacity table, codewords = modules / 8, Reed-Solomon syndromes of every block, every codeword bit placed exactly once, an independent decoder round trip, and the worked example of 123456 remembered from the standard).
-  **Not verified on a scanner or a printer:** scan the drawn symbol with a phone and compare it with a printed label before relying on it. Not documented by the manuals: how TSPL `DMATRIX` places the symbol in `width` x `height`, whether `xm,row,col` can be partly omitted, the module limits of TSPL,
+  **Checked with an independent decoder:** the symbols of all 24 sizes (including every multi-region size and the four corner patterns), forced and
+  smallest-fit, decode with the ZXing DataMatrix reader to the same text (a check done outside the repository, which has no dependencies); that check found and fixed
+  the 144 x 144 quirk (its error-correction interleave starts at the first shorter block).
+  **Not verified on a printer or with a phone scanner:** scan the drawn symbol with a phone and compare it with a printed label before relying on it. Not documented by the manuals: how TSPL `DMATRIX` places the symbol in `width` x `height`, whether `xm,row,col` can be partly omitted, the module limits of TSPL,
   and the printer's choice of encodation. The viewer draws no quiet zone (like QR).
 - Code 93, NW7 / Codabar, MSI and Industrial 2 of 5 (TPCL types `C 4 1 O`; TSPL `93` and `CODA`, which are the only ones the B-442/443 manual lists): drawn for real with their usual symbol tables, the module / wide / narrow
   widths of the command and the text under the bars when the label asks for it. What the manuals say: Code 93 is in the generic TPCL form (check option 1 none, 2 check, 3 attach modulus 47); MSI, NW7 and Industrial 2 of 5
