@@ -133,6 +133,9 @@
       if (!choice && (Math.abs(size / units.UNITS_PER_POINT - ymul) > MULTIPLIER_TOLERANCE || Math.abs(ymul * scaleX - xmul) > MULTIPLIER_TOLERANCE)) {
         ctx.once('tspl-size-rounding', () => diag.info('Hay textos cuyo tamaño se redondea a puntos enteros en la fuente escalable de TSPL: el tamaño impreso puede diferir ligeramente'));
       }
+      if (item.attribute && item.attribute.kind !== 'black') {
+        ctx.once('tspl-text-attribute', () => diag.warning('Hay textos con atributo (invertido, con marco o tachado), que TSPL no tiene: se escriben sin él'));
+      }
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
       return `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${quoted(safeData(ctx, item.data))}`;
     }

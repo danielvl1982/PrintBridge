@@ -135,7 +135,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     nothing selected it shows "Selecciona un objeto". Clicking empty space deselects. In TSPL the content of TEXT, BARCODE
     and QRCODE is editable too (not for counters `@n`, BLOCK, 128M/EAN128 or QR manual mode); in TPCL so is the data of
     PC/PV text, barcodes and QR, inline (`=data`) or in its `RC`/`RV`/`RB` command (values with `| { }` or line breaks are rejected). The font of text is selectable too: the PC/PV font letter in TPCL (the PC table is the viewer's
-    simulation, not verified against the printer) and the TEXT font id in TSPL; a value not in the list is kept and shown.
+    simulation, not verified against the printer) and the TEXT font id in TSPL; a value not in the list is kept and shown. The TPCL text attribute of PC/PV (`B` black, `W` reverse, `F` boxed, `C` stroked out, with their `aabb`/`aa` dot margins) is drawn in the preview and editable (**Atributo**, **Margen horizontal/vertical**); omitted margins use the manual default (PC: larger magnification x 6 dots; PV: larger character size in mm x 8 dots, a reading of the manual not verified on a printer). TSPL has no text attribute: converting such a text writes it plain and warns once.
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.

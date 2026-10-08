@@ -15,6 +15,9 @@
  *       text    { ref, x, y, rotation, font:{ size, scaleX, family, weight, style }, data }
  *               font.size = height of the letter square (em) in 0.1 mm; scaleX = horizontal stretch;
  *               family = serif | sans | mono; weight = 400 | 700; style = normal | italic
+ *               attribute? = { kind: 'reverse' | 'box' | 'strike', h, v?, native?: { h, v? }, defaultDots } (TPCL PC/PV attribute,
+ *               absent = black); h/v = distance from the string to the end of the background / box / stroke in 0.1 mm (strike: h
+ *               only), native = the dots written in the file (absent when omitted), defaultDots = the manual default in dots
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)

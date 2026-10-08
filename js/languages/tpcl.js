@@ -390,7 +390,7 @@
     if (found) {
       const { shape, match } = found;
       for (const f of shape.fields) {
-        const value = match ? f.read(match[f.group]) : f.model && f.model(item);
+        const value = match ? f.read(match[f.group], item) : f.model && f.model(item);
         if (value === undefined || value === null) continue;
         const { key, label, type, min, max, step } = f;
         const options = f.optionsFor ? f.optionsFor(value) : f.options; // optionsFor lists a current value outside the options
@@ -421,8 +421,9 @@
       for (const f of shape.fields) {
         if (!Object.hasOwn(changes, f.key)) continue;
         const [s, e] = match.indices[f.group];
-        const digits = f.write(changes[f.key], e - s);
-        if (digits !== null) edits.push({ start: span.start + map[s], end: span.start + map[e - 1] + 1, value: digits.padStart(e - s, '0') });
+        const digits = f.write(changes[f.key], e - s, match[f.group], changes);
+        // `exact` fields write a whole token (not digits): no zero padding
+        if (digits !== null) edits.push({ start: span.start + map[s], end: span.start + map[e - 1] + 1, value: f.exact ? digits : digits.padStart(e - s, '0') });
       }
     }
     // Content: the framing characters have no escape, so a value holding one is rejected (never altered)

@@ -30,11 +30,38 @@
   });
   const DEFAULT_BITMAP_FONT = 'J';
 
+  /** The attribute letter of PC/PV (j) -> neutral kind of item.attribute. */
+  const ATTRIBUTE_KINDS = Object.freeze({ B: 'black', W: 'reverse', F: 'box', C: 'strike' });
+  const KIND_LETTERS = Object.freeze(Object.fromEntries(Object.entries(ATTRIBUTE_KINDS).map(([letter, kind]) => [kind, letter])));
+
+  /** Manual default of the offsets when omitted: PC = larger magnification x 6 dots; PV = larger character size (mm) x 8 dots. */
+  const PC_DEFAULT_DOTS = 6;
+  const PV_DEFAULT_DOTS_PER_MM = 8;
+
+  const isKind = k => typeof k === 'string' && Object.hasOwn(KIND_LETTERS, k);
+
+  const clampInt =(n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
+
+  /** Offsets written after the letter, in dots: W/F "aabb" -> { h, v }, C "aa" -> { h }; null when omitted or malformed. */
+  function parseAttributeDigits(letter, digits) {
+    if (letter === 'C') return digits.length === 2 ? { h: +digits } : null;
+    if (letter === 'B' || digits.length !== 4) return null;
+    return { h: +digits.slice(0, 2), v: +digits.slice(2) };
+  }
+
+  /** Attribute token of PC/PV from its kind and offsets (dots): no offsets = the bare letter; strike writes only h. */
+  function attributeToken(kind, h, v) {
+    const letter = KIND_LETTERS[kind];
+    const two = n => String(clampInt(n, 1, 99)).padStart(2, '0');
+    if (letter === 'B' || h == null) return letter;
+    return letter === 'C' ? letter + two(h) : letter + two(h) + two(v ?? h);
+  }
+
   /** Outline font (PV command): always simulated with this family and weight. */
   const OUTLINE_FONT = Object.freeze({ family: 'sans', weight: 700 });
 
   // Options common to PC and PV after the font type: [spacing adjustment,]rotation,attribute[,…][=text]
-  const TEXT_TAIL = String.raw`([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWF])[^=]*(?:=([\s\S]*))?$`;
+  const TEXT_TAIL = String.raw`([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC])(\d{0,4})[^=]*(?:=([\s\S]*))?$`;
 
   /**
    * Font select of the properties panel: the letter is written as is, and a letter outside `letters` that the item
@@ -97,6 +124,56 @@
     return best;
   }
 
+  const ATTRIBUTE_OPTIONS = Object.freeze([
+    { value: 'black', label: 'Negro' }, { value: 'reverse', label: 'Invertido' }, { value: 'box', label: 'Con marco' }, { value: 'strike', label: 'Tachado' },
+  ]);
+
+  /** Kind and offsets (dots, null when omitted) of an attribute token ("W0507"). */
+  function readToken(raw) {
+    const given = parseAttributeDigits(raw[0], raw.slice(1));
+    return { kind: ATTRIBUTE_KINDS[raw[0]], h: given ? given.h : null, v: given && given.v != null ? given.v : null };
+  }
+
+  const isOffset = v => typeof v === 'number' && Number.isFinite(v);
+
+  /**
+   * The three panel fields over the one attribute token (letter + offsets, written whole: `exact`): the kind select and the
+   * offsets in dots, shown only for the kinds that use them (reverse/box: h and v; strike: h). Changing the kind keeps the
+   * offsets. The token is composed by the first of the fields present in the change set; the others write nothing.
+   * A bare letter shows the item's default offset (the manual default, computed by the parser).
+   */
+  function attributeFields(group) {
+    const kindOf = item => (item.attribute && item.attribute.kind) || 'black';
+    const offset = (key, label, uses) => {
+      const part = key === 'attrH' ? 'h' : 'v';
+      return {
+        key, label, type: 'number', min: 1, max: 99, step: 1, group, exact: true,
+        read: (raw, item) => (uses.includes(readToken(raw).kind) ? readToken(raw)[part] ?? (item && item.attribute ? item.attribute.defaultDots : undefined) : undefined),
+        model: item => (uses.includes(kindOf(item)) ? (item.attribute.native ? item.attribute.native[part] : item.attribute.defaultDots) : undefined),
+        write: (v, width, raw, changes) => {
+          const t = readToken(raw);
+          if (!isOffset(v) || !uses.includes(t.kind) || isKind(changes.attribute)) return null;
+          if (part === 'v') return isOffset(changes.attrH) ? null : attributeToken(t.kind, t.h ?? v, v);
+          return attributeToken(t.kind, v, isOffset(changes.attrV) ? changes.attrV : t.v);
+        },
+      };
+    };
+    return [
+      {
+        key: 'attribute', label: 'Atributo', type: 'select', group, exact: true, options: ATTRIBUTE_OPTIONS,
+        read: raw => readToken(raw).kind,
+        model: kindOf,
+        write: (v, width, raw, changes) => {
+          if (!isKind(v)) return null;
+          const t = readToken(raw);
+          return attributeToken(v, isOffset(changes.attrH) ? changes.attrH : t.h, isOffset(changes.attrV) ? changes.attrV : t.v);
+        },
+      },
+      offset('attrH', 'Margen horizontal', ['reverse', 'box', 'strike']),
+      offset('attrV', 'Margen vertical', ['reverse', 'box']),
+    ];
+  }
+
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
@@ -113,6 +190,13 @@
       return ROTATION_CODES[degrees];
     }
 
+    /** Attribute token of an item: B, or W/F/C with the offsets in dots when the item has them (else the bare letter). */
+    function attributeText(attribute, ctx) {
+      if (!attribute || !isKind(attribute.kind)) return 'B';
+      const dots = n => (Number.isFinite(n) ? ctx.dot(n) : null);
+      return attributeToken(attribute.kind, attribute.native ? dots(attribute.h) : null, dots(attribute.v));
+    }
+
     /**
      * PC (bitmap font) when the model font matches BITMAP_FONTS, else PV (outline font: width = size * scaleX, height =
      * size, font letter B like the palette template), each followed by its RC / RV data command (empty without data).
@@ -125,10 +209,11 @@
       const rot = rotationCode(ctx, item.rotation);
       const data = safeData(ctx, item.data);
       const choice = bitmapChoice({ ...font, size, scaleX });
+      const attribute = attributeText(item.attribute, ctx);
       if (choice) {
         const id = allocId(ctx, 'PC');
         const mag = n => String(n).padStart(2, '0');
-        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${rot},B`), wrap(`RC${id};${data}`)];
+        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${rot},${attribute}`), wrap(`RC${id};${data}`)];
       }
       // The outline font is always drawn sans bold: any other family, weight or style is lost
       if ((font.family || OUTLINE_FONT.family) !== OUTLINE_FONT.family || (font.weight == null ? OUTLINE_FONT.weight : font.weight) !== OUTLINE_FONT.weight || (font.style || 'normal') !== 'normal') {
@@ -136,13 +221,25 @@
       }
       const id = allocId(ctx, 'PV');
       const dim = n => pad4(Math.max(1, clampCoord(n)));
-      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${rot},B`), wrap(`RV${id};${data}`)];
+      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${rot},${attribute}`), wrap(`RV${id};${data}`)];
     }
 
-    function textAttributes(ctx, ref, rotationCode, attribute) {
+    function textRotation(ctx, ref, rotationCode) {
       if (!(rotationCode in ROTATIONS)) ctx.report(diag.warning(`${ref}: rotación "${rotationCode}" desconocida, se dibuja sin rotar`));
-      if (attribute !== 'B') ctx.report(diag.warning(`${ref}: atributo "${attribute}" no soportado por el visor, se dibuja en negro`));
       return ROTATIONS[rotationCode] ?? 0;
+    }
+
+    /**
+     * { attribute } for the item (nothing for the black default): the offsets in 0.1 mm (h, v; strike has only h) and, when the
+     * command wrote them, the dots as they are in the file (native). Omitted offsets use the manual's default (defaultDots).
+     */
+    function textAttribute(ctx, letter, digits, defaultMargin) {
+      const kind = ATTRIBUTE_KINDS[letter];
+      if (kind === 'black') return {};
+      const defaultDots = clampInt(defaultMargin, 1, 99);
+      const given = parseAttributeDigits(letter, digits);
+      const [h, v] = [given ? given.h : defaultDots, given && given.v != null ? given.v : defaultDots];
+      return { attribute: { kind, h: h * ctx.dot, ...(kind !== 'strike' && { v: v * ctx.dot }), ...(given && { native: given }), defaultDots } };
     }
 
     function bitmapFont(ctx, ref, code, hMag, vMag) {
@@ -184,8 +281,9 @@
             ctx.addField(ref, {
               kind: 'text', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
               font: bitmapFont(ctx, ref, m[6].toUpperCase(), m[4], m[5]),
-              rotation: textAttributes(ctx, ref, m[7], m[8]),
-              data: m[9] ?? null,
+              rotation: textRotation(ctx, ref, m[7]),
+              ...textAttribute(ctx, m[8], m[9], Math.max(magnification(m[4]), magnification(m[5])) * PC_DEFAULT_DOTS),
+              data: m[10] ?? null,
             });
           },
         },
@@ -198,8 +296,9 @@
             ctx.addField(ref, {
               kind: 'text', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
               font: { size: +m[5], scaleX: +m[4] / +m[5], family, weight, style: 'normal' },
-              rotation: textAttributes(ctx, ref, m[7], m[8]),
-              data: m[9] ?? null,
+              rotation: textRotation(ctx, ref, m[7]),
+              ...textAttribute(ctx, m[8], m[9], (Math.max(+m[4], +m[5]) / 10) * PV_DEFAULT_DOTS_PER_MM),
+              data: m[10] ?? null,
             });
           },
         },
@@ -216,22 +315,24 @@
       editable: [
         { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
-          pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),[BWF]/d,
+          pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC]\d{0,4})/d,
           fields: [
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
             rotationField(4),
             fontField(3, OUTLINE_FONT_OPTIONS),
+            ...attributeFields(5),
           ],
         },
         { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
-          pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),[BWF]/d,
+          pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC]\d{0,4})/d,
           fields: [
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
             rotationField(4),
             fontField(3, BITMAP_FONT_OPTIONS),
+            ...attributeFields(5),
           ],
         },
       ],
