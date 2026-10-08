@@ -292,3 +292,17 @@ test('the size row and the view row have a title with the same style as Componen
     assert.ok(at < html.indexOf(firstControl, start), 'the title comes before the first control of ' + row);
   }
 });
+
+test('the stage is sticky on wide windows only, bounded to the viewport and scrolling inside', () => {
+  const bare = css.replace(/\/\*[\s\S]*?\*\//g, '');
+  const wide = bare.match(/@media\s*\(min-width:\s*(\d+)px\)\s*\{\s*\.stage\s*\{([^{}]*)\}\s*\}/);
+  assert.ok(wide, 'a min-width media query holds the .stage sticky rule');
+  const narrow = bare.match(/@media\s*\(max-width:\s*(\d+)px\)\s*\{\s*main\s*\{/);
+  assert.ok(narrow && Number(wide[1]) === Number(narrow[1]) + 1, 'sticky starts right where the one-column layout ends');
+  const body = wide[2];
+  assert.match(body, /position:\s*sticky/);
+  assert.match(body, /align-self:\s*start/, 'the stage keeps its own height instead of stretching to the column');
+  assert.match(body, /max-height:\s*calc\(100vh\s*-\s*\d+px\)/);
+  assert.match(body, /overflow-y:\s*auto/);
+  assert.doesNotMatch(bare.replace(/@media[^{]*\{[^{}]*\{[^{}]*\}\s*\}/g, ''), /\.stage\s*\{[^}]*(sticky|overflow)/, 'outside the media query .stage is not sticky');
+});

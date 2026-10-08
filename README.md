@@ -110,6 +110,11 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 
 ### Panels
 
+- **Collapsible sections:** click the title of Código, Variables, Convertir, Formato, Vista, Componentes or Propiedades
+  to fold it (the state is remembered in the browser).
+- **Sticky drawing area:** on wide windows the right-hand side (rows, drawing and Avisos) stays in view while the page
+  scrolls through the left column, so the label is visible while editing code or variables. If it is taller than the
+  window (many warnings) it scrolls inside itself. On narrow windows (one column) it scrolls with the page.
 - **Variables:** each `#NAME#` or `<#NAME#>` of the label has an input to type a test value. This shows
   how it looks with long or short data.
 - **Avisos:**
