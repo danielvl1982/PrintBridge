@@ -1,7 +1,7 @@
 /**
  * Barcode slice: SVG drawing of 1D barcodes. The model item is { kind: 'barcode', x, y, rotation, symbology, module, height,
- * widths?, interCharGap?, check?, addon?, guard?, humanReadable, data }. Code128 (module based), the wide/narrow symbologies (Code39, ITF)
- * and EAN-13 / EAN-8 / UPC-A / UPC-E with their add-ons (module based, with the digits laid out as for these symbologies) are drawn
+ * widths?, interCharGap?, check?, addon?, guard?, humanReadable, data }. Code128 and Code 93 (module based), the wide/narrow symbologies
+ * (Code39, ITF, NW7, MSI, Industrial 2 of 5) and EAN-13 / EAN-8 / UPC-A / UPC-E with their add-ons (module based, with the digits laid out as for these symbologies) are drawn
  * exactly; any other symbology is drawn as approximate filler bars.
  * Published on PB.slices.barcode.render and registered by js/components/barcode/index.js.
  */
@@ -11,27 +11,34 @@
   PB.slices = PB.slices || {};
   PB.slices.barcode = PB.slices.barcode || {};
 
-  const { units, barcodeData, code128, code39, itf, ean } = PB;
+  const { units, barcodeData, code128, code93, code39, itf, codabar, msi, industrial25, ean } = PB;
 
   /** Displayed name of each neutral symbology (those not listed are displayed as a generic code). */
-  const SYMBOLOGY_NAMES = Object.freeze({ code128: 'Code128', code39: 'Code39', itf: 'ITF', ean13: 'EAN-13', ean8: 'EAN-8', upca: 'UPC-A', upce: 'UPC-E' });
+  const SYMBOLOGY_NAMES = Object.freeze({ code128: 'Code128', code39: 'Code39', itf: 'ITF', ean13: 'EAN-13', ean8: 'EAN-8', upca: 'UPC-A', upce: 'UPC-E',
+    code93: 'Code93', codabar: 'NW7', msi: 'MSI', industrial25: '2 de 5 industrial',
+  });
 
   /** Encoders of the wide/narrow symbologies (bars with real wide and narrow widths). */
-  const WIDE_NARROW_ENCODERS = { code39, itf };
+  const WIDE_NARROW_ENCODERS = { code39, itf, codabar, msi, industrial25 };
+
+  /** Encoders of the module based symbologies with their own table (widths in modules; Code 128 has its own path below). */
+  const MODULE_ENCODERS = { code93 };
 
   /** Ratio of the wide to the narrow elements when the model does not give the widths (item.widths). */
   const DEFAULT_WIDE_RATIO = 3;
 
   /** Bars of a module-based symbology (Code128, or an approximation of the rest): widths are multiples of item.module. */
   function moduleBars(item, data) {
-    const exact = item.symbology === 'code128';
-    const widths = exact ? code128.encode(data) : approximateWidths(data);
+    const encoder = MODULE_ENCODERS[item.symbology];
+    const encoded = encoder ? encoder.encode(data, { check: item.check }) : null;
+    const exact = !!encoded || item.symbology === 'code128';
+    const widths = encoded ? encoded.widths : exact ? code128.encode(data) : approximateWidths(data);
     const rects = [];
     let pos = 0;
     widths.forEach((w, i) => { if (i % 2 === 0) rects.push([item.x + pos * item.module, item.y, w * item.module, item.height]); pos += w; });
     return {
-      rects, total: pos * item.module, exact, readable: data.replaceAll(barcodeData.FNC1, ''),
-      detail: `${pos} módulos × ${units.formatMm(item.module)} mm`, warnings: [],
+      rects, total: pos * item.module, exact, readable: encoded ? encoded.text : data.replaceAll(barcodeData.FNC1, ''),
+      detail: `${pos} módulos × ${units.formatMm(item.module)} mm`, warnings: encoded ? encoded.warnings : [],
     };
   }
 
