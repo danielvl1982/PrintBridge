@@ -19,3 +19,7 @@ desktop.ini
 .codegraph/
 .claude/
 .atl/
+
+# Vendor manuals (copyrighted: keep them local, never commit)
+docs/*.pdf
+docs/**/*.pdf
