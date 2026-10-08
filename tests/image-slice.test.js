@@ -16,7 +16,7 @@ test('image registers as a slice with palette entry, renderer and a TPCL hook fa
 
 test('PB.images keeps its public name and lives in the slice', () => {
   for (const name of ['bitmapToNibble', 'nibbleToBitmap', 'buildSG', 'targetDots', 'thresholdFromPercent', 'downscaleSteps',
-    'thresholdRGBA', 'makeBitmapItem', 'makeItem']) {
+    'thresholdRGBA', 'makeBitmapItem', 'makeItem', 'rotateBitmap', 'rotationForView']) {
     assert.equal(typeof PB.images[name], 'function', name);
   }
 });

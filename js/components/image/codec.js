@@ -130,6 +130,36 @@
     },
 
     /**
+     * Rotates a bitmap { w, h, data } (flat 0/1, row by row, 1 = black) clockwise by 0, 90, 180 or 270 degrees (equivalent
+     * angles such as 360 or -90 are accepted) and returns a new { w, h, data }; 90 and 270 swap w and h. The input is not
+     * modified. Any other angle throws a RangeError.
+     */
+    rotateBitmap({ w, h, data }, degrees) {
+      const turn = ((Number(degrees) % 360) + 360) % 360;
+      if (!Number.isFinite(turn) || turn % 90 !== 0) throw new RangeError(`rotation ${degrees} is not a multiple of 90`);
+      const swap = turn === 90 || turn === 270;
+      const outW = swap ? h : w;
+      const out = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          // Destination (column, row) of source dot (x, y) after a clockwise turn
+          const [dx, dy] = turn === 0 ? [x, y] : turn === 90 ? [h - 1 - y, x] : turn === 180 ? [w - 1 - x, h - 1 - y] : [y, w - 1 - x];
+          out[dy * outW + dx] = data[y * w + x];
+        }
+      }
+      return { w: outW, h: swap ? w : h, data: out };
+    },
+
+    /**
+     * Rotation (0/90/180/270, clockwise on the label, the same convention as text items) that makes a picture look upright
+     * in a view turned by `view` degrees (the "Giro" selector): (360 - view) % 360. Invalid views count as 0.
+     */
+    rotationForView(view) {
+      const v = ((Math.round(Number(view) / 90) * 90 % 360) + 360) % 360;
+      return Number.isFinite(v) ? (360 - v) % 360 : 0;
+    },
+
+    /**
      * `image` item that shows the converted dots (what "Insertar en el código" writes): same placement as makeItem, but
      * drawn from bitmap = { w, h, data } (flat 0/1) and sized in printer dots, as the parsed SG command will be.
      */
@@ -143,17 +173,23 @@
      * { href, naturalW, naturalH (pixels), xMm, yMm, widthMm (optional), dpi }
      * Without a valid positive widthMm the size is the natural pixels times the printer dot size; the height always
      * keeps the aspect ratio. Empty or invalid x/y count as 0.
+     * rotation (0/90/180/270, clockwise, default 0): the plain picture is drawn turned by it (item.turn, see render.js);
+     * x/y stay the top-left corner of the rotated bounding box and width/height are the box's, so they swap for 90/270.
      */
-    makeItem({ href, naturalW, naturalH, xMm, yMm, widthMm, dpi, ref = 'IMG1' }) {
+    makeItem({ href, naturalW, naturalH, xMm, yMm, widthMm, dpi, rotation = 0, ref = 'IMG1' }) {
       const widthUnits = mmOrNull(widthMm);
-      const width = widthUnits > 0 ? widthUnits : naturalW * units.dotSize(dpi);
+      const width = Math.round(widthUnits > 0 ? widthUnits : naturalW * units.dotSize(dpi));
+      const height = Math.round(width * naturalH / naturalW);
+      const turn = ((Number(rotation) % 360) + 360) % 360 || 0;
+      const sideways = turn === 90 || turn === 270;
       return {
         kind: 'image',
         ref,
         x: mmOrNull(xMm) ?? 0,
         y: mmOrNull(yMm) ?? 0,
-        width: Math.round(width),
-        height: Math.round(width * naturalH / naturalW),
+        width: sideways ? height : width,
+        height: sideways ? width : height,
+        turn,
         href,
         data: null,
       };

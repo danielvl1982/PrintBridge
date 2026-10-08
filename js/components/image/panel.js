@@ -4,15 +4,17 @@
  *  - onFile(file): the user chose a picture file (the hidden file input is opened by the palette entry).
  *  - onChange(): x, y or width changed.
  *  - onThreshold(): the "Umbral" slider moved (its value is already shown next to it).
+ *  - onRotation(): the user picked a "Rotación" (0/90/180/270, clockwise on the label, like text items).
  *  - onRemove(): "Quitar imagen" was pressed.
  *  - onInsert(): "Insertar en el código" was pressed.
  */
 (function (PB) {
   'use strict';
 
-  /** els: { fileInput, x, y, width, threshold, thresholdValue, insert, remove } */
-  function createImagePanel(els, { onFile, onChange, onThreshold, onRemove, onInsert }) {
-    const inputs = [els.x, els.y, els.width, els.threshold];
+  /** els: { fileInput, x, y, width, rotation (select), threshold, thresholdValue, insert, remove } */
+  function createImagePanel(els, { onFile, onChange, onThreshold, onRotation, onRemove, onInsert }) {
+    const inputs = [els.x, els.y, els.width, els.rotation, els.threshold];
+    const QUARTER_TURNS = [0, 90, 180, 270];
     const showThreshold = () => { els.thresholdValue.textContent = `${els.threshold.value} %`; };
 
     els.fileInput.addEventListener('change', () => {
@@ -22,6 +24,7 @@
     });
     [els.x, els.y, els.width].forEach(i => i.addEventListener('input', onChange));
     els.threshold.addEventListener('input', () => { showThreshold(); onThreshold(); });
+    els.rotation.addEventListener('input', onRotation);
     els.remove.addEventListener('click', onRemove);
     els.insert.addEventListener('click', onInsert);
     showThreshold();
@@ -33,6 +36,15 @@
       setPosition(xMm, yMm) {
         els.x.value = xMm;
         els.y.value = yMm;
+      },
+      /** Rotation shown in the select: 0, 90, 180 or 270 (anything else reads as 0). */
+      rotation() {
+        const degrees = Number(els.rotation.value);
+        return QUARTER_TURNS.includes(degrees) ? degrees : 0;
+      },
+      /** Shows a rotation (degrees) in the select; it does not notify. */
+      setRotation(degrees) {
+        els.rotation.value = String(degrees);
       },
       /** Raw value of the "Umbral" slider (percent, text). */
       thresholdPercent: () => els.threshold.value,

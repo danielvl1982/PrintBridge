@@ -89,7 +89,8 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 
 - **Imagen (paleta):** the component palette has an **Imagen** entry (when the label language can insert images); the chosen file replaces the previous image and is drawn at its natural pixel size for the selected **Resolución**. Click it (or press Enter) to pick a file and place it at the default point; dragging it onto the label only works if the browser allows opening the file picker from a drop, otherwise click the entry.
 - **Posición X / Posición Y:** top left corner of the image, in mm from the label origin.
-- **Ancho:** optional width in mm (empty = natural size); the height keeps the proportion.
+- **Ancho:** optional width in mm (empty = natural size); the height keeps the proportion. It is the width of the picture before rotating.
+- **Rotación:** 0°, 90°, 180° or 270° clockwise on the label, the same convention as text. TPCL `SG` and TSPL `BITMAP` have no rotation parameter, so the converted dots are rotated before they are previewed and written. For a new image, and every time **Giro** changes until you pick a value for that image, it is `(360 − Giro) % 360`, so the picture looks upright in the current view; choosing a value keeps it for that image. **Posición X / Y** is the top left corner of the rotated picture. Images already in the code (`SG` / `BITMAP`) have no rotation control.
 - **Umbral:** slider 0-100 % (default 50 %), enabled with the image. A dot is black when its luminance is below the
   threshold: raise it to thicken thin lines, lower it to drop light gray background. While an image is loaded, the
   preview shows the converted black and white result (the same dots that get inserted), so you see the effect of the

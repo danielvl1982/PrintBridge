@@ -12,7 +12,7 @@ const BRAND_H1 = '<h1 class="brand"><span class="brand-print">Print</span><span 
 
 const REQUIRED_IDS = [
   'palette', 'propsPanel', 'propsKind', 'propsEmpty', 'propsForm', 'propsOverlay',
-  'imgX', 'imgY', 'imgW', 'imgThreshold', 'imgThresholdValue', 'btnImageInsert', 'btnImageRemove', 'imageFile',
+  'imgX', 'imgY', 'imgW', 'imgRotation', 'imgThreshold', 'imgThresholdValue', 'btnImageInsert', 'btnImageRemove', 'imageFile',
   'svgwrap', 'dims', 'cursor', 'src', 'vars', 'msgs', 'convert',
   'dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap', 'btnOpen', 'file', 'example',
   'size', 'szW', 'szH', 'szP',
@@ -313,4 +313,15 @@ test('the stage is sticky on wide windows only, bounded to the viewport and scro
   assert.match(body, /max-height:\s*calc\(100vh\s*-\s*\d+px\)/);
   assert.match(body, /overflow-y:\s*auto/);
   assert.doesNotMatch(bare.replace(/@media[^{]*\{[^{}]*\{[^{}]*\}\s*\}/g, ''), /\.stage\s*\{[^}]*(sticky|overflow)/, 'outside the media query .stage is not sticky');
+});
+
+test('the image controls offer Rotación 0/90/180/270 between Ancho and Umbral, inside the overlay panel', () => {
+  const overlay = html.slice(at('id="propsOverlay"'), html.indexOf('</section>', at('id="propsOverlay"')));
+  const select = overlay.match(/<select id="imgRotation"[^>]*>(.*?)<\/select>/s);
+  assert.ok(select, 'select imgRotation');
+  assert.deepEqual([...select[1].matchAll(/<option value="(\d+)">(\d+)°<\/option>/g)].map(m => [m[1], m[2]]),
+    [['0', '0'], ['90', '90'], ['180', '180'], ['270', '270']]);
+  assert.match(select[0], /disabled/);
+  assert.ok(overlay.indexOf('id="imgW"') < overlay.indexOf('id="imgRotation"') && overlay.indexOf('id="imgRotation"') < overlay.indexOf('id="imgThreshold"'));
+  assert.match(overlay, /Rotación/);
 });
