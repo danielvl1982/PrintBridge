@@ -47,5 +47,5 @@ test('TPCL hooks: line owns parse, move and edit; both build', () => {
 
 test('the TPCL language offers line and box (then the area) in the palette after the not yet migrated kinds', () => {
   const kinds = PB.languages.get('tpcl').componentTemplates().map(c => c.kind);
-  assert.deepEqual(kinds, ['text', 'barcode', 'qr', 'line', 'box', 'area']);
+  assert.deepEqual(kinds, ['text', 'barcode', 'qr', 'datamatrix', 'line', 'box', 'area']);
 });

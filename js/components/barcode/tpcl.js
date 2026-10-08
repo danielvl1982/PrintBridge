@@ -405,9 +405,9 @@
         },
         {
           // 1D barcode: XBnn;x,y,<type>,<check digit>,<module>,<rotation>,<height>,<increment>,<000>,<human readable text>,<00>
-          // Skips well-formed QR commands (T,<ecc>,<cell>…), which the qr slice parses: handler order never decides between
-          // them. A malformed type T command still ends up here (symbology 'qr').
-          pattern: /^XB(\d+);(\d+),(\d+),(?!T,\w,\d)([^,]),(.*)$/,
+          // Skips well-formed QR commands (T,<ecc>,<cell>…) and Data Matrix commands (Q,<ecc>,<cell>,<id>,<rotation>…), which their
+          // slices parse: handler order never decides between them. A malformed type T command still ends up here (symbology 'qr').
+          pattern: /^XB(\d+);(\d+),(\d+),(?!T,\w,\d|Q,\d+,\d+,\d+,[0-3](?:[,=;]|$))([^,]),(.*)$/,
           handle(m, cmd, ctx) {
             const ref = 'XB' + m[1];
             const p = m[5].split(',');
