@@ -115,13 +115,15 @@ Overlays a picture on the preview to check where it would go. Until you insert i
 
 ### Panels
 
-- **Collapsible sections:** click the title of Código, Variables, Convertir, Formato, Vista, Componentes or Propiedades
-  to fold it (the state is remembered in the browser).
+- **Collapsible sections:** click the title of Código, Convertir, Variables, Formato, Vista, Componentes or Propiedades
+  to fold it (the state is remembered in the browser). Variables starts collapsed until you open it.
 - **Sticky drawing area:** on wide windows the right-hand side (rows, drawing and Avisos) stays in view while the page
   scrolls through the left column, so the label is visible while editing code or variables. If it is taller than the
   window (many warnings) it scrolls inside itself. On narrow windows (one column) it scrolls with the page.
-- **Variables:** each `#NAME#` or `<#NAME#>` of the label has an input to type a test value. This shows
-  how it looks with long or short data.
+- **Variables:** below Convertir and collapsed by default. Each `#NAME#` or `<#NAME#>` of the label has an input to
+  type a test value. This shows how it looks with long or short data. The values can also be typed in Propiedades
+  for the selected object ("Valores de prueba (solo vista previa)", with a note when the variable is used by more
+  than one object); both places share the same values and neither changes the label code.
 - **Avisos:**
   - <span style="color:#c4320a">Red</span>: errors (overlaps, items outside the label, wrong required size).
   - <span style="color:#b54708">Orange</span>: warnings (coordinates without 4 digits, commands the viewer does not know...).

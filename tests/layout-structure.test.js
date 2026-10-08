@@ -159,7 +159,7 @@ const FILE_IDS = ['btnOpen', 'file', 'example'];
 const columnHtml = () => html.slice(at('<div class="column">'), at('<div class="stage">'));
 const sizeRowHtml = () => html.slice(at('<div class="size-row"'), at('<div class="view-row"'));
 
-// P1g changed the premise: the file controls no longer lead the column in their own row; they live in the Código panel header.
+// The Variables panel sits below Convertir (it starts collapsed): the column is Código, Convertir, Variables.
 const codePanelHtml = () => {
   const column = columnHtml();
   const start = column.indexOf('<section class="panel"');
@@ -256,11 +256,11 @@ test('the file input keeps its attributes and the file controls keep their text'
   ]) assert.ok(html.includes(piece), piece);
 });
 
-// P1g changed the premise: there is no file row any more (its controls are in the Código panel header), so the column is Código, Variables, Convertir.
-test('the left column order is Código, Variables, Convertir', () => {
-  const order = ['id="src"', 'id="vars"', 'id="convert"'].map(k => html.indexOf(k));
+// The Variables panel sits below Convertir (it starts collapsed): the column is Código, Convertir, Variables.
+test('the left column order is Código, Convertir, Variables', () => {
+  const order = ['id="src"', 'id="convert"', 'id="vars"'].map(k => html.indexOf(k));
   assert.ok(order.every(i => i > 0), 'all three blocks exist');
-  assert.deepEqual([...order].sort((a, b) => a - b), order, 'src, vars, convert in this DOM order');
+  assert.deepEqual([...order].sort((a, b) => a - b), order, 'src, convert, vars in this DOM order');
   const column = html.slice(html.indexOf('<div class="column">'), html.indexOf('<div class="stage">'));
   assert.ok(column.includes('id="convert"'), 'convert stays in the left column');
 });
