@@ -24,6 +24,13 @@
  *               -99..99, PV -512..512; value = the same distance in 0.1 mm, signed; absent = none or 0)
  *               bold? = { h, v, native: { h, v } } (TPCL PC Jkkll bold overprint: native = the shift in printer DOTS as written,
  *               0..16 each; h, v = the same shifts in 0.1 mm; absent = none)
+ *               counter? = { step, native } (a counter field: the printer increments / decrements the data on every label issued; the
+ *               model keeps the START value in data. step = signed integer, + increments and - decrements, never 0 (0 = no counter,
+ *               absent); TPCL PC/PV/XB "noooooooooo" skip value 0000000000..9999999999, native = the token as written ("+0000000010");
+ *               TSPL "SET COUNTER @n step" -999999999..999999999 with the content "@n", native = { n, start, end } (the counter number
+ *               and where its step sits in the text, for the panel). Barcodes carry it too; QR does not.)
+ *               zeroSuppress? = 1..20 (TPCL PC/PV "Zpp", XB "qq": the number of characters kept after replacing the leading zeros by
+ *               spaces; absent = none or 00). The preview applies it to the drawn text only (PB.slices.text.suppressZeros), never to data.
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)
@@ -38,6 +45,7 @@
  *                 interCharGap = space between Code 39 characters in 0.1 mm (default: module; ITF has none).
  *                 check = 'none' | 'mod43' (Code 39 only) | 'unsupported' (the language's check digit option has no
  *                 neutral equivalent: drawn without check character and reported). Default: 'none'.
+ *               counter?, zeroSuppress? as in text (the bars always draw the start value; the zero suppression is kept but not drawn).
  *       line    { ref, x1, y1, x2, y2, rect, width, radius?, native:{ width, radius? } }
  *               width = thickness in 0.1 mm (native.width = the language's value, in dots)
  *               radius = corner radius of a rectangle (rect true) in 0.1 mm, absent when the command has none; the renderer clamps

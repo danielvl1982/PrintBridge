@@ -77,7 +77,7 @@
   function tspl(helpers) {
     const {
       sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, toDots, safeData, numberField, selectField, textField,
-      insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
+      insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, counterSetup,
     } = helpers;
 
     /**
@@ -154,7 +154,10 @@
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
       const height = Math.max(1, toDots(ctx, item.height));
       const readable = item.humanReadable ? 1 : 0;
-      return `BARCODE ${x},${y},"${type}",${height},${readable},${rotationDegrees(ctx, item.rotation)},${narrow},${wide},${quoted(data)}`;
+      // A counter writes SET COUNTER and the start value before the command, which then prints "@n"
+      const counter = counterSetup(ctx, item, data);
+      const line = `BARCODE ${x},${y},"${type}",${height},${readable},${rotationDegrees(ctx, item.rotation)},${narrow},${wide},${counter ? counter.ref : quoted(data)}`;
+      return counter ? [...counter.lines, line] : line;
     }
 
     function contentOf(ctx, arg) {
@@ -196,7 +199,7 @@
       ...(wideNarrow ? [numberField('wide', 'Barra ancha (puntos)', 7, 1, MAX_DOTS, item => item.native && item.native.wide)] : []),
       // The content is argument 8, or 9 when an alignment argument precedes it; counters are left out
       textField('content', 'Contenido', cmd => (cmd.args.length >= 10 ? 9 : 8),
-        item => (item.native && rawContent(item.native.type) && !COUNTER.test(String(item.data)) ? item.data : undefined),
+        item => (item.native && rawContent(item.native.type) && item.native.counterN === undefined && !COUNTER.test(String(item.data)) ? item.data : undefined),
         cmd => rawContent(cmd.args[2] && cmd.args[2].value)),
     ];
     const isBarcode = (item, cmd) => (cmd ? cmd.name === 'BARCODE' : item.ref === 'BARCODE');
@@ -244,7 +247,9 @@
             if (narrow !== narrowValue) ctx.report(diag.warning(`${ref}: ancho estrecho "${cmd.args[6].value}" no válido, se usa 2 puntos`));
             const wide = num(cmd.args[7]);
 
-            let data = contentOf(ctx, cmd.args[hasAlign ? 9 : 8]);
+            // A counter with an assigned start value shows it (the printer increments it per label); else the literal text
+            const shown = ctx.counterContent(cmd.args[hasAlign ? 9 : 8]);
+            let data = shown ? shown.data : contentOf(ctx, cmd.args[hasAlign ? 9 : 8]);
             if (typeKey === '128M') data = manualModeData(ctx, data);
             if (typeKey === 'EAN128') data = barcodeData.FNC1 + data;
 
@@ -264,6 +269,10 @@
               humanReadable: readable !== null && readable >= 1 && readable <= 3,
               data,
             };
+            if (shown) {
+              item.native.counterN = shown.n;
+              if (shown.counter) item.counter = shown.counter;
+            }
             if (hasAlign) item.native.align = num(cmd.args[8]);
             if (readable !== null) item.native.humanReadable = readable;
             ctx.addItem(item);

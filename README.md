@@ -138,7 +138,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
       end point and thickness (the fields each command has).
     - **Radio (esquinas redondeadas):** rectangles only (TPCL `LC` type 1, TSPL `BOX`): the corner radius, 0..999 in 0.1 mm for TPCL and in dots for TSPL, drawn clamped to half of the shorter side. A value above 0 adds the optional token at the end of the command; 0 keeps an existing token and writes nothing for an absent one. The TSPL radius argument comes from the TSPL2 manual and is not verified on a printer.
-    - **Contenido:** the data of text, barcodes and QR. TSPL: `TEXT`, `BARCODE` and `QRCODE` (not counters `@n`, `BLOCK`,
+    - **Contenido:** the data of text, barcodes and QR. TSPL: `TEXT`, `BARCODE` and `QRCODE` (not a counter `@n` (edit its start value in the `@n="..."` line), `BLOCK`,
       `128M`/`EAN128` or QR manual mode). TPCL: `PC`/`PV` text, barcodes and QR, inline (`=data`) or in the `RC`/`RV`/`RB`
       command; values with `| { }` or line breaks are rejected because TPCL has no escape for them.
     - **Fuente:** the PC font letter (A-T) or PV font (`A`, `B`) in TPCL, and the font id of `TEXT` in TSPL. A value not in the
@@ -153,7 +153,16 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       - **Espaciado entre caracteres** (`ghh` / `ghhh`, signed dots; ignored with equal space, as in the manual) and
         **Negrita horizontal/vertical** (PC `Jkkll`, shift dots 0-16): the bold overprint is an approximation (the string
         is drawn again shifted by those dots).
-    - Not editable yet: the barcode type, the check digit, increment and zero-suppress options.
+    - **Incremento** and **Ceros suprimidos** (counters): TPCL `PC`/`PV` text and the 1D barcodes `XB` (not QR) take the optional increment
+      `noooooooooo` (a signed integer, + increments and - decrements the data on every label issued, up to 9999999999; 0 means no counter: it
+      writes nothing on an absent token and keeps an existing one as `+0000000000`) and the zero suppression `Zpp` (`qq` in `XB`, 0..20).
+      They are written in the manual's order (`...,J,M,n,Z,P`) without touching the other tokens. The preview shows the **start value** (the
+      data) because the printer is the one that increments per label (one information message says so); with zero suppression the text is drawn as
+      the manual's table shows (the leading zeros become spaces so that `pp` characters stay: `0000` with 2 draws `  00`), but only in the
+      preview, the data written to the code never changes, and the barcode bars always draw the full data. TSPL: a TEXT or BARCODE whose
+      content is exactly `@n` with a start value assigned (`@n="0001"`) shows that value, and **Incremento** edits the step of its
+      `SET COUNTER @n step` line (-999999999..999999999).
+    - Not editable yet: the barcode type and the check digit.
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box, for TSPL **Elipse** and **Círculo**, and, for TPCL and TSPL, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
@@ -208,7 +217,7 @@ What is lost or approximated (each case is reported in the warnings list):
 The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`BITMAP`/`BAR`/`BOX`
 followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. The label is drawn, clicking an item selects its line, and, as with TPCL, you can
 **drag items** to move them, edit their properties (numbers, font and content) in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, line, box and image,
-written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (counters, `BLOCK` and `BITMAP` data are never touched).
+written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (`BLOCK` and `BITMAP` data are never touched, and a counter `@n` keeps its text: only its step in the `SET COUNTER` line is editable).
 `REFERENCE` and `SHIFT` are taken into account (the item lands under the cursor), positions never go below 0 and `DIRECTION 0` is edited as `DIRECTION 1`.
 It can be exported to TPCL with **Convertir a…**.
 
@@ -231,7 +240,8 @@ Not supported (a warning is shown): `DMATRIX`, `PDF417` and `PUTBMP`/`PUTPCX`/`P
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
 - `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
-  text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; counters (`@1`) are shown literally.
+  text alignment parameters are read but not drawn; add-on barcodes (`EAN13+2`...) are drawn without the add-on; a TSPL counter `@n` without an assigned start value, a mix such as `"x"+@1` and the counters of `BLOCK` and `QRCODE` are shown literally.
+- Counters: TPCL increment `n` and TSPL `SET COUNTER @n step` / `@n="start"` are converted both ways (the start value is the data; TSPL has 50 counters, `@0`-`@49`, with steps up to 999999999). The TPCL zero suppression has no TSPL equivalent and is dropped with one information message; QR codes have no counter in either language.
 - **Resolución:** the dots-per-mm of a TSPL label are not in the file, so the **Resolución** selector (203 or 300 dpi) must match
   the printer: coordinates are in dots, so the same label is drawn smaller at 300 dpi.
 - **Files with a `BITMAP`:** files opened or dragged (`.prn`, `.tspl`...) are read as bytes, so the graphic data survives, including `0x0D`

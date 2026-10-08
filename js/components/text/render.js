@@ -82,6 +82,21 @@
     return [h && { dx: h, dy: 0 }, v && { dx: 0, dy: v }, h && v && { dx: h, dy: v }].filter(Boolean);
   }
 
+  /**
+   * Zero suppression of the preview (B-SV4 manual 6.3.7 (11), item.zeroSuppress = Zpp): the leading zeros of the data row are replaced
+   * by spaces so that `count` characters stay, never past the first non-zero character; with a count greater than the row (or 0)
+   * the row is drawn as is. Table of the manual: 0000/1 -> "   0", 0000/2 -> "  00", 0A12/2 -> " A12", 0123/3 -> " 123", 0123/4 and 0123/5 -> "0123".
+   * The data written to the code is never changed: this is only what the preview draws.
+   */
+  function suppressZeros(data, count) {
+    const text = String(data == null ? '' : data);
+    if (!(count > 0) || count > text.length) return text;
+    let leading = 0;
+    while (leading < text.length && text[leading] === '0') leading++;
+    const blanks = Math.min(leading, text.length - count);
+    return ' '.repeat(blanks) + text.slice(blanks);
+  }
+
   /** ctx comes from drawing.js: { n } rounds to 2 decimals, { esc } escapes markup, { value } substitutes variables, { textScale }. */
   function render(item, ctx) {
     const { n, esc } = ctx;
@@ -96,7 +111,7 @@
       (letter == null ? '' : ` letter-spacing="${n(letter)}"`);
     // One string element per overprint (the first is the text itself and stays first: layout.js measures it); `shift` moves a copy in the rotated frame
     const string = (cls, shift) => `<text class="${cls}"${placed} transform="translate(${item.x} ${item.y}) rotate(${item.rotation})${shift ? ` translate(${n(shift.dx)} ${n(shift.dy)})` : ''} scale(${n(f.scaleX)} 1)" ` +
-      `font-size="${n(f.size * ctx.textScale)}" xml:space="preserve">${esc(ctx.value(item.data))}</text>`;
+      `font-size="${n(f.size * ctx.textScale)}" xml:space="preserve">${esc(suppressZeros(ctx.value(item.data), item.zeroSuppress))}</text>`;
     const copies = boldShifts(item.bold).map(shift => string(`${classes} text-bold`, shift)).join('');
     return {
       // .hit is sized after measuring the real text (PB.layout, in drawing.js)
@@ -110,5 +125,6 @@
   PB.slices.text.alignAttributes = alignAttributes;
   PB.slices.text.spacingAttributes = spacingAttributes;
   PB.slices.text.boldShifts = boldShifts;
+  PB.slices.text.suppressZeros = suppressZeros;
   PB.slices.text.attributeMarkup = attributeMarkup;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

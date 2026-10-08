@@ -45,7 +45,46 @@
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
       ROTATIONS, ROTATION_STEPS, MAX_COORD, DIGITS, wrap, safeData, coordText, allocId,
+      COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, zeroDigits, readCounterStep, counterFields,
     } = helpers;
+
+    const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
+    const isNumber = v => typeof v === 'number' && Number.isFinite(v);
+    const hasCounter = item => !!item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0;
+
+    /**
+     * The increment field over the one token after the height (written whole: `exact`). `slot` = the Code 39 / ITF form, where the
+     * token is optional (an empty range with its comma is an insertion point, "+0000000001" is written as ",+0000000001"); else
+     * the generic form, where it always exists ("0" or a signed token) and is replaced. A token that is neither is never rewritten.
+     * 0 on an omitted / "0" token writes nothing; 0 on a signed one keeps it as +0000000000.
+     */
+    function counterField(group, slot) {
+      const bare = raw => (slot ? raw.replace(/^,/, '') : raw);
+      const written = text => (slot ? `,${text}` : text);
+      return {
+        key: 'counter', label: 'Incremento', type: 'number', min: -COUNTER_MAX, max: COUNTER_MAX, step: 1, group, exact: true,
+        read: raw => readCounterStep(bare(raw)),
+        model: item => (hasCounter(item) ? item.counter.step : 0),
+        write: (v, width, raw) => {
+          if (!isNumber(v) || readCounterStep(bare(raw)) === undefined) return null;
+          const n = clampInt(v, -COUNTER_MAX, COUNTER_MAX);
+          if (n === 0) return COUNTER_TOKEN.test(bare(raw)) ? written('+0000000000') : null;
+          return written(counterToken(n));
+        },
+      };
+    }
+
+    /** The zero suppression field over the optional ",qq" slot at the end (written whole with its comma, empty when omitted). */
+    const zeroField = group => ({
+      key: 'zeroSuppress', label: 'Ceros suprimidos', type: 'number', min: 0, max: ZERO_MAX, step: 1, group, exact: true,
+      read: raw => (raw === '' ? 0 : Number(raw.slice(1))),
+      model: item => item.zeroSuppress || 0,
+      write: (v, width, raw) => {
+        if (!isNumber(v)) return null;
+        const n = clampInt(v, 0, ZERO_MAX);
+        return n === 0 && raw === '' ? null : `,${zeroDigits(n)}`;
+      },
+    });
 
     const humanReadableField = group => ({
       key: 'humanReadable', label: 'Texto legible', type: 'checkbox', group, model: item => item.humanReadable,
@@ -126,7 +165,10 @@
       const module = dotsText(ctx, item.module, 1);
       const head = `XB${id};${x},${y},${type}`;
       const data = wrap(`RB${id};${barcodeText(ctx, item.data)}`);
-      if (item.symbology === 'code128') return [wrap(`${head},0,${module},${rotation},${height},0,000,${readable},00`), data];
+      if (item.symbology === 'code128') {
+        const [inc, zero] = [hasCounter(item) ? counterToken(item.counter.step) : '0', item.zeroSuppress > 0 ? zeroDigits(item.zeroSuppress) : '00'];
+        return [wrap(`${head},0,${module},${rotation},${height},${inc},000,${readable},${zero}`), data];
+      }
       const w = item.widths;
       if (!w) ctx.once('tpcl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
       const wide = w ? null : dotsText(ctx, item.module * DEFAULT_RATIO, 1);
@@ -136,7 +178,10 @@
       // Code 39 gap defaults to the module, ITF has none
       const gap = dotsText(ctx, item.interCharGap ?? (item.symbology === 'itf' ? 0 : item.module), 0);
       const check = checkCode(ctx, item.symbology, item.check);
-      return [wrap(`${head},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpace},${gap},${rotation},${height},${readable}`), data];
+      // The increment sits right after the height (manual: llll(,mnnnnnnnnnn,p,qq)(,r)); a zero suppression is written after the readable flag
+      const inc = hasCounter(item) ? `,${counterToken(item.counter.step)}` : '';
+      const zero = item.zeroSuppress > 0 ? `,${zeroDigits(item.zeroSuppress)}` : '';
+      return [wrap(`${head},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpace},${gap},${rotation},${height}${inc},${readable}${zero}`), data];
     }
 
     return {
@@ -151,7 +196,9 @@
           handle(m, cmd, ctx) {
             const ref = 'XB' + m[1];
             const symbology = symbologyOf(m[4]);
-            const [e, ff, gg, hh, ii, jj, k, height, readable, ...optional] = m[5].split(',');
+            const [e, ff, gg, hh, ii, jj, k, height, ...rest] = m[5].split(',');
+            // The manual puts the increment right after the height; the older form goes straight to the readable flag
+            const [inc, readable, ...optional] = COUNTER_TOKEN.test(rest[0] ?? '') ? rest : [undefined, ...rest];
             const dots = [ff, gg, hh, ii, jj];
             const validWidths = dots.every(v => DIGITS.test(v)) && +ff > 0;
             const [narrowBar, narrowSpace, wideBar, wideSpace, interCharGap] = dots.map(v => +v * ctx.dot);
@@ -169,6 +216,7 @@
                 startStop, zeroSuppression: optional.find(v => DIGITS.test(v)) ?? null,
                 ...(symbology === 'code39' && { fullAscii: m[4] === 'B' }),
               },
+              ...counterFields(ctx, inc, optional.find(v => /^\d{2}$/.test(v))),
               humanReadable: readable === '1', data: null,
             });
           },
@@ -185,6 +233,7 @@
               kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
               symbology: symbologyOf(m[4]), module: (+p[1] || 2) * ctx.dot, rotation: ROTATIONS[p[2]] ?? 0, height: +p[3] || 100,
               native: { type: m[4], module: +p[1] || 2 },
+              ...counterFields(ctx, p[4], p[7]),
               humanReadable: p[6] === '1', data: null,
             });
           },
@@ -200,17 +249,17 @@
       ],
       // Editable shapes for describeItem / updateItem (see EDITABLE in js/languages/tpcl.js)
       editable: [
-        { // Code 39 / ITF: …,<type>,e,ff,gg,hh,ii,jj,<rotation>,<height>,<human readable> (module widths not editable)
+        { // Code 39 / ITF: …,<type>,e,ff,gg,hh,ii,jj,<rotation>,<height>(,<increment>),<human readable>(,<zero suppression>) (module widths not editable)
           applies: item => item.kind === 'barcode' && ['2', '3', 'B'].includes(item.native && item.native.type),
-          pattern: /^\{XB\d+;\d+,\d+,[23B],(?:[^,]*,){6}(\d+),(\d+),([^,|]*)/d,
-          fields: [barcodeHeight(2), rotationField(1), humanReadableField(3)],
+          pattern: /^\{XB\d+;\d+,\d+,[23B],(?:[^,]*,){6}(\d+),(\d+)((?:,[+-]\d{10})?),([^,;|]*)((?:,\d{2})?)/d,
+          fields: [barcodeHeight(2), rotationField(1), counterField(3, true), humanReadableField(4), zeroField(5)],
         },
-        { // Other 1D barcodes: …,<type>,<check>,<module>,<rotation>,<height>,<increment>,<000>,<human readable>
+        { // Other 1D barcodes: …,<type>,<check>,<module>,<rotation>,<height>,<increment>,<000>,<human readable>(,<zero suppression>)
           applies: item => item.kind === 'barcode',
-          pattern: /^\{XB\d+;\d+,\d+,[^,],[^,]*,(\d+),(\d+),(\d+),[^,]*,[^,]*,([^,|]*)/d,
+          pattern: /^\{XB\d+;\d+,\d+,[^,],[^,]*,(\d+),(\d+),(\d+),([^,]*),[^,]*,([^,;|]*)((?:,\d{2})?)/d,
           fields: [
             numberField('module', 'Módulo (puntos)', 1, 1, 99, item => item.native.module),
-            barcodeHeight(3), rotationField(2), humanReadableField(4),
+            barcodeHeight(3), rotationField(2), counterField(4, false), humanReadableField(5), zeroField(6),
           ],
         },
       ],
