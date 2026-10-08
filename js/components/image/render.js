@@ -31,11 +31,26 @@
       (d ? `<path d="${d}" shape-rendering="crispEdges"/>` : '') + `</g>`;
   }
 
+  /**
+   * Plain picture of a preview item. item.x/y/width/height are the bounding box; with item.turn = 90 or 270 the picture
+   * itself is height x width, centred in the box and turned clockwise about the centre.
+   */
+  function pictureMarkup(item, ctx) {
+    const turn = item.turn || 0;
+    const sideways = turn === 90 || turn === 270;
+    const w = sideways ? item.height : item.width;
+    const h = sideways ? item.width : item.height;
+    const cx = item.x + item.width / 2;
+    const cy = item.y + item.height / 2;
+    const transform = turn ? ` transform="rotate(${turn} ${cx} ${cy})"` : '';
+    return `<image href="${ctx.esc(item.href)}" x="${cx - w / 2}" y="${cy - h / 2}" width="${w}" height="${h}" preserveAspectRatio="none"${transform}/>`;
+  }
+
   /** ctx comes from drawing.js: { esc } escapes attribute values. */
   function render(item, ctx) {
     return {
       // .hit goes after the picture so the hover/selection highlight is painted over it
-      markup: (item.bitmap ? bitmapMarkup(item) : `<image href="${ctx.esc(item.href)}" x="${item.x}" y="${item.y}" width="${item.width}" height="${item.height}" preserveAspectRatio="none"/>`) +
+      markup: (item.bitmap ? bitmapMarkup(item) : pictureMarkup(item, ctx)) +
         `<rect class="hit" x="${item.x}" y="${item.y}" width="${item.width}" height="${item.height}"/>`,
       info: `imagen ${units.formatMm(item.width)} × ${units.formatMm(item.height)} mm`,
       anchor: [item.x, item.y],

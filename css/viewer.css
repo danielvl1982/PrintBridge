@@ -137,7 +137,7 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .props input, .props select { font: inherit; padding: 2px 4px; min-width: 0; }
 .props input[type=number] { width: 72px; }
 .props input[type=range] { width: 100px; padding: 0; }
-.props input:disabled { background: #eef0f3; color: var(--muted); }
+.props input:disabled, .props select:disabled { background: #eef0f3; color: var(--muted); }
 .props-input { display: flex; gap: 6px; align-items: center; }
 .props-input output { min-width: 3.2em; color: var(--text); }
 .props-actions { display: flex; flex-wrap: wrap; gap: 8px; }

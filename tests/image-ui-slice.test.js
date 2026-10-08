@@ -33,12 +33,12 @@ test('PB.ui.createImagePanel is exposed by the image slice and extends PB.ui', (
 test('the image panel reads placement, shows the threshold and reports controls', () => {
   const els = {
     fileInput: fakeEl(), x: fakeEl({ value: '10' }), y: fakeEl({ value: '20' }), width: fakeEl({ value: '' }),
-    threshold: fakeEl({ value: '50' }), thresholdValue: fakeEl(), insert: fakeEl(), remove: fakeEl(),
+    threshold: fakeEl({ value: '50' }), thresholdValue: fakeEl(), insert: fakeEl(), remove: fakeEl(), rotation: fakeEl({ value: '0' }),
   };
   const calls = [];
   const panel = PB.ui.createImagePanel(els, {
     onFile: file => calls.push(['file', file]), onChange: () => calls.push('change'),
-    onThreshold: () => calls.push('threshold'), onRemove: () => calls.push('remove'), onInsert: () => calls.push('insert'),
+    onThreshold: () => calls.push('threshold'), onRotation: () => calls.push('rotation'), onRemove: () => calls.push('remove'), onInsert: () => calls.push('insert'),
   });
   assert.equal(els.thresholdValue.textContent, '50 %');
   assert.deepEqual(panel.placement(), { xMm: '10', yMm: '20', widthMm: '' });
@@ -49,16 +49,36 @@ test('the image panel reads placement, shows the threshold and reports controls'
   assert.equal(els.thresholdValue.textContent, '70 %');
   assert.equal(panel.thresholdPercent(), '70');
   els.x.fire('input');
+  els.rotation.fire('input');
   els.remove.fire('click');
   els.insert.fire('click');
   els.fileInput.files = ['pic'];
   els.fileInput.fire('change');
-  assert.deepEqual(calls, ['threshold', 'change', 'remove', 'insert', ['file', 'pic']]);
+  assert.deepEqual(calls, ['threshold', 'change', 'rotation', 'remove', 'insert', ['file', 'pic']]);
   assert.equal(els.fileInput.value, '');
   panel.setActive(true);
-  assert.deepEqual([els.x.disabled, els.threshold.disabled, els.remove.disabled, els.insert.disabled], [false, false, false, false]);
+  assert.deepEqual([els.x.disabled, els.threshold.disabled, els.remove.disabled, els.insert.disabled, els.rotation.disabled], [false, false, false, false, false]);
   panel.setActive(false);
-  assert.deepEqual([els.x.disabled, els.threshold.disabled, els.remove.disabled, els.insert.disabled], [true, true, true, true]);
+  assert.deepEqual([els.x.disabled, els.threshold.disabled, els.remove.disabled, els.insert.disabled, els.rotation.disabled], [true, true, true, true, true]);
+});
+
+test('the image panel reads and sets the rotation (degrees clockwise) without notifying', () => {
+  const els = {
+    fileInput: fakeEl(), x: fakeEl(), y: fakeEl(), width: fakeEl(), threshold: fakeEl({ value: '50' }), thresholdValue: fakeEl(),
+    insert: fakeEl(), remove: fakeEl(), rotation: fakeEl({ value: '0' }),
+  };
+  const calls = [];
+  const panel = PB.ui.createImagePanel(els, { onFile() {}, onChange() {}, onThreshold() {}, onRotation: () => calls.push('rotation'), onRemove() {}, onInsert() {} });
+  assert.equal(panel.rotation(), 0);
+  panel.setRotation(270);
+  assert.equal(els.rotation.value, '270');
+  assert.equal(panel.rotation(), 270);
+  els.rotation.value = '90';
+  els.rotation.fire('input');
+  assert.deepEqual([panel.rotation(), calls], [90, ['rotation']]);
+  // anything that is not one of the offered quarter turns reads as 0
+  els.rotation.value = 'x';
+  assert.equal(panel.rotation(), 0);
 });
 
 test('the registry exposes the image palette entry and the overlay picker factory', () => {

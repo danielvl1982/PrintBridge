@@ -18,7 +18,8 @@
 
   const catalog = sizes.createCatalog(config.sizes);
   // image: picture overlaid on the label, { href (data URL), naturalW, naturalH } or null. Preview only, never written to the code.
-  // image also holds `converted` once the 1-bit conversion that the preview shows is ready:
+  // image also holds `rotationPicked` (true once the user chose a "Rotación" for this image; until then it follows Giro, see
+  // images.rotationForView) and `converted` once the 1-bit conversion that the preview shows is ready:
   // { key: 'WxH@threshold', bitmap: { w, h, data } | null (null = conversion failed, plain picture shown) }.
   const state = { values: { ...examples[0].values }, image: null, fileName: undefined };
 
@@ -52,12 +53,14 @@
   const imagePanel = ui.createImagePanel(
     {
       fileInput: $('imageFile'), x: $('imgX'), y: $('imgY'), width: $('imgW'),
-      threshold: $('imgThreshold'), thresholdValue: $('imgThresholdValue'), insert: $('btnImageInsert'), remove: $('btnImageRemove'),
+      rotation: $('imgRotation'), threshold: $('imgThreshold'), thresholdValue: $('imgThresholdValue'), insert: $('btnImageInsert'), remove: $('btnImageRemove'),
     },
     {
       onFile: loadImage,
       onChange: () => { refresh(); updatePreview({ delay: PREVIEW_DELAY_MS }); },
       onThreshold: () => updatePreview({ delay: PREVIEW_DELAY_MS }),
+      // The rotation is applied after the conversion (see rotatedBitmap), so the ready conversion is reused: only a redraw is needed
+      onRotation: () => { if (state.image) state.image.rotationPicked = true; refresh(); },
       onRemove: removeImage,
       onInsert: insertImage,
     },
@@ -82,16 +85,30 @@
   /**
    * Model with the overlay image (if any) appended to its items; the parsed model is not modified.
    * The item shows the converted 1-bit dots when they are ready for the current controls (what "Insertar en el código"
-   * writes); otherwise (conversion pending or failed) the plain picture.
+   * writes); otherwise (conversion pending or failed) the plain picture. Both are shown rotated by the "Rotación" control:
+   * x / y are the top-left of the rotated bounding box and width / height (overlap and outside-the-label checks) are its size.
    */
   function withImage(model) {
     if (!state.image) return model;
-    const placement = { ...state.image, ...imagePanel.placement(), dpi: Number($('dpi').value) };
+    const rotation = imagePanel.rotation();
+    const placement = { ...state.image, ...imagePanel.placement(), dpi: Number($('dpi').value), rotation };
     const { converted } = state.image;
     const item = converted && converted.bitmap && converted.key === conversionParams().key
-      ? images.makeBitmapItem(placement, converted.bitmap)
+      ? images.makeBitmapItem(placement, rotatedBitmap(converted, rotation))
       : images.makeItem(placement);
     return { ...model, items: [...model.items, item] };
+  }
+
+  /**
+   * The converted bitmap turned by `rotation` (clockwise on the label, like text). Neither SG nor BITMAP has a rotation
+   * parameter, so the dots themselves are rotated, after the conversion: Ancho is the width of the unrotated picture. The
+   * result is kept on `converted` per rotation so redrawing does not rotate again.
+   */
+  function rotatedBitmap(converted, rotation) {
+    if (!converted.rotated || converted.rotated.rotation !== rotation) {
+      converted.rotated = { rotation, bitmap: images.rotateBitmap(converted.bitmap, rotation) };
+    }
+    return converted.rotated.bitmap;
   }
 
   function options() {
@@ -302,6 +319,8 @@
     readImage(file).then(
       image => {
         state.image = image;
+        // A new picture starts at the default rotation for the current view, whatever was picked for the previous one
+        imagePanel.setRotation(images.rotationForView($('rotation').value));
         const position = imagePicker.takePosition();
         if (position) imagePanel.setPosition(...position);
         // Drop any conversion still running for the previous picture: its stale result would leave previewKey set
@@ -433,8 +452,10 @@
     }
     const placement = imagePanel.placement();
     convertImage()
-      .then(({ w, h, data }) => {
+      .then(bitmap => {
         if (image !== state.image) return;
+        // The rotated dots are what is written (the same ones the preview shows), at the top-left of the rotated box
+        const { w, h, data } = images.rotateBitmap(bitmap, imagePanel.rotation());
         // TSPL writes a BITMAP from the neutral bitmap; TPCL (no hook) writes an SG with nibble data
         const command = language.imageCommand
           ? language.imageCommand({ ...placement, w, h, data, dpi: Number($('dpi').value) })
@@ -462,6 +483,11 @@
   // --- Startup ---
   $('dpi').replaceChildren(...config.resolutions.map(d => Object.assign(document.createElement('option'), { value: d, textContent: `${d} dpi` })));
   PB.ui.createExamplePicker($('example'), examples, { onPick: loadExample });
+  // Giro: until the user picks a rotation for the image, it follows the view (the picture looks upright in it). Registered
+  // before the generic listener below so the redraw already sees the new default.
+  $('rotation').addEventListener('input', () => {
+    if (state.image && !state.image.rotationPicked) imagePanel.setRotation(images.rotationForView($('rotation').value));
+  });
   ['dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap'].forEach(id => $(id).addEventListener('input', () => refresh()));
   // The resolution changes the size in dots, so the 1-bit preview has to be converted again
   $('dpi').addEventListener('input', () => updatePreview({ delay: PREVIEW_DELAY_MS }));
