@@ -47,4 +47,4 @@ behaviour (rotation, magnification, drag) unchanged; `node --test` green after e
 Branch created; exploration done.
 T1 done: panel `text` field + TSPL content (TEXT/BARCODE/QR); `node --test` 771/771 green; commit a1cf696. Next: T2.
 T2 done: TPCL content (inline =data, RC/RV/RB command, FNC1 >8 round trip, unsafe chars rejected, max 255); `node --test` 792/792 green; commit c81e1a6. Next: T3.
-T3 done: TPCL PC/PV font letter select and TSPL TEXT font id (string select, extra option for a current unknown value); `node --test` 804/804 green; commit PENDING. Next: T4.
+T3 done: TPCL PC/PV font letter select and TSPL TEXT font id (string select, extra option for a current unknown value); `node --test` 804/804 green; commit a442d2e. Next: T4.
