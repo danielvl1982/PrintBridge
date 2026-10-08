@@ -36,6 +36,38 @@
   // Options common to PC and PV after the font type: [spacing adjustment,]rotation,attribute[,…][=text]
   const TEXT_TAIL = String.raw`([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWF])[^=]*(?:=([\s\S]*))?$`;
 
+  /**
+   * Font select of the properties panel: the letter is written as is, and a letter outside `letters` that the item
+   * already has is listed as an extra last option so the select shows the real value (it is never offered otherwise).
+   */
+  function fontField(group, letters) {
+    const list = letters.map(([value, label]) => ({ value, label }));
+    return {
+      key: 'font', label: 'Fuente', type: 'select', group, options: list,
+      optionsFor: value => (list.some(o => o.value === value) ? list : [...list, { value, label: value }]),
+      read: raw => (list.some(o => o.value === raw.toUpperCase()) ? raw.toUpperCase() : raw),
+      write: v => (list.some(o => o.value === v) ? v : null),
+    };
+  }
+
+  const FAMILY_NAMES = Object.freeze({ serif: 'Serif', sans: 'Sans', mono: 'Mono' });
+
+  /**
+   * [letter, label] of each PC font for the panel, derived from BITMAP_FONTS: family, size in points and weight/style.
+   * BITMAP_FONTS is the viewer's simulation of the fonts and has NOT been verified against a printer, so the labels
+   * only repeat what the table says (serif/sans/mono, size, bold, italic) and invent no font names.
+   */
+  const BITMAP_FONT_OPTIONS = Object.entries(BITMAP_FONTS).map(([letter, [points, family, weight, style = 'normal']]) => [
+    letter,
+    `${letter} · ${FAMILY_NAMES[family]} ${String(points).replace('.', ',')} pt${weight >= 700 ? ' negrita' : ''}${style === 'italic' ? ' cursiva' : ''}`,
+  ]);
+
+  /** The two outline fonts of the PV command in the manual (both are drawn the same by OUTLINE_FONT). */
+  const OUTLINE_FONT_OPTIONS = Object.freeze([
+    ['A', 'A · Helvetica negrita (TEC FONT1)'],
+    ['B', 'B · Helvetica negrita proporcional (TEC FONT1)'],
+  ]);
+
   /** Format options of a freshly inserted PV command; {rot2} is the 2-digit rotation code. */
   const VARIABLE = Object.freeze({ format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,{rot2},B' });
 
@@ -184,20 +216,22 @@
       editable: [
         { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
-          pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),[A-Za-z0-9],(?:[+-]\d+,)?(\d{2}),[BWF]/d,
+          pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),[BWF]/d,
           fields: [
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
-            rotationField(3),
+            rotationField(4),
+            fontField(3, OUTLINE_FONT_OPTIONS),
           ],
         },
         { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
-          pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),[A-Za-z0-9],(?:[+-]\d+,)?(\d{2}),[BWF]/d,
+          pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),[BWF]/d,
           fields: [
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
-            rotationField(3),
+            rotationField(4),
+            fontField(3, BITMAP_FONT_OPTIONS),
           ],
         },
       ],

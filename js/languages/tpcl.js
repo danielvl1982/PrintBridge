@@ -392,7 +392,8 @@
       for (const f of shape.fields) {
         const value = match ? f.read(match[f.group]) : f.model && f.model(item);
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step, options } = f;
+        const { key, label, type, min, max, step } = f;
+        const options = f.optionsFor ? f.optionsFor(value) : f.options; // optionsFor lists a current value outside the options
         fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
       }
     }

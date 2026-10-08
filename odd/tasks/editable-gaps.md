@@ -28,7 +28,7 @@ Out for now (cost/risk, decide later): G6 barcode type selector, G7 check digit 
 ## Tasks
 - [x] T1 Panel `text` field type + TSPL content editing: `type:'text'` control and coercion in js/properties.js, TSPL TEXT content (quote-safe), BARCODE and QRCODE content where the parser keeps the raw data; tests.
 - [x] T2 TPCL content editing: inline `=data` and the separate RC/RV/RB command (framing-unsafe chars rejected, FNC1 `>8` round trip), PC/PV/XB; tests.
-- [ ] T3 Font: TPCL PC font letter select, TSPL TEXT font id (string select); tests.
+- [x] T3 Font: TPCL PC font letter select, TSPL TEXT font id (string select); tests.
 - [ ] T4 TPCL text attribute: parse B/W/F/C (extend the regex) into the item, draw reverse / boxed / stroked in the preview, edit the attribute; tests.
 - [ ] T5 TPCL alignment `P1..P4`: parse, draw in the preview, edit; tests.
 - [ ] T6 TPCL spacing `±hh` and bold `Jkkll`: parse, show, edit; README and contract docs.
@@ -47,3 +47,4 @@ behaviour (rotation, magnification, drag) unchanged; `node --test` green after e
 Branch created; exploration done.
 T1 done: panel `text` field + TSPL content (TEXT/BARCODE/QR); `node --test` 771/771 green; commit a1cf696. Next: T2.
 T2 done: TPCL content (inline =data, RC/RV/RB command, FNC1 >8 round trip, unsafe chars rejected, max 255); `node --test` 792/792 green; commit c81e1a6. Next: T3.
+T3 done: TPCL PC/PV font letter select and TSPL TEXT font id (string select, extra option for a current unknown value); `node --test` 804/804 green; commit PENDING. Next: T4.

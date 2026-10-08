@@ -27,7 +27,7 @@ test('the TSPL slices provide editable definitions for text, barcode, qr and lin
 test('describeItem: TEXT lists rotation and both multipliers with the values of the command', () => {
   const d = describe(doc('TEXT 100,200,"3",90,2,3,"Hello, world"'));
   assert.equal(d.kind, 'text');
-  assert.deepEqual(pairs(d), [['rotation', 90], ['xmul', 2], ['ymul', 3], ['content', 'Hello, world']]);
+  assert.deepEqual(pairs(d), [['rotation', 90], ['xmul', 2], ['ymul', 3], ['font', '3'], ['content', 'Hello, world']]);
   assert.equal(byKey(d, 'rotation').type, 'select');
   assert.deepEqual(byKey(d, 'rotation').options.map(o => o.value), [0, 90, 180, 270]);
   assert.equal(byKey(d, 'xmul').type, 'number');
@@ -36,13 +36,50 @@ test('describeItem: TEXT lists rotation and both multipliers with the values of 
 });
 
 test('describeItem: TEXT with an alignment argument is described the same way', () => {
-  assert.deepEqual(pairs(describe(doc('TEXT 100,200,"3",180,1,2,2,"Hi"'))), [['rotation', 180], ['xmul', 1], ['ymul', 2], ['content', 'Hi']]);
+  assert.deepEqual(pairs(describe(doc('TEXT 100,200,"3",180,1,2,2,"Hi"'))), [['rotation', 180], ['xmul', 1], ['ymul', 2], ['font', '3'], ['content', 'Hi']]);
 });
 
 test('describeItem: a scalable font (point sizes) allows multipliers above 10', () => {
   const d = describe(doc('TEXT 100,200,"0",0,24,30,"Hi"'));
-  assert.deepEqual(pairs(d), [['rotation', 0], ['xmul', 24], ['ymul', 30], ['content', 'Hi']]);
+  assert.deepEqual(pairs(d), [['rotation', 0], ['xmul', 24], ['ymul', 30], ['font', '0'], ['content', 'Hi']]);
   assert.ok(byKey(d, 'ymul').max > 10);
+});
+
+test('font: TEXT lists the ids the viewer knows as a string select and shows the current one', () => {
+  const f = byKey(describe(doc('TEXT 100,200,"3",0,1,1,"Hi"')), 'font');
+  assert.deepEqual([f.label, f.type, f.value], ['Fuente', 'select', '3']);
+  assert.deepEqual(f.options.map(o => o.value), ['1', '2', '3', '4', '5', '6', '7', '8', '0', 'ROMAN.TTF']);
+  assert.equal(f.options.find(o => o.value === '3').label, '3 · 16×24 puntos (monoespaciada)');
+  assert.equal(f.options.find(o => o.value === '0').label, '0 · Escalable (sans)');
+  assert.equal(byKey(describe(doc('TEXT 100,200,"ROMAN.TTF",0,10,10,"Hi"')), 'font').value, 'ROMAN.TTF');
+});
+
+test('font: updateItem rewrites only the quoted id, with and without the alignment argument', () => {
+  assert.equal(update(doc('TEXT 100,200,"3",0,1,1,"Hi"'), { font: '5' }), doc('TEXT 100,200,"5",0,1,1,"Hi"'));
+  assert.equal(update(doc('TEXT 100,200,"3",90,2,2,2,"Hi, there"'), { font: '0' }), doc('TEXT 100,200,"0",90,2,2,2,"Hi, there"'));
+  assert.equal(update(doc('TEXT 100,200,"3",0,1,1,"Hi"'), { font: 'ROMAN.TTF', xmul: 4 }), doc('TEXT 100,200,"ROMAN.TTF",0,4,1,"Hi"'));
+});
+
+test('font: an id outside the list is ignored when written, and shown as an extra option when it is the current one', () => {
+  const text = doc('TEXT 100,200,"3",0,1,1,"Hi"');
+  for (const font of ['9', 'x', '', 3, null]) assert.equal(update(text, { font }), text);
+  const odd = doc('TEXT 100,200,"9",0,1,1,"Hi"');
+  const f = byKey(describe(odd), 'font');
+  assert.equal(f.value, '9');
+  assert.deepEqual(f.options.map(o => o.value).slice(-1), ['9']);
+  assert.equal(update(odd, { font: '2' }), doc('TEXT 100,200,"2",0,1,1,"Hi"'));
+  assert.equal(update(odd, { font: '9' }), odd);
+});
+
+test('font: an id that is not a plain quoted string leaves the field out and is never edited', () => {
+  const bare = doc('TEXT 100,200,3,0,1,1,"Hi"');
+  assert.equal(byKey(describe(bare), 'font'), undefined);
+  assert.equal(update(bare, { font: '2' }), bare);
+});
+
+test('font: LF line endings behave like CRLF', () => {
+  const text = 'SIZE 100 mm,60 mm\nCLS\nTEXT 100,200,"3",0,1,1,"Hi"\nPRINT 1,1\n';
+  assert.equal(update(text, { font: '4' }), text.replace('"3"', '"4"'));
 });
 
 test('describeItem: BLOCK has no editable fields (its content and layout are never touched)', () => {
@@ -224,7 +261,7 @@ test('updateItem only touches the item it was given, in a multi-item document wi
 
 test('describeItem without text falls back to the item model (kind decides the fields)', () => {
   const model = tspl.parse(doc('TEXT 1,2,"3",90,2,3,"Hi"', 'BAR 1,2,30,4'), { dpi: 203 });
-  assert.deepEqual(pairs(tspl.describeItem(model.items[0], undefined, { dpi: 203 })), [['rotation', 90], ['xmul', 2], ['ymul', 3], ['content', 'Hi']]);
+  assert.deepEqual(pairs(tspl.describeItem(model.items[0], undefined, { dpi: 203 })), [['rotation', 90], ['xmul', 2], ['ymul', 3], ['font', '3'], ['content', 'Hi']]);
   assert.deepEqual(pairs(tspl.describeItem(model.items[1], undefined, { dpi: 203 })), [['width', 30], ['height', 4]]);
 });
 

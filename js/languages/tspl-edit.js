@@ -12,7 +12,8 @@
  *     { key, label, type: 'number' | 'select' | 'text', arg, min?, max?, step?, options?: [{ value, label }],
  *       read(arg, cmd) -> value | undefined, write(value) -> new raw text | null, model?(item, { dpi }) -> value }
  *     arg is an argument index, or a function (cmd) -> index when the position depends on the optional arguments.
- *     numberField(), selectField() and textField() build the usual ones.
+ *     numberField(), selectField(), stringSelectField() and textField() build the usual ones; a field may give
+ *     optionsFor(value) -> options to list the current value when it is not one of them.
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so quoted strings (commas inside), counters
  * (@1), BLOCK content, BITMAP bytes and every other line stay byte for byte. An argument that is not a plain number is
@@ -47,6 +48,22 @@
       key, label, type: 'select', arg, options: list, model,
       read: a => { const v = INTEGER.test(a.raw) ? Number(a.raw) : undefined; return list.some(o => o.value === v) ? v : undefined; },
       write: v => (list.some(o => o.value === v) ? String(v) : null),
+    };
+  }
+
+  /**
+   * Choice among quoted strings (e.g. a font id "3"): options are strings or { value, label }. Only an argument that is
+   * exactly one quoted string is read; the quotes are kept when writing. A current value outside the list is shown as an
+   * extra last option (optionsFor) but is never written: write() accepts the listed values only. model(item) gives the
+   * value when there is no text.
+   */
+  function stringSelectField(key, label, arg, options, model) {
+    const list = options.map(o => (typeof o === 'object' ? o : { value: o, label: o }));
+    return {
+      key, label, type: 'select', arg, options: list, model,
+      optionsFor: value => (list.some(o => o.value === value) ? list : [...list, { value, label: value }]),
+      read: a => (isQuotedString(a.raw) ? a.value : undefined),
+      write: v => (list.some(o => o.value === v) ? `"${v}"` : null),
     };
   }
 
@@ -175,7 +192,8 @@
         if (found) value = a ? f.read(a, found.cmd) : undefined;
         else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step, options } = f;
+        const { key, label, type, min, max, step } = f;
+        const options = f.optionsFor ? f.optionsFor(value) : f.options;
         fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
       }
       return { kind, fields };
@@ -199,5 +217,5 @@
     return { moveItem, describeItem, updateItem };
   }
 
-  PB.tsplEdit = Object.freeze({ createTsplEditing, dropDots, numberField, selectField, textField });
+  PB.tsplEdit = Object.freeze({ createTsplEditing, dropDots, numberField, selectField, stringSelectField, textField });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
