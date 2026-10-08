@@ -45,4 +45,4 @@ behaviour (rotation, magnification, drag) unchanged; `node --test` green after e
 
 ## Progress
 Branch created; exploration done.
-T1 done: panel `text` field + TSPL content (TEXT/BARCODE/QR); `node --test` 771/771 green; commit COMMIT_ID. Next: T2.
+T1 done: panel `text` field + TSPL content (TEXT/BARCODE/QR); `node --test` 771/771 green; commit a1cf696. Next: T2.
