@@ -219,7 +219,7 @@
    * suppression has no TSPL equivalent: one info per emit.
    */
   function counterSetup(ctx, item, data) {
-    if (item.zeroSuppress > 0) ctx.once('tspl-zero-suppress', () => diag.info('Los ceros suprimidos de TPCL no tienen equivalente en TSPL: los contadores se escriben sin supresión de ceros'));
+    if (item.zeroSuppress > 0) ctx.once('tspl-zero-suppress', () => diag.info('Los ceros suprimidos (supresión de ceros iniciales) no tienen equivalente en TSPL: los contadores se escriben sin supresión de ceros'));
     const c = item.counter;
     if (!c || !Number.isFinite(c.step) || Math.trunc(c.step) === 0) return null;
     const n = Number(ctx.ids.next('COUNTER'));
@@ -489,6 +489,8 @@
    * knows the separation (else omitted with an info). REFERENCE and SHIFT are never written: the parser folds them into
    * the coordinates. DIRECTION 1 is the origin the parser assumes (top-left).
    */
+  const ROTATED_NOTE = 'La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora';
+
   function headerLines(model, ctx) {
     const size = (model && model.size) || {};
     const out = [];
@@ -499,7 +501,10 @@
     }
     if (Number.isFinite(size.gap)) out.push(`GAP ${mmNumber(size.gap)} mm,0 mm`);
     else ctx.report(diag.info('No se escribe GAP: la separación entre etiquetas o la marca negra no está especificada, compruebe el ajuste en su impresora'));
-    out.push('DIRECTION 1', 'CLS');
+    // DIRECTION 0 (printed rotated 180 degrees) is written back as it was read; a ^POI of ZPL has no TSPL counterpart here and is reported
+    const rotated = size.native && size.native.direction === 0;
+    if (size.native && size.native.invert === true) ctx.report(diag.info(ROTATED_NOTE));
+    out.push(rotated ? 'DIRECTION 0' : 'DIRECTION 1', 'CLS');
     return out;
   }
 

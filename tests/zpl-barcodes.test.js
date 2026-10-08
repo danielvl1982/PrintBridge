@@ -386,14 +386,14 @@ const itemsOf = text => parse(text).items;
 const update = (it, changes, text) => zpl.updateItem(text, it, changes, { dpi: DPI });
 const describe = (it, text) => zpl.describeItem(it, text, { dpi: DPI });
 
-test('describeItem: the fields of each command (symbology, check, height, rotation, readable, above, module, ratio, command extras, content)', () => {
+test('describeItem: the fields of each command (symbology, check, height, rotation, readable, above, module, ratio, command extras, content, counter: the digits of every data of the cases allow the Incremento of Z7)', () => {
   const keys = c => describe(parse(BASE(field(c))).items[0], BASE(field(c))).fields.map(f => f.key);
-  assert.deepEqual(keys(CASES[0]), ['symbology', 'height', 'rotation', 'readable', 'above', 'module', 'ucc', 'mode', 'content']);
-  assert.deepEqual(keys(CASES[1]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'ratio', 'content']);
-  assert.deepEqual(keys(CASES[3]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'content']);
-  assert.deepEqual(keys(CASES[5]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'printCheck', 'content']);
-  assert.deepEqual(keys(CASES[8]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'ratio', 'start', 'stop', 'content']);
-  assert.deepEqual(keys(CASES[9]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'ratio', 'content']);
+  assert.deepEqual(keys(CASES[0]), ['symbology', 'height', 'rotation', 'readable', 'above', 'module', 'ucc', 'mode', 'content', 'counter']);
+  assert.deepEqual(keys(CASES[1]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'ratio', 'content', 'counter']);
+  assert.deepEqual(keys(CASES[3]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'content', 'counter']);
+  assert.deepEqual(keys(CASES[5]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'printCheck', 'content', 'counter']);
+  assert.deepEqual(keys(CASES[8]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'ratio', 'start', 'stop', 'content', 'counter']);
+  assert.deepEqual(keys(CASES[9]), ['symbology', 'check', 'height', 'rotation', 'readable', 'above', 'module', 'ratio', 'content', 'counter']);
 });
 
 test('describeItem values from the text and without it (the model), and the data-driven options of the selector', () => {

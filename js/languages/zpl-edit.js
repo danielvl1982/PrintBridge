@@ -36,6 +36,10 @@
  *       argument whose empty value stands for a default (QR model, Data Matrix module and orientation).
  *       reverseField(key, label) is the ^FR checkbox (own ^FR or the ^LRY state of the label: custom, see its comment); setArgs(cmd, { index: text })
  *       edits several arguments of a command at once.
+ *       serialFields() are the two counter fields of the text and bar code slices (Incremento, Ceros iniciales): the data command of a field is
+ *       ^FD / ^FV or ^SNv,n,z (the counter), and the Incremento field converts one into the other (a step of 0 is a plain ^FD; a step other than
+ *       0 on a ^FD whose data ^SN can carry writes ^SN with z = Y). contentField reads and writes the first argument of ^SN too (its start value).
+ *       A field with ^FN has no content or counter fields: its data is the variable <#FNn#> (the ^FD of the field is only the default test value).
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so the other commands of the field, other fields,
  * comments and line endings stay byte for byte. An argument that is not a plain number is never moved. The coordinates of an item
@@ -57,6 +61,17 @@
 
   /** Largest ^FD / ^FV data of the guide (3072 characters). */
   const MAX_DATA = 3072;
+
+  /** ^SN increment: the guide gives 12 digits maximum. */
+  const SERIAL_MAX = 999999999999;
+
+  /**
+   * A start value ^SN can carry: at least one digit (the right-most digits are the ones indexed), no comma, ^ or ~ (they split or start a command),
+   * no line break, no blank at either end (the parameters are trimmed) and no variable placeholder (it would be written as text, not substituted).
+   */
+  function serializable(text) {
+    return typeof text === 'string' && /\d/.test(text) && !/[,^~\r\n]/.test(text) && text === text.trim() && !PB.variables.namesIn(text).length;
+  }
 
   const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
 
@@ -152,9 +167,11 @@
    * can rule a field out (e.g. data the parser rewrites). model(item) gives the value when there is no text.
    */
   const contentField = (key, label, model, usable) => ({
-    key, label, type: 'text', cmd: ['FD', 'FV'], arg: 0, maxLength: MAX_DATA, model,
-    read: (a, cmd, field) => (!usable || usable(cmd, field) ? a.value : undefined),
+    key, label, type: 'text', cmd: ['FD', 'FV', 'SN'], arg: 0, maxLength: MAX_DATA, model,
+    // A field with ^FN has the variable as its data (the 2D codes keep their ^FD data: see js/languages/zpl.js)
+    read: (a, cmd, field) => ((field.has('FN') && !field.has(['BQ', 'BX'])) || (usable && !usable(cmd, field)) ? undefined : cmd.name === 'SN' ? a.raw : a.value),
     write(v, a, cmd) {
+      if (cmd.name === 'SN') return serializable(v) ? v : null;
       if (typeof v !== 'string' || v.length > MAX_DATA) return null;
       const encoded = encodeData(v.replace(/\r\n|\r|\n/g, ' '), { indicator: cmd.hex || '_', hex: !!cmd.hex });
       return encoded.hex && !cmd.hex ? { value: encoded.text, edits: [{ start: cmd.start, end: cmd.start, value: '^FH' }] } : encoded.text;
@@ -227,6 +244,63 @@
       edits.push({ start: at, end: at, value: (cmd.args.length ? ',' : '') + parts.join(',') });
     }
     return edits;
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Counter fields (^SNv,n,z)
+
+  /** The two counter fields of the text and bar code slices (see the header): [Incremento, Ceros iniciales]. */
+  function serialFields() {
+    const dataCmd = field => field.find(['FD', 'FV', 'SN']);
+    const variable = field => field.has('FN') && !field.has(['BQ', 'BX']);
+    /** n of a ^SN: default 1; undefined when it is not a whole number. */
+    const stepOf = cmd => { const a = cmd.args[1]; return !a || a.raw === '' ? 1 : INTEGER.test(a.raw) ? Number(a.raw) : undefined; };
+    /** z of a ^SN: default N (the guide); undefined when it is neither Y nor N. */
+    const zerosOf = cmd => { const a = cmd.args[2]; const u = a ? a.raw.toUpperCase() : ''; return u === '' || u === 'N' ? false : u === 'Y' ? true : undefined; };
+    const startOf = cmd => (cmd.args[0] && cmd.args[0].raw !== '' ? cmd.args[0].raw : '1');
+    const counter = {
+      key: 'counter', label: 'Incremento', type: 'number', min: -SERIAL_MAX, max: SERIAL_MAX, step: 1, custom: true,
+      model: item => (item.counter && Number.isFinite(item.counter.step) ? item.counter.step : serializable(String(item.data ?? '')) ? 0 : undefined),
+      read(text, found) {
+        const cmd = dataCmd(found.field);
+        if (!cmd || variable(found.field)) return undefined;
+        if (cmd.name === 'SN') return stepOf(cmd);
+        return serializable(cmd.args[0] ? cmd.args[0].value : undefined) ? 0 : undefined;
+      },
+      edits(text, found, item, value) {
+        const { field } = found;
+        const cmd = dataCmd(field);
+        if (!cmd || variable(field) || typeof value !== 'number' || !Number.isFinite(value)) return null;
+        const step = clampInt(value, -SERIAL_MAX, SERIAL_MAX);
+        if (cmd.name === 'SN') {
+          const current = stepOf(cmd);
+          if (current === undefined || current === step) return null;
+          if (step !== 0) return [argEdit(cmd, 1, String(step))];
+          // Back to a plain ^FD: the data is escaped as the ^FH of the field says (the ^SN start value never is)
+          const fh = field.cmds.find(c => c.name === 'FH' && c.start < cmd.start);
+          const indicator = fh && fh.args[0] && fh.args[0].raw ? fh.args[0].raw[0] : '_';
+          const encoded = encodeData(startOf(cmd), { indicator, hex: Boolean(fh) });
+          return [{ start: cmd.start, end: cmd.end, value: `${cmd.prefix}FD${encoded.text}` }];
+        }
+        const data = cmd.args[0] ? cmd.args[0].value : undefined;
+        if (step === 0 || !serializable(data)) return null;
+        return [{ start: cmd.start, end: cmd.end, value: `${cmd.prefix}SN${data},${step},Y` }];
+      },
+    };
+    const zeros = {
+      key: 'zeros', label: 'Ceros iniciales', type: 'checkbox', custom: true,
+      model: item => (item.counter ? !(item.zeroSuppress > 0) : undefined),
+      read(text, found) {
+        const cmd = dataCmd(found.field);
+        return cmd && cmd.name === 'SN' && !variable(found.field) ? zerosOf(cmd) ?? false : undefined;
+      },
+      edits(text, found, item, value) {
+        const cmd = dataCmd(found.field);
+        if (!cmd || cmd.name !== 'SN' || variable(found.field) || typeof value !== 'boolean' || zerosOf(cmd) === value) return null;
+        return [argEdit(cmd, 2, value ? 'Y' : 'N')];
+      },
+    };
+    return [counter, zeros];
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -501,7 +575,7 @@
   }
 
   PB.zplEdit = Object.freeze({
-    createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA,
-    numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField, reverseField, setArgs, flagEdits,
+    createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable,
+    numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField, reverseField, setArgs, flagEdits, serialFields,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

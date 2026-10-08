@@ -156,8 +156,8 @@
 
   function zpl(helpers) {
     const {
-      sourceOf, int, ROTATIONS, rotationOf, orientationOf, exactDots, roundDots, fieldData, fo, ft,
-      numberField, stringSelectField, contentField, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, reverseField,
+      sourceOf, int, ROTATIONS, rotationOf, orientationOf, exactDots, roundDots, dataCommands, fo, ft,
+      numberField, stringSelectField, contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, reverseField,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -193,8 +193,6 @@
       }
       if (item.spacing) ctx.once('zpl-text-spacing', () => diag.info('Hay textos con espaciado entre caracteres, que ^A de ZPL no escribe: se escriben sin él'));
       if (item.bold) ctx.once('zpl-text-bold', () => diag.info('Hay textos en negrita (sobreimpresión), que ^A de ZPL no escribe: se escriben sin ella'));
-      if (item.counter) ctx.once('zpl-text-counter', () => diag.warning('Hay textos con contador: ZPL los escribe como texto fijo con el valor inicial (el contador ^SN aún no se escribe)'));
-      if (item.zeroSuppress) ctx.once('zpl-text-zero', () => diag.info('Hay textos con supresión de ceros, que ZPL no tiene: se escriben sin ella'));
     }
 
     /**
@@ -242,7 +240,7 @@
       } else {
         origin = ft(ctx, item.x || 0, item.y || 0);
       }
-      return `${origin}^A${name}${orientationOf(degrees)},${cell.height},${cell.width}${item.reverse ? '^FR' : ''}${fieldData(ctx, item.data)}^FS`;
+      return `${origin}^A${name}${orientationOf(degrees)},${cell.height},${cell.width}${item.reverse ? '^FR' : ''}${dataCommands(ctx, item)}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------
@@ -310,6 +308,8 @@
     /** ^FR: the presence of the command, or the ^LRY state of the label (native.labelReverse): see reverseField in js/languages/zpl-edit.js. */
     const reverse = reverseField('reverse', 'Impresión inversa (^FR)');
     const contentOf = contentField('content', 'Contenido', item => item.data);
+    /** Incremento and Ceros iniciales: the data command is ^FD or ^SN (see serialFields in js/languages/zpl-edit.js). */
+    const counterFields = serialFields();
 
     return {
       // emit(item, ctx) -> the field of a text item
@@ -322,11 +322,11 @@
       editable: [
         {
           applies: (item, field) => item.kind === 'text' && (field ? field.has('A') : item.ref === 'A'),
-          fields: [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField, contentOf, reverse],
+          fields: [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField, contentOf, ...counterFields, reverse],
         },
         {
           applies: (item, field) => item.kind === 'text' && (field ? !field.has('A') : item.ref === 'FD'),
-          fields: [contentOf, reverse],
+          fields: [contentOf, ...counterFields, reverse],
         },
       ],
       handlers: [

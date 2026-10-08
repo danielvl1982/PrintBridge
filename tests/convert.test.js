@@ -211,3 +211,36 @@ test('a TSPL file with accents converted from TPCL reads back as the same text t
   assert.equal(decoded, r.text);
   assert.equal(PB.languages.get('tspl').parse(decoded).items[0].data, 'Niño café');
 });
+
+// ---- Z8: ZPL as the third language
+
+test('targets lists the three languages in registration order, and each is detected as a source', () => {
+  assert.deepEqual(PB.convert.targets().filter(t => t.id !== 'noemit').map(t => t.id), ['tpcl', 'tspl', 'zpl']);
+  const zplExample = PB.examples.find(e => e.id === 'zpl-label-100x60');
+  for (const [example, id] of [[spool, 'tpcl'], [tsplExample, 'tspl'], [zplExample, 'zpl']]) {
+    for (const target of ['tpcl', 'tspl', 'zpl']) assert.equal(PB.convert.run(example.source, target, { dpi: 203 }).source, id);
+  }
+});
+
+test('ZPL files: .zpl extension, the file name rule of the other languages, UTF-8 bytes without any special byte', () => {
+  assert.equal(PB.convert.fileName('zpl'), 'etiqueta.zpl');
+  assert.equal(PB.convert.fileName('zpl', 'labels/bobina 99.ter'), 'bobina 99.zpl');
+  assert.equal(PB.convert.fileName('zpl', 'a:b?.prn'), 'a_b_.zpl');
+  const text = '^XA\r\n^FO10,10^A0N,30,30^FDNiño € ñ^FS\r\n^XZ\r\n';
+  assert.deepEqual(Array.from(PB.convert.toBytes(text, 'zpl')), Array.from(new TextEncoder().encode(text)));
+  assert.equal(new TextDecoder().decode(PB.convert.toBytes(text, 'zpl')), text);
+});
+
+test('a ZPL output never carries the characters outside latin1 warning (its file is UTF-8) and an image is ASCII hex', () => {
+  const converted = PB.convert.run('{D0610,0990,0550|}\n{PC001;0100,0100,05,05,J,00,B=Niño € ñ|}\n{XS;I,0001,0002C4100|}', 'zpl', { dpi: 203 });
+  assert.ok(!converted.diagnostics.some(d => /latin1/.test(d.text)));
+  const tspl = PB.convert.run('{D0610,0990,0550|}\n{PC001;0100,0100,05,05,J,00,B=Niño € ñ|}\n{XS;I,0001,0002C4100|}', 'tspl', { dpi: 203 });
+  assert.ok(tspl.diagnostics.some(d => /latin1/.test(d.text)), 'while TSPL (latin1 file) does warn');
+  const bitmap = bitmapOf(16, 6, (x, y) => (x + 2 * y) % 5 === 0);
+  const model = { language: 'tpcl', size: { width: 990, height: 550, pitch: 610, gap: null, native: {} }, diagnostics: [], items: [{ kind: 'image', x: 40, y: 30, width: 0, height: 0, bitmap, data: null }] };
+  const source = PB.languages.emit('tpcl', model, { dpi: 203 }).text;
+  const zpl = PB.convert.run(source, 'zpl', { dpi: 203 }).text;
+  assert.match(zpl, /\^GFA,/);
+  assert.ok(/^[\t\r\n\u0020-\u007E]*$/.test(zpl));
+  assert.deepEqual(Array.from(PB.convert.toBytes(zpl, 'zpl')), Array.from(zpl, ch => ch.charCodeAt(0)));
+});

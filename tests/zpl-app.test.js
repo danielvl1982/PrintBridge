@@ -93,3 +93,54 @@ test('README documents the ZPL support and the .zpl extension', () => {
   assert.match(readme, /ZPL support \(Zebra\)/);
   assert.match(readme, /`\.zpl`/);
 });
+
+// Z8: ZPL declares whole dots (^PW / ^LL), so 100 x 60 mm reads back as 100.0 x 60.1 (203 dpi) and has no pitch: the Formato row still
+// finds the standard size, within one dot; TPCL and TSPL (exact millimetres) keep the exact match.
+const [tpcl, tspl] = [PB.languages.get('tpcl'), PB.languages.get('tspl')];
+const STANDARDS = [[100, 150], [100, 100], [100, 60], [80, 50], [60, 40], [50, 30], [40, 30]];
+const selectedFor = (language, text, dpi) => {
+  const model = language.parse(text, { dpi });
+  return PB.sizes.createCatalog(PB.config.sizes).findBySize({ ...model.size, pitch: PB.sizes.declaredPitch(model.size) });
+};
+
+test('catalog: a size with a tolerance matches a standard one within it and ignores a missing pitch; without tolerance it stays exact', () => {
+  const catalog = PB.sizes.createCatalog(PB.config.sizes);
+  assert.equal(catalog.findBySize({ width: 1000, height: 601, pitch: null, tolerance: 1.25 }).id, '100x60');
+  assert.equal(catalog.findBySize({ width: 1000, height: 602, pitch: null, tolerance: 1.25 }), null, 'two 0.1 mm away is more than one dot');
+  assert.equal(catalog.findBySize({ width: 1001, height: 601, pitch: 630, tolerance: 1.25 }).id, '100x60', 'a declared pitch still has to be the standard one');
+  assert.equal(catalog.findBySize({ width: 1001, height: 601, pitch: 600, tolerance: 1.25 }), null);
+  assert.equal(catalog.findBySize({ width: 1000, height: 601, pitch: null }), null, 'no tolerance: exact, and a null pitch never matched');
+  assert.equal(catalog.findBySize({ width: 1000, height: 601, pitch: 630 }), null);
+  assert.equal(catalog.findBySize({ width: null, height: null, pitch: null, tolerance: 1.25 }), null);
+});
+
+test('ZPL: a label of every standard size matches it at 203 and 300 dpi, as ^PW / ^LL in dots', () => {
+  for (const dpi of [203, 300]) {
+    for (const [w, h] of STANDARDS) {
+      const text = zpl.applySize('^XA\r\n^XZ\r\n', { w: w * 10, h: h * 10, p: h * 10 + 30, dpi });
+      const model = zpl.parse(text, { dpi });
+      assert.ok(model.size.tolerance > 0, 'ZPL says how precise its size is');
+      const match = selectedFor(zpl, text, dpi);
+      assert.equal(match && match.id, `${w}x${h}`, `${w} x ${h} mm at ${dpi} dpi (${model.size.width} x ${model.size.height})`);
+    }
+  }
+  assert.deepEqual(Object.keys(zpl.parse('^XA^PW799^LL480^XZ', { dpi: 203 }).size).sort(), ['gap', 'height', 'native', 'pitch', 'tolerance', 'width']);
+});
+
+test('ZPL: the 100 x 60 label of the example (^PW800 ^LL480) and a different size are told apart', () => {
+  assert.equal(selectedFor(zpl, '^XA^PW799^LL480^XZ', 203).id, '100x60');
+  assert.equal(selectedFor(zpl, '^XA^PW800^LL480^XZ', 203).id, '100x60', '100.1 x 60.1 is within a dot of 100 x 60');
+  assert.equal(selectedFor(zpl, '^XA^PW812^LL480^XZ', 203), null, '101.6 mm is not a standard size');
+  assert.equal(selectedFor(zpl, '^XA^PW799^XZ', 203), null, 'no length declared');
+});
+
+test('TPCL and TSPL keep the exact match: no tolerance, and a missing pitch or gap never matches', () => {
+  assert.equal(tpcl.parse('{D0630,1000,0600|}').size.tolerance, undefined);
+  assert.equal(tspl.parse('SIZE 100 mm,60 mm\nGAP 3 mm,0 mm').size.tolerance, undefined);
+  assert.equal(selectedFor(tpcl, '{D0630,1000,0600|}', 203).id, '100x60');
+  assert.equal(selectedFor(tpcl, '{D0630,1001,0600|}', 203), null);
+  assert.equal(selectedFor(tpcl, '{D0630,1000,0601|}', 203), null);
+  assert.equal(selectedFor(tspl, 'SIZE 100 mm,60 mm\nGAP 3 mm,0 mm', 203).id, '100x60');
+  assert.equal(selectedFor(tspl, 'SIZE 100 mm,60 mm', 203), null, 'TSPL without a gap declares no pitch');
+  assert.equal(selectedFor(tspl, 'SIZE 100.1 mm,60 mm\nGAP 3 mm,0 mm', 203), null);
+});

@@ -151,6 +151,7 @@
   function refresh({ language = null, notices = [] } = {}) {
     try {
       const { model, area, diagnostics, language: used } = analyze(editor.text(), { language });
+      variables.seedDefaults(state.values, model); // test values the label suggests (ZPL ^FN data), for the variables that have none yet
       const opts = options();
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));

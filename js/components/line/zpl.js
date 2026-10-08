@@ -268,12 +268,19 @@
       const [dx, dy] = [x2 - x1, y2 - y1];
       const horizontal = Math.abs(dy) <= 1;
       if (horizontal || Math.abs(dx) <= 1) {
-        // A bar: ^GBlength,t,t centred on the line
-        const length = bound(Math.max(roundDots(Math.abs(horizontal ? dx : dy)), t.dots), t.dots, MAX_BOX);
+        // A bar: ^GBlength,t,t centred on the line. One shorter than its thickness is a solid box of length x thickness: the border is then
+        // the shorter side (^GB raises w and h to the border, so t would make the bar longer)
+        const span = roundDots(Math.abs(horizontal ? dx : dy));
+        if (span < 1) {
+          ctx.once('zpl-line-empty', () => diag.warning('Hay líneas de longitud 0 que no se escriben: no dibujan nada'));
+          return [];
+        }
+        const border = Math.min(span, t.dots);
+        const length = bound(Math.max(span, border), border, MAX_BOX);
         const [w, h] = horizontal ? [length, t.dots] : [t.dots, length];
         const left = horizontal ? Math.min(x1, x2) : (x1 + x2) / 2 - t.exact / 2;
         const top = horizontal ? (y1 + y2) / 2 - t.exact / 2 : Math.min(y1, y2);
-        return `${S.place(item, roundDots(left), roundDots(top), h)}${S.gb(w, h, t.dots, { white })}${S.fr(item)}^FS`;
+        return `${S.place(item, roundDots(left), roundDots(top), h)}${S.gb(w, h, border, { white })}${S.fr(item)}^FS`;
       }
       const sizes = [Math.abs(dx), Math.abs(dy)].map(v => roundDots(v));
       if (sizes.some(v => v < MIN_DIAGONAL)) ctx.once('zpl-gd-min', () => diag.warning(`Hay líneas diagonales de menos de ${MIN_DIAGONAL} puntos de ancho o alto: ZPL (^GD) admite de ${MIN_DIAGONAL} a ${MAX_BOX}, se ajustan`));

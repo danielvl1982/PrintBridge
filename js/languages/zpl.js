@@ -32,7 +32,7 @@
  *   - ^FO / ^FT open a field (origin x,y in dots, LH not applied yet); ^FS closes it; a field still open when the next ^FO / ^FT arrives is
  *     closed there (one warning per label: the guide shows the ^FS in every field), and one still open at ^XZ or at the end of the text is
  *     closed silently (the guide: ^XZ "ends the field data").
- *   - ^FD, ^FV, ^FH, ^FR, ^FN, ^FP, ^SN are field MODIFIERS: they are stored in the field (field.data, field.reverse) and never dispatched.
+ *   - ^FD, ^FV, ^FH, ^FR, ^FN, ^FP, ^SN, ^SF are field MODIFIERS: they are stored in the field (field.data, field.reverse, field.fn, field.serial) and never dispatched.
  *   - the setup commands (^PW ^LL ^LH ^LS ^LT ^PO ^CF ^FW ^CI ^BY and the recognised-but-not-drawn configuration ones) are IMMEDIATE: they run when they
  *     are read, inside an open field too, so the state the handler sees at ^FS is the state after all of them (the guide's ^CF inside a field
  *     example relies on it). A slice may declare an immediate handler too (`immediate: true`: ^LR, in js/components/area/zpl.js).
@@ -51,6 +51,24 @@
  *     height or width is "proportional to the other"), by { module, ratio, height } (^BY; 2, 3, 10: the 2003 guide gives the initial module and height only, the ratio 3.0
  *     is assumed; read through byValues(), which the barcode slice's editing shares), charset (^CI), invert (^PO: the label orientation I), labelReverse (^LRY / ^LRN: every field OPENED while it is on gets field.reverse, like an ^FR of its own,
  *     and field.labelReverse; the slices that keep a native record native.labelReverse; the emitters never write ^LR).
+ *
+ * ---- Counters (^SN) and variables (^FN), Z7 ----------------------------------------------------------------------------------------
+ * ^SNv,n,z replaces ^FD (guide): v = the starting value (default 1; 12 digits maximum for the portion to be indexed), n = the increment (default 1,
+ * a minus sign decrements, 12 digits maximum), z = print the leading zeros Y / N (default N: they are replaced by spaces, the last zero of an
+ * all-zero number is not suppressed). The driver turns it into the same field as a ^FD one with the start value as its data (field.data.kind
+ * 'SN') and, after the slice handler ran, gives the text and bar code items item.counter = { step, native: { n, z } } (step 0 = none, like TPCL)
+ * and item.zeroSuppress = 1 for z = N (TPCL's Zpp keeps that many characters: 1 keeps the last digit, the neutral preview helper then draws
+ * exactly what the guide says for a numeric start value; for a mixed text the guide scans the right-most digits, which the viewer does not
+ * model: not verified). QR and Data Matrix read the start value as data and report once that the counter is not modelled for 2D codes. ^SF (the
+ * mask form of the serialization) is read as its plain ^FD with one warning: no counter, the mask and the increment string are not modelled.
+ * Not in the guide: what n = 0 does, the suppression of a mixed text, ^SN on 2D codes, ^SN with ^FN.
+ * ^FNn (0..9999, default 0; the quoted prompt ^FNn"prompt" is of later guides, read, not verified) numbers a field of a stored format (^DF) whose data
+ * ^XF merges. The driver makes it the app's variable <#FNn#>: the field's data is the placeholder (so the Variables panel and "Valores de prueba"
+ * list FNn and the preview substitutes it), the ^FD data of the field, when it has one, is the DEFAULT value (the guide: "the data in that field
+ * prints for any other field containing the same ^FN value": ctx.variableDefaults, handed to the app as model.variableDefaults, which seeds the
+ * test values that have none yet), and the item keeps native.fn = { n, prompt, default } so the emitters write ^FNn[prompt][^FDdefault] back. The
+ * 2D codes keep their ^FD data (one info). ^DF is ignored with one info (the template is drawn as a normal label); ^XF is reported once (stored
+ * template not available) and, after it, an ^FN field without a position is data for the missing template: it is not drawn, its data stays a default.
  *
  * ---- Formats ---------------------------------------------------------------------------------------------------------------------
  * A file may hold several ^XA .. ^XZ formats. The viewer draws the FIRST one (commands before the first ^XA are printer state and apply) and
@@ -94,7 +112,12 @@
   const REVERSIBLE = new Set(['text', 'line', 'ellipse', 'area']);
 
   /** Commands that only complete a field (never its main command). */
-  const MODIFIERS = new Set(['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^FS', '^FX', '^SN']);
+  const MODIFIERS = new Set(['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^FS', '^FX', '^SN', '^SF']);
+
+  /** ^FN numbers (guide: 0 to 9999) and the commands whose data carries a structure the variable placeholder would break (QR, Data Matrix). */
+  const FN_MAX = 9999;
+  const NO_VARIABLE = /^\^(BQ|BX)$/;
+  const COUNTER_NOTE = 'Los campos con incremento muestran su valor inicial: la impresora los incrementa en cada etiqueta';
 
   // ---------------------------------------------------------------------------------------------------------------
   // Tokenizer
@@ -261,6 +284,45 @@
     return `${hex ? '^FH' : ''}^${tag}${text}`;
   }
 
+  /**
+   * The data commands of a text or bar code field (the part between the symbology / font command and ^FS), for an item whose data is `data`
+   * (the item's by default; a slice passes the data as the symbology writes it):
+   *   - an item that came from an ^FN field (native.fn) and still has the variable <#FNn#> as its data: ^FNn["prompt"][^FDdefault], so a ZPL file
+   *     round-trips exactly; any other placeholder (#NAME#, <#NAME#>, of the palette or of TPCL / TSPL) is written as literal data with one info;
+   *   - a counter: ^SNstart,step,z with z = N when the item has zero suppression (all of the leading zeros: one info when it keeps more than one
+   *     character) and Y when it does not. What ^SN cannot carry (see serializable in zpl-edit.js) is written as a plain ^FD with one warning; a
+   *     step beyond the 12 digits of the guide is clamped (warning), a start value with more than 12 digits is written (the guide indexes the 12
+   *     right-most; info);
+   *   - anything else: ^FD (or ^FH^FD when the data needs the hex escapes). A zero suppression without a counter has no ZPL form (info).
+   */
+  function dataCommands(ctx, item, data = item.data) {
+    const text = data == null ? '' : String(data);
+    const fn = item.native && item.native.fn;
+    if (fn && item.data === `<#FN${fn.n}#>`) {
+      return `^FN${fn.n}${typeof fn.prompt === 'string' ? `"${fn.prompt}"` : ''}${fn.default === undefined ? '' : fieldData(ctx, fn.default)}`;
+    }
+    if (PB.variables.namesIn(text).length) {
+      ctx.once('zpl-variables', () => diag.info('Las variables #NOMBRE# se escriben como texto literal en ZPL (solo los campos ^FN de un archivo ZPL se escriben como variables)'));
+    }
+    const c = item.counter;
+    let step = c && Number.isFinite(c.step) ? Math.trunc(c.step) : 0;
+    if (step === 0) {
+      if (item.zeroSuppress > 0) ctx.once('zpl-zero-bare', () => diag.info('Hay campos con supresión de ceros iniciales sin contador: ZPL solo la tiene en ^SN, se escriben sin ella'));
+      return fieldData(ctx, text);
+    }
+    if (!zplEdit.serializable(text)) {
+      ctx.once('zpl-counter-start', () => diag.warning('Hay contadores cuyo valor inicial no se puede escribir con ^SN (necesita un dígito, sin comas, ^ ni ~, ni espacios en los extremos, ni variables): se escriben como texto fijo con el valor inicial'));
+      return fieldData(ctx, text);
+    }
+    if (Math.abs(step) > zplEdit.SERIAL_MAX) {
+      ctx.once('zpl-counter-step', () => diag.warning(`Hay incrementos fuera de ±${zplEdit.SERIAL_MAX} (los 12 dígitos de ^SN): se ajustan al límite`));
+      step = Math.sign(step) * zplEdit.SERIAL_MAX;
+    }
+    if (/\d{13}/.test(text)) ctx.once('zpl-counter-digits', () => diag.info('Hay contadores con más de 12 dígitos seguidos: ^SN solo incrementa los 12 de la derecha'));
+    if (item.zeroSuppress > 1) ctx.once('zpl-zero-count', () => diag.info('La supresión de ceros de ZPL (z = N) quita todos los ceros iniciales: se pierde el número de caracteres que se conservan'));
+    return `^SN${text},${step},${item.zeroSuppress > 0 ? 'N' : 'Y'}`;
+  }
+
   /** ^FOx,y / ^FTx,y for a position in 0.1 mm (never below 0). */
   const fo = (ctx, x, y) => `^FO${toDots(ctx, x)},${toDots(ctx, y)}`;
   const ft = (ctx, x, y) => `^FT${toDots(ctx, x)},${toDots(ctx, y)}`;
@@ -305,12 +367,12 @@
   const SLICE_HELPERS = Object.freeze({
     commands, byValues, isImmediate: id => Boolean(handlerFor(id, true)), argEdit: zplEdit.argEdit,
     sourceOf, argValue, num, int, ROTATIONS, ORIENTATIONS, rotationOf, orientationOf,
-    roundDots, exactDots, toDots, safeData, fieldData, fo, ft,
+    roundDots, exactDots, toDots, safeData, fieldData, dataCommands, fo, ft,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     encodeData: zplEdit.encodeData, decodeData: zplEdit.decodeData,
     numberField: zplEdit.numberField, selectField: zplEdit.selectField, stringSelectField: zplEdit.stringSelectField,
     checkboxField: zplEdit.checkboxField, textField: zplEdit.textField, contentField: zplEdit.contentField, paramField: zplEdit.paramField,
-    reverseField: zplEdit.reverseField, setArgs: zplEdit.setArgs, flagEdits: zplEdit.flagEdits,
+    reverseField: zplEdit.reverseField, setArgs: zplEdit.setArgs, flagEdits: zplEdit.flagEdits, serialFields: zplEdit.serialFields,
   });
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -331,6 +393,7 @@
         const w = int(cmd.args[0]);
         if (w === null || w < 2 || w > 32000) { invalid(ctx, '^PW', cmd); return; }
         ctx.model.size.width = toTenthMm(w, ctx.dot);
+        ctx.model.size.tolerance = ctx.dot;
         ctx.model.size.native.pw = w;
         ctx.model.size.native.pwRaw = cmd.raw;
       },
@@ -343,6 +406,7 @@
         const l = int(cmd.args[0]);
         if (l === null || l < 1 || l > 32000) { invalid(ctx, '^LL', cmd); return; }
         ctx.model.size.height = toTenthMm(l, ctx.dot);
+        ctx.model.size.tolerance = ctx.dot;
         ctx.model.size.native.ll = l;
         ctx.model.size.native.llRaw = cmd.raw;
       },
@@ -424,6 +488,23 @@
       handle() {},
     },
     {
+      // ^DFd:o.x: stores the format as a template for ^XF (the viewer does not store anything: the template is drawn as a normal label)
+      pattern: /^\^DF$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        ctx.once('zpl-df', () => diag.info('^DF guarda este formato como plantilla para ^XF (sus campos ^FN se rellenan al recuperarla): el visor lo dibuja como una etiqueta normal, sin guardarlo'));
+      },
+    },
+    {
+      // ^XFd:o.x: recalls a stored template; the template lives on the printer, so it is not available here (see the header)
+      pattern: /^\^XF$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        ctx.recalled = true;
+        ctx.once('zpl-xf', () => diag.warning('^XF recupera una plantilla almacenada en la impresora (^DF): plantilla almacenada no disponible, los campos ^FN sin posición se toman como datos de esa plantilla y no se dibujan'));
+      },
+    },
+    {
       // Printer configuration: recognised, not drawn (one info per label lists them)
       pattern: new RegExp(`^[\\^~](?:${CONFIG_NAMES.join('|')})$`),
       immediate: true,
@@ -454,6 +535,9 @@
       invert: false,
       /** ^LR: true after ^LRY until ^LRN. Every field OPENED while it is on is reversed (see dispatch). */
       labelReverse: false,
+      /** ^FN data by variable name (the default test values of the label) and whether an ^XF recall was read (see the header). */
+      variableDefaults: {},
+      recalled: false,
       /** The open field (see the header), and the ids of the configuration commands seen. */
       field: null,
       ignored: new Set(),
@@ -490,7 +574,7 @@
   /** Starts a field; its start offset is the one of its first command. */
   function openField(ctx) {
     const cmds = [];
-    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
+    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, fn: null, serial: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
     return ctx.field;
   }
 
@@ -540,8 +624,8 @@
       main = content.filter(c => !c.unsupported).pop();
       if (!main) return; // only commands the viewer does not know: already reported
       key = main.id;
-    } else if (field.data) {
-      main = field.data.cmd;
+    } else if (field.data || field.fn) {
+      main = field.data ? field.data.cmd : field.fn.cmd;
       key = '^FD';
     } else return; // only an origin: nothing to draw
     const handler = handlerFor(key, false);
@@ -549,13 +633,89 @@
       if (!main.unsupported) ctx.report(diag.warning(`Comando no soportado por el visor: ${brief(main)}`));
       return;
     }
+    const variable = useVariable(ctx, field, key);
+    if (variable && ctx.recalled && !field.origin) return; // data for a template the viewer does not have
     // ^LRY is the same as an ^FR in every field after it (the guide): the handlers only see field.reverse; native.labelReverse (set by the
     // slices that keep a native) tells the editing engines the ^FR is not in the field itself
     if (field.labelReverse) field.reverse = true;
     const before = ctx.model.items.length;
     handler.handle(key.match(handler.pattern), main, ctx, field);
+    const added = ctx.model.items.slice(before);
+    if (variable) {
+      for (const item of added) if (item.data === variable.placeholder) item.native = { ...item.native, fn: { n: variable.n, prompt: variable.prompt, default: variable.default } };
+    } else if (field.serial) applySerial(ctx, field.serial, added);
     if (field.reverse && ctx.model.items.slice(before).some(item => !REVERSIBLE.has(item.kind))) {
       ctx.once('zpl-reverse-unsupported', () => diag.info('^FR / ^LR sobre códigos de barras, QR, Data Matrix o imágenes: el visor los dibuja sin invertir (no verificado en impresora)'));
+    }
+  }
+
+  /**
+   * ^SNv,n,z (see the header): { cmd, step, zeros, native: { n, z } (as written), data } where data is the field data the slices read (the start value).
+   * A parameter that is not valid is reported and takes its default (n 1, z N); an increment over the 12 digits of the guide is clamped.
+   */
+  function readSerial(ctx, cmd) {
+    const [a, b, c] = [0, 1, 2].map(i => cmd.args[i]);
+    const start = a && a.raw !== '' ? a.raw : '1';
+    let step = 1;
+    if (b && b.raw !== '') {
+      const n = int(b);
+      if (n === null) ctx.report(diag.warning(`^SN: incremento "${b.raw}" no válido, se usa 1`));
+      else if (Math.abs(n) > zplEdit.SERIAL_MAX) {
+        ctx.report(diag.warning(`^SN: el incremento ${b.raw} supera los 12 dígitos del comando, se ajusta a ${n < 0 ? '-' : ''}${zplEdit.SERIAL_MAX}`));
+        step = Math.sign(n) * zplEdit.SERIAL_MAX;
+      } else step = n;
+    }
+    const z = c ? c.raw.toUpperCase() : '';
+    if (!['', 'Y', 'N'].includes(z)) ctx.report(diag.warning(`^SN: ceros iniciales "${c.raw}" no válido (Y o N), se usa N`));
+    return {
+      cmd, step, zeros: z === 'Y', native: { n: b ? b.raw : '', z: c ? c.raw : '' },
+      data: { cmd, kind: 'SN', value: start, raw: start, start: a ? a.start : cmd.end, end: a ? a.end : cmd.end, hex: false },
+    };
+  }
+
+  /** ^FNn or ^FNn"prompt": { cmd, n, prompt } (prompt undefined when there is none); null (and a warning) when it is not valid. */
+  function readFn(ctx, cmd) {
+    const m = /^\s*(\d*)\s*(?:"([^"]*)")?\s*$/.exec(cmd.raw.slice(1 + cmd.name.length));
+    const n = m ? (m[1] === '' ? 0 : Number(m[1])) : NaN;
+    if (!m || n > FN_MAX) { invalid(ctx, '^FN', cmd); return null; }
+    return { cmd, n, prompt: m[2] };
+  }
+
+  /**
+   * A field with ^FN: its data becomes the placeholder <#FNn#> and the ^FD data it has is the default value (see the header). Returns
+   * { n, prompt, default, placeholder } or null (no ^FN, an invalid one, or a 2D code, which keeps its own ^FD data).
+   */
+  function useVariable(ctx, field, key) {
+    const fn = field.fn;
+    if (!fn) return null;
+    if (field.data && field.data.kind === 'SN') ctx.once('zpl-fn-sn', () => diag.warning('Hay campos con ^FN y ^SN a la vez: se usa ^FN (la variable) y se ignora el contador'));
+    if (NO_VARIABLE.test(key)) {
+      ctx.once('zpl-fn-2d', () => diag.info('^FN en QR o Data Matrix: no se modela como variable (el dato lleva el prefijo del QR y el símbolo se construye con él): se lee el dato ^FD por defecto'));
+      return null;
+    }
+    const own = field.data && field.data.kind !== 'SN' && field.data.kind !== 'FN' ? field.data : null;
+    const name = `FN${fn.n}`;
+    const placeholder = `<#${name}#>`;
+    const dflt = own ? own.value : undefined;
+    if (dflt !== undefined && !Object.hasOwn(ctx.variableDefaults, name)) ctx.variableDefaults[name] = dflt;
+    ctx.once('zpl-fn', () => diag.info('Los campos ^FN son variables <#FNn#>: se dibujan con su dato ^FD por defecto, que se puede cambiar en Variables'));
+    field.data = { cmd: fn.cmd, kind: 'FN', value: placeholder, raw: placeholder, start: fn.cmd.start, end: fn.cmd.end, hex: false };
+    field.serial = null;
+    return { n: fn.n, prompt: fn.prompt, default: dflt, placeholder };
+  }
+
+  /** The counter of a ^SN field on the items its handler added: text and bar codes get it, the 2D codes are reported (see the header). */
+  function applySerial(ctx, serial, items) {
+    for (const item of items) {
+      if (item.kind === 'text' || item.kind === 'barcode') {
+        if (serial.step !== 0) {
+          item.counter = { step: serial.step, native: serial.native };
+          ctx.once('zpl-counter', () => diag.info(COUNTER_NOTE));
+        }
+        if (!serial.zeros) item.zeroSuppress = 1;
+      } else if (item.kind === 'qr' || item.kind === 'datamatrix') {
+        ctx.once('zpl-counter-2d', () => diag.info('^SN en QR o Data Matrix: se lee el valor inicial como dato, el contador no se modela para códigos 2D'));
+      }
     }
   }
 
@@ -570,7 +730,12 @@
     if (MODIFIERS.has(id)) {
       const field = addToField(ctx, cmd);
       if (id === '^FR') field.reverse = true;
-      else if (cmd.data) field.data = { cmd, kind: cmd.name, value: cmd.args[0].value, raw: cmd.args[0].raw, start: cmd.args[0].start, end: cmd.args[0].end, hex: !!cmd.hex };
+      else if (cmd.data) {
+        field.data = { cmd, kind: cmd.name, value: cmd.args[0].value, raw: cmd.args[0].raw, start: cmd.args[0].start, end: cmd.args[0].end, hex: !!cmd.hex };
+        field.serial = null;
+      } else if (id === '^FN') field.fn = readFn(ctx, cmd);
+      else if (id === '^SN') { field.serial = readSerial(ctx, cmd); field.data = field.serial.data; }
+      else if (id === '^SF') ctx.once('zpl-sf', () => diag.warning('^SF (formato de serialización con máscara) no se modela: el campo se dibuja con el dato ^FD tal como está y sin contador'));
       return;
     }
     if (!handlerFor(id, false)) {
@@ -598,6 +763,7 @@
     }
     if (!done) closeField(ctx);
     if (formats > 1) ctx.report(diag.info(`El archivo tiene ${formats} formatos (^XA ... ^XZ): el visor muestra solo el primero`));
+    if (Object.keys(ctx.variableDefaults).length) model.variableDefaults = ctx.variableDefaults;
     if (ctx.ignored.size) ctx.report(diag.info(`Comandos de configuración de la impresora sin efecto en el visor: ${[...ctx.ignored].join(', ')}`));
     return { model, ctx };
   }
@@ -641,6 +807,14 @@
     if (width) out.push(`^PW${Math.max(1, roundDots(exactDots(ctx, size.width)))}`);
     if (height) out.push(`^LL${Math.max(1, roundDots(exactDots(ctx, size.height)))}`);
     if (!width || !height) ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe ^PW / ^LL, indique el tamaño antes de exportar'));
+    // ^POI (printed rotated 180 degrees) is written back as it was read; a TSPL DIRECTION 0 has no ZPL counterpart here and is reported
+    const native = size.native || {};
+    if (native.invert === true) out.push('^POI');
+    else if (native.direction === 0) ctx.report(diag.info('La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora'));
+    // ZPL declares the width and the length only (^LS and ^LT are offsets): the TPCL pitch and the TSPL gap have nowhere to go
+    if (Number.isFinite(size.pitch) || Number.isFinite(size.gap)) {
+      ctx.report(diag.info('El paso de etiqueta (pitch de TPCL) o la separación entre etiquetas (GAP de TSPL) no se escriben: ZPL solo declara el ancho y el largo (^PW y ^LL), compruebe el ajuste en su impresora'));
+    }
     return out;
   }
 

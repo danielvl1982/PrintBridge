@@ -363,7 +363,7 @@
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
       ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, wrap, safeData, coordText, allocId,
-      COUNTER_MAX, ZERO_MAX, counterToken, zeroDigits, readCounterStep, counterFields,
+      COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
     } = helpers;
 
     /** { counter?, zeroSuppress? } of the optional parameters between the attribute and the data (see counterFields). */
@@ -374,7 +374,7 @@
     }
 
     /** Increment and zero suppression tokens of an item (with their commas), empty without them. */
-    const counterText = item => (item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0 ? `,${counterToken(item.counter.step)}` : '');
+    const counterText = (item, ctx) => (item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0 ? `,${emitCounterToken(ctx, item.counter.step)}` : '');
     const zeroText = item => (item.zeroSuppress > 0 ? `,Z${zeroDigits(item.zeroSuppress)}` : '');
 
     /**
@@ -454,11 +454,12 @@
       const data = safeData(ctx, item.data);
       const choice = bitmapChoice({ ...font, size, scaleX });
       const attribute = attributeText(item.attribute, ctx);
+      if (item.reverse) ctx.once('tpcl-text-reverse', () => diag.warning('Hay textos con impresión inversa (^FR de ZPL): TPCL no la tiene en el texto (su atributo de fondo negro es otra cosa), se escriben normales'));
       const align = item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignToken(item.align.kind, item.align.width) : '';
       if (choice) {
         const id = allocId(ctx, 'PC');
         const mag = n => String(n).padStart(2, '0');
-        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item)}${zeroText(item)}${align}`), wrap(`RC${id};${data}`)];
+        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RC${id};${data}`)];
       }
       if (item.bold) ctx.once('tpcl-bold-pv', () => diag.info('Hay textos en negrita (J) que se escriben con la fuente vectorial (PV), que no tiene ese parámetro: se escriben sin negrita'));
       // The outline font is always drawn sans bold: any other family, weight or style is lost
@@ -467,7 +468,7 @@
       }
       const id = allocId(ctx, 'PV');
       const dim = n => pad4(Math.max(1, clampCoord(n)));
-      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${counterText(item)}${zeroText(item)}${align}`), wrap(`RV${id};${data}`)];
+      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RV${id};${data}`)];
     }
 
     function textRotation(ctx, ref, rotationCode) {

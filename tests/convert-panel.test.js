@@ -262,3 +262,140 @@ test('Descargar uses the default name without a source name and the target of th
     await tick();
   });
 });
+
+// ---- Z8: three targets (TPCL, TSPL, ZPL) and a source detected in each of them
+
+const ZPL_EXAMPLE = PB.examples.find(e => e.id === 'zpl-label-100x60');
+const NAMES = { tpcl: 'TPCL (Toshiba TEC)', tspl: 'TSPL (TSC TTP)', zpl: 'ZPL (Zebra)' };
+const SOURCES = [['tpcl', SPOOL.source], ['tspl', TSPL_EXAMPLE.source], ['zpl', ZPL_EXAMPLE.source]];
+
+test('the target select lists TPCL, TSPL and ZPL', async () => {
+  await withPanel({}, ({ els }) => {
+    assert.deepEqual(els.select.children.map(o => [o.value, o.textContent]), [['tpcl', NAMES.tpcl], ['tspl', NAMES.tspl], ['zpl', NAMES.zpl]]);
+  });
+});
+
+test('every source language converts to every target, itself included, with the summary naming both', async () => {
+  for (const [from, source] of SOURCES) {
+    for (const target of Object.keys(NAMES)) {
+      await withPanel({ text: source }, async ({ els }) => {
+        els.select.value = target;
+        await els.convert.fire('click');
+        const expected = PB.convert.run(source, target, { dpi: 203 });
+        assert.equal(expected.source, from);
+        assert.equal(els.summary.textContent, `Convertido de ${NAMES[from]} a ${NAMES[target]}`);
+        assert.equal(els.output.value, expected.text, `${from} -> ${target}`);
+        assert.deepEqual(texts(els.diagnostics), PB.diagnostics.sort(expected.diagnostics.length ? expected.diagnostics : [PB.diagnostics.info('Sin avisos de conversión')]).map(d => d.text));
+        assert.equal(els.copy.disabled, false);
+        assert.equal(els.download.disabled, false);
+      });
+    }
+  }
+});
+
+test('a label converted to its own language is written again by that language (nothing special, nothing lost)', async () => {
+  await withPanel({ text: ZPL_EXAMPLE.source }, async ({ els }) => {
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    const model = PB.languages.get('zpl').parse(els.output.value, { dpi: 203 });
+    const original = PB.languages.get('zpl').parse(ZPL_EXAMPLE.source, { dpi: 203 });
+    assert.deepEqual(model.items.map(i => [i.kind, i.data]), original.items.map(i => [i.kind, i.data]));
+  });
+});
+
+test('ZPL -> TPCL and TSPL -> ZPL use the dpi given by the app', async () => {
+  await withPanel({ text: ZPL_EXAMPLE.source }, async ({ els, state }) => {
+    state.dpi = 300;
+    els.select.value = 'tpcl';
+    await els.convert.fire('click');
+    assert.equal(els.output.value, PB.convert.run(ZPL_EXAMPLE.source, 'tpcl', { dpi: 300 }).text);
+    assert.notEqual(els.output.value, PB.convert.run(ZPL_EXAMPLE.source, 'tpcl', { dpi: 203 }).text);
+  });
+  await withPanel({ text: TSPL_EXAMPLE.source }, async ({ els, state }) => {
+    state.dpi = 300;
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    assert.match(els.output.value, /\^PW1181\r\n\^LL709/);
+  });
+});
+
+test('Descargar writes a .zpl file with the UTF-8 bytes of the text (no BOM, accents kept), named after the source', async () => {
+  const text = '{D0610,0990,0550|}\n{PC001;0100,0100,05,05,J,00,B=Niño café|}\n{XS;I,0001,0002C4100|}';
+  await withPanel({ text, name: 'etiquetas/bobina 99.ter' }, async ({ els, dom }) => {
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    assert.match(els.output.value, /Niño café/);
+    await els.download.fire('click');
+    const bytes = new Uint8Array(await dom.blobs[0].arrayBuffer());
+    assert.deepEqual(Array.from(bytes), Array.from(new TextEncoder().encode(els.output.value)));
+    assert.notDeepEqual(Array.from(bytes.subarray(0, 3)), [0xEF, 0xBB, 0xBF], 'no byte order mark');
+    assert.ok(bytes.includes(0xC3), 'ñ is two UTF-8 bytes, not latin1');
+    assert.equal(dom.anchors[0].download, 'bobina 99.zpl');
+    await tick();
+  });
+  await withPanel({ text: TSPL_EXAMPLE.source }, async ({ els, dom }) => {
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    await els.download.fire('click');
+    assert.equal(dom.anchors[0].download, 'etiqueta.zpl');
+    await tick();
+  });
+});
+
+test('the binary note never appears for ZPL: an image is ASCII hexadecimal (^GFA) and Copiar is safe', async () => {
+  for (const source of [tpclWithImage(), PB.convert.run(tpclWithImage(), 'tspl', { dpi: 203 }).text]) {
+    await withPanel({ text: source }, async ({ els, dom }) => {
+      dom.setClipboard(async () => {});
+      els.select.value = 'zpl';
+      await els.convert.fire('click');
+      assert.match(els.output.value, /\^GFA,/);
+      assert.ok(/^[\t\r\n\u0020-\u007E]*$/.test(els.output.value), 'only printable ASCII, tabs and line breaks');
+      assert.equal(els.note.hidden, true);
+      assert.equal(els.note.textContent, '');
+      await els.copy.fire('click');
+      assert.equal(els.status.textContent, 'Copiado al portapapeles');
+    });
+  }
+  // while a TSPL target of the same image still carries the note
+  await withPanel({ text: tpclWithImage() }, async ({ els }) => {
+    els.select.value = 'tspl';
+    await els.convert.fire('click');
+    assert.equal(els.note.hidden, false);
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    assert.equal(els.note.hidden, true, 'the note goes away with the next conversion');
+  });
+});
+
+test('Copiar writes the exact ZPL output (CRLF kept)', async () => {
+  await withPanel({ text: TSPL_EXAMPLE.source }, async ({ els, dom }) => {
+    const written = [];
+    dom.setClipboard(async text => { written.push(text); });
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    await els.copy.fire('click');
+    assert.deepEqual(written, [PB.convert.run(TSPL_EXAMPLE.source, 'zpl', { dpi: 203 }).text]);
+    assert.ok(written[0].includes('\r\n'));
+  });
+});
+
+test('the label losses are listed: the pitch / gap that ZPL cannot hold, and what the source parser did not read', async () => {
+  await withPanel({}, async ({ els }) => {
+    els.select.value = 'zpl';
+    await els.convert.fire('click');
+    assert.ok(texts(els.diagnostics).some(t => /ZPL solo declara el ancho y el largo/.test(t)));
+  });
+  await withPanel({ text: '^XA\r\n^PW799\r\n^LL480\r\n^FO30,30^A0N,30,30^FDHola^FS\r\n^FB300,3^FDblock^FS\r\n^XZ\r\n' }, async ({ els }) => {
+    els.select.value = 'tspl';
+    await els.convert.fire('click');
+    const unread = els.diagnostics.children.filter(c => c.textContent.startsWith('Origen: '));
+    assert.equal(unread.length, 1);
+    assert.match(unread[0].textContent, /Comando no soportado/);
+    assert.equal(unread[0].className, 'warning');
+  });
+  await withPanel({ text: ZPL_EXAMPLE.source }, async ({ els }) => {
+    els.select.value = 'tspl';
+    await els.convert.fire('click');
+    assert.ok(!texts(els.diagnostics).some(t => t.startsWith('Origen: ')), 'a label the parser read completely adds nothing');
+  });
+});

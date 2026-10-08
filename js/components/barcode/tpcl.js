@@ -88,7 +88,7 @@
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
       ROTATIONS, ROTATION_STEPS, MAX_COORD, DIGITS, wrap, safeData, coordText, allocId,
-      COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, zeroDigits, readCounterStep, counterFields,
+      COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
     } = helpers;
 
     const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
@@ -246,7 +246,7 @@
     function parameters(item, ctx, { rotation, height, readable, module }, keep = {}) {
       const type = keep.type || typeChar(item.symbology, item.addon);
       if (FORM_OF[item.symbology] === 'generic') {
-        const [inc, zero] = [hasCounter(item) ? counterToken(item.counter.step) : '0', item.zeroSuppress > 0 ? zeroDigits(item.zeroSuppress) : '00'];
+        const [inc, zero] = [hasCounter(item) ? emitCounterToken(ctx, item.counter.step) : '0', item.zeroSuppress > 0 ? zeroDigits(item.zeroSuppress) : '00'];
         const check = hasGenericCheck(item.symbology) ? checkCode(ctx, item.symbology, item.check) : (keep.checkDigit ?? '0');
         return `${type},${check},${module},${rotation},${height},${inc},${keep.guard ?? (isWpc(item.symbology) ? guardText(item) : '000')},${readable},${zero}`;
       }
@@ -261,7 +261,7 @@
       const wideSpaceText = item.symbology === NO_WIDE_SPACE ? '00' : wideSpace;
       const check = checkCode(ctx, item.symbology, item.check);
       // The increment sits right after the height (manual: llll(,mnnnnnnnnnn,p,qq)(,r)); a zero suppression is written after the readable flag
-      const inc = hasCounter(item) ? `,${counterToken(item.counter.step)}` : '';
+      const inc = hasCounter(item) ? `,${emitCounterToken(ctx, item.counter.step)}` : '';
       const zero = item.zeroSuppress > 0 ? `,${zeroDigits(item.zeroSuppress)}` : '';
       return `${type},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpaceText},${gap},${rotation},${height}${inc},${readable}${zero}${keep.startStop ? `,${keep.startStop}` : ''}`;
     }
