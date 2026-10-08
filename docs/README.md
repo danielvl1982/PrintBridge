@@ -21,6 +21,12 @@ The vendor manuals are **not** in the repository: they are copyrighted and the r
 The code follows the *TSC TSPL/TSPL2 Programming Manual v3.0*; if you find it, save it as
 `tspl/TSC_TSPL-TSPL2_programming-manual_v3.0.pdf`.
 
+## `zpl/` (Zebra ZPL II)
+
+| File | Printer / scope | Why it is here |
+|---|---|---|
+| `Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` | Zebra ZPL II, Programming Guide Volume One (English, 428 pages, 2003) | Reference for the ZPL support: label setup (`^XA`, `^PW`, `^LL`, `^LH`), fields (`^FO`, `^FT`, `^FD`, `^FS`), text (`^A`, `^CF`, `^FW`, `^FH`), barcodes (`^B*`), graphics (`^GB`, `^GC`, `^GD`, `^GE`, `^GF`), reverse (`^FR`, `^LR`), counters (`^SN`) and variable fields (`^FN`). |
+
 ## Left out on purpose
 
 Owner's manuals (hardware), the older B-SV4D spec (superseded by the 2004 B-SV4 edition) and a duplicate of the B-452 guide.
