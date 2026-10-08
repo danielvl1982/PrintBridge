@@ -77,7 +77,7 @@
 
   function tspl(helpers) {
     const {
-      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField,
+      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField, textField,
       insertCommand, freePlaceholder, itemRotation, dropDots,
     } = helpers;
 
@@ -215,6 +215,8 @@
           selectField('rotation', 'Rotación', 3, [0, 90, 180, 270], item => item.rotation),
           numberField('xmul', bitmap ? 'Multiplicador X' : 'Tamaño X (pt)', 4, 1, max, item => item.native && item.native.xmul),
           numberField('ymul', bitmap ? 'Multiplicador Y' : 'Tamaño Y (pt)', 5, 1, max, item => item.native && item.native.ymul),
+          // The content is argument 6, or 7 when an alignment argument precedes it; counters are left out
+          textField('content', 'Contenido', cmd => (cmd.args.length >= 8 ? 7 : 6), item => (COUNTER.test(String(item.data)) ? undefined : item.data)),
         ],
       };
     };
@@ -229,7 +231,7 @@
       build,
       // Move: TEXT and BLOCK both start with x,y (arguments 0 and 1, dots); everything else of the command is left alone
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'TEXT' || cmd.name === 'BLOCK', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
-      // Properties: rotation and multipliers of TEXT (font name and content are never touched)
+      // Properties: rotation, multipliers and content of TEXT (the font name is never touched; counters keep their text)
       editable: [textShape(true), textShape(false)],
       handlers: [
         {

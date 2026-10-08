@@ -27,7 +27,7 @@ test('the TSPL slices provide editable definitions for text, barcode, qr and lin
 test('describeItem: TEXT lists rotation and both multipliers with the values of the command', () => {
   const d = describe(doc('TEXT 100,200,"3",90,2,3,"Hello, world"'));
   assert.equal(d.kind, 'text');
-  assert.deepEqual(pairs(d), [['rotation', 90], ['xmul', 2], ['ymul', 3]]);
+  assert.deepEqual(pairs(d), [['rotation', 90], ['xmul', 2], ['ymul', 3], ['content', 'Hello, world']]);
   assert.equal(byKey(d, 'rotation').type, 'select');
   assert.deepEqual(byKey(d, 'rotation').options.map(o => o.value), [0, 90, 180, 270]);
   assert.equal(byKey(d, 'xmul').type, 'number');
@@ -36,12 +36,12 @@ test('describeItem: TEXT lists rotation and both multipliers with the values of 
 });
 
 test('describeItem: TEXT with an alignment argument is described the same way', () => {
-  assert.deepEqual(pairs(describe(doc('TEXT 100,200,"3",180,1,2,2,"Hi"'))), [['rotation', 180], ['xmul', 1], ['ymul', 2]]);
+  assert.deepEqual(pairs(describe(doc('TEXT 100,200,"3",180,1,2,2,"Hi"'))), [['rotation', 180], ['xmul', 1], ['ymul', 2], ['content', 'Hi']]);
 });
 
 test('describeItem: a scalable font (point sizes) allows multipliers above 10', () => {
   const d = describe(doc('TEXT 100,200,"0",0,24,30,"Hi"'));
-  assert.deepEqual(pairs(d), [['rotation', 0], ['xmul', 24], ['ymul', 30]]);
+  assert.deepEqual(pairs(d), [['rotation', 0], ['xmul', 24], ['ymul', 30], ['content', 'Hi']]);
   assert.ok(byKey(d, 'ymul').max > 10);
 });
 
@@ -90,17 +90,17 @@ test('updateItem: CRLF is preserved and no stray CR appears', () => {
 
 test('describeItem: BARCODE lists height, readable, rotation and narrow (wide only for Code 39 / ITF)', () => {
   const code128 = describe(doc('BARCODE 100,200,"128",80,1,0,2,2,"ABC,123"'));
-  assert.deepEqual(pairs(code128), [['height', 80], ['readable', 1], ['rotation', 0], ['narrow', 2]]);
+  assert.deepEqual(pairs(code128), [['height', 80], ['readable', 1], ['rotation', 0], ['narrow', 2], ['content', 'ABC,123']]);
   assert.equal(byKey(code128, 'readable').type, 'select');
   assert.deepEqual(byKey(code128, 'readable').options.map(o => o.value), [0, 1, 2, 3]);
   const code39 = describe(doc('BARCODE 100,200,"39",60,0,90,3,6,"ABC"'));
-  assert.deepEqual(pairs(code39), [['height', 60], ['readable', 0], ['rotation', 90], ['narrow', 3], ['wide', 6]]);
+  assert.deepEqual(pairs(code39), [['height', 60], ['readable', 0], ['rotation', 90], ['narrow', 3], ['wide', 6], ['content', 'ABC']]);
   const itf = describe(doc('BARCODE 100,200,"25",60,0,0,2,5,"1234"'));
   assert.equal(byKey(itf, 'wide').value, 5);
 });
 
 test('describeItem: BARCODE with an alignment argument is described the same way', () => {
-  assert.deepEqual(pairs(describe(doc('BARCODE 100,200,"128",50,2,180,2,2,1,"X"'))), [['height', 50], ['readable', 2], ['rotation', 180], ['narrow', 2]]);
+  assert.deepEqual(pairs(describe(doc('BARCODE 100,200,"128",50,2,180,2,2,1,"X"'))), [['height', 50], ['readable', 2], ['rotation', 180], ['narrow', 2], ['content', 'X']]);
 });
 
 test('updateItem: BARCODE rewrites only the requested arguments; content with commas untouched', () => {
@@ -136,7 +136,7 @@ test('updateItem: BARCODE readable outside the options changes nothing', () => {
 
 test('describeItem: QRCODE lists ECC level, cell width and rotation', () => {
   const d = describe(doc('QRCODE 100,200,Q,5,A,90,"https://x.y/?a=1,2"'));
-  assert.deepEqual(pairs(d), [['ecc', 'Q'], ['cell', 5], ['rotation', 90]]);
+  assert.deepEqual(pairs(d), [['ecc', 'Q'], ['cell', 5], ['rotation', 90], ['content', 'https://x.y/?a=1,2']]);
   assert.equal(byKey(d, 'ecc').type, 'select');
   assert.deepEqual(byKey(d, 'ecc').options.map(o => o.value), ['L', 'M', 'Q', 'H']);
   assert.equal(byKey(d, 'cell').min, 1);
@@ -144,7 +144,7 @@ test('describeItem: QRCODE lists ECC level, cell width and rotation', () => {
 });
 
 test('describeItem: QRCODE skips an ECC level it does not know', () => {
-  assert.deepEqual(pairs(describe(doc('QRCODE 100,200,Z,5,A,0,"x"'))).map(p => p[0]), ['cell', 'rotation']);
+  assert.deepEqual(pairs(describe(doc('QRCODE 100,200,Z,5,A,0,"x"'))).map(p => p[0]), ['cell', 'rotation', 'content']);
 });
 
 test('updateItem: QRCODE rewrites ECC and cell only; mode, extras and content (commas) stay', () => {
@@ -224,6 +224,89 @@ test('updateItem only touches the item it was given, in a multi-item document wi
 
 test('describeItem without text falls back to the item model (kind decides the fields)', () => {
   const model = tspl.parse(doc('TEXT 1,2,"3",90,2,3,"Hi"', 'BAR 1,2,30,4'), { dpi: 203 });
-  assert.deepEqual(pairs(tspl.describeItem(model.items[0], undefined, { dpi: 203 })), [['rotation', 90], ['xmul', 2], ['ymul', 3]]);
+  assert.deepEqual(pairs(tspl.describeItem(model.items[0], undefined, { dpi: 203 })), [['rotation', 90], ['xmul', 2], ['ymul', 3], ['content', 'Hi']]);
   assert.deepEqual(pairs(tspl.describeItem(model.items[1], undefined, { dpi: 203 })), [['width', 30], ['height', 4]]);
+});
+
+// ---- content (text field)
+
+const contentOf = (text, index = 0) => byKey(describe(text, index), 'content');
+
+test('describeItem: TEXT lists its content as a text field (with and without an alignment argument)', () => {
+  const f = contentOf(doc('TEXT 100,200,"3",0,1,1,"Hello, world"'));
+  assert.equal(f.type, 'text');
+  assert.equal(f.label, 'Contenido');
+  assert.equal(f.value, 'Hello, world');
+  assert.equal(contentOf(doc('TEXT 100,200,"3",0,1,1,2,"Aligned"')).value, 'Aligned');
+});
+
+test('describeItem: content is left out for counters, BLOCK, 128M / EAN128 barcodes and manual-mode QR', () => {
+  assert.equal(contentOf(doc('TEXT 100,200,"3",0,1,1,"N"+@1')), undefined);
+  assert.equal(contentOf(doc('BARCODE 100,200,"128",80,1,0,2,2,"N"+@1')), undefined);
+  assert.equal(contentOf(doc('QRCODE 100,200,M,4,A,0,"N"+@1')), undefined);
+  assert.equal(contentOf(doc('BLOCK 100,200,300,150,"3",0,1,1,"Some text"')), undefined);
+  assert.equal(contentOf(doc('BARCODE 100,200,"128M",80,1,0,2,2,"!104AB"')), undefined);
+  assert.equal(contentOf(doc('BARCODE 100,200,"EAN128",80,1,0,2,2,"0012"')), undefined);
+  assert.equal(contentOf(doc('QRCODE 100,200,M,4,M,0,"AHELLO"')), undefined);
+});
+
+test('describeItem: BARCODE and QRCODE list their content (alignment argument included); the other fields keep their order', () => {
+  assert.equal(contentOf(doc('BARCODE 100,200,"128",80,1,0,2,2,"ABC,123"')).value, 'ABC,123');
+  assert.equal(contentOf(doc('BARCODE 100,200,"128",50,2,180,2,2,1,"X"')).value, 'X');
+  assert.equal(contentOf(doc('BARCODE 100,200,"39",60,0,90,3,6,"CODE"')).value, 'CODE');
+  assert.equal(contentOf(doc('QRCODE 100,200,Q,5,A,90,"https://x.y/?a=1,2"')).value, 'https://x.y/?a=1,2');
+  assert.equal(contentOf(doc('QRCODE 100,200,M,4,A,0,M2,S7,"a,b"')).value, 'a,b');
+});
+
+test('describeItem without text: content comes from the item (and is left out for a counter)', () => {
+  const text = doc('TEXT 1,1,"3",0,1,1,"Hi"', 'TEXT 1,1,"3",0,1,1,"N"+@1');
+  assert.equal(byKey(tspl.describeItem(itemOf(text, 0), undefined, { dpi: 203 }), 'content').value, 'Hi');
+  assert.equal(byKey(tspl.describeItem(itemOf(text, 1), undefined, { dpi: 203 }), 'content'), undefined);
+});
+
+test('updateItem: content rewrites only that argument of that command', () => {
+  const text = doc('TEXT 100,200,"3",0,1,1,"Old"', 'TEXT 10,10,"3",0,1,1,"Other"');
+  assert.equal(update(text, { content: 'New one' }, 0), doc('TEXT 100,200,"3",0,1,1,"New one"', 'TEXT 10,10,"3",0,1,1,"Other"'));
+  assert.equal(update(doc('TEXT 100,200,"3",0,1,1,2,"Old"'), { content: 'x' }), doc('TEXT 100,200,"3",0,1,1,2,"x"'));
+  assert.equal(update(doc('BARCODE 100,200,"128",80,1,0,2,2,"Old"'), { content: '12345' }), doc('BARCODE 100,200,"128",80,1,0,2,2,"12345"'));
+  assert.equal(update(doc('BARCODE 100,200,"128",50,2,180,2,2,1,"Old"'), { content: 'Z' }), doc('BARCODE 100,200,"128",50,2,180,2,2,1,"Z"'));
+  assert.equal(update(doc('QRCODE 100,200,M,4,A,0,M2,S7,"Old"'), { content: 'a,b' }), doc('QRCODE 100,200,M,4,A,0,M2,S7,"a,b"'));
+});
+
+test('updateItem: content with quotes, backslashes and commas re-parses to the same string', () => {
+  for (const value of ['say "hi", ok', 'a\\b', 'c:\\dir\\"x"', '\\["]', 'x\\', '\u00f1,;+x ']) {
+    for (const line of ['TEXT 1,2,"3",0,1,1,"Old"', 'BARCODE 1,2,"128",80,1,0,2,2,"Old"', 'QRCODE 1,2,M,4,A,0,"Old"']) {
+      const out = update(doc(line), { content: value });
+      if (value.endsWith('\\')) { assert.equal(out, doc(line), 'a trailing backslash is rejected'); continue; }
+      assert.equal(itemOf(out).data, value,`${line} <- ${value}`);
+    }
+  }
+});
+
+test('updateItem: line breaks become spaces and the command stays on one line', () => {
+  const out = update(doc('TEXT 1,2,"3",0,1,1,"Old"'), { content: 'a\r\nb\nc\rd' });
+  assert.equal(out, doc('TEXT 1,2,"3",0,1,1,"a b c d"'));
+});
+
+test('updateItem: an empty string is allowed for TEXT; a non-string is ignored', () => {
+  const text = doc('TEXT 1,2,"3",0,1,1,"Old"');
+  assert.equal(update(text, { content: '' }), doc('TEXT 1,2,"3",0,1,1,""'));
+  assert.equal(itemOf(update(text, { content: '' })).data, '');
+  assert.equal(update(text, { content: 5 }), text);
+  assert.equal(update(text, { content: null }), text);
+});
+
+test('updateItem: content is ignored for counters, BLOCK, 128M / EAN128 and manual-mode QR (the text is never touched)', () => {
+  for (const line of [
+    'TEXT 1,2,"3",0,1,1,"N"+@1', 'BLOCK 1,2,300,150,"3",0,1,1,"Some text"', 'BARCODE 1,2,"128M",80,1,0,2,2,"!104AB"',
+    'BARCODE 1,2,"EAN128",80,1,0,2,2,"0012"', 'QRCODE 1,2,M,4,M,0,"AHELLO"', 'BARCODE 1,2,"128",80,1,0,2,2,"N"+@1',
+  ]) {
+    const text = doc(line);
+    assert.equal(update(text, { content: 'changed' }), text, line);
+  }
+});
+
+test('updateItem: content and numeric fields can change together', () => {
+  const out = update(doc('TEXT 1,2,"3",0,1,1,"Old"'), { content: 'New', xmul: 3 });
+  assert.equal(out, doc('TEXT 1,2,"3",0,3,1,"New"'));
 });

@@ -132,7 +132,8 @@ Overlays a picture on the preview to check where it would go. Until you insert i
   - **Propiedades panel:** selecting an item shows its editable fields (size, magnification, rotation, module width,
     human-readable text, error-correction level, end point, thickness...; only the values TPCL accepts). Changing a field
     (on leaving it or pressing Intro) rewrites only that field in the code, and **Ctrl+Z** in the code box undoes it. With
-    nothing selected it shows "Selecciona un objeto". Clicking empty space deselects.
+    nothing selected it shows "Selecciona un objeto". Clicking empty space deselects. In TSPL the content of TEXT, BARCODE
+    and QRCODE is editable too (not for counters `@n`, BLOCK, 128M/EAN128 or QR manual mode).
   - **Components panel:** drag a component (text, Code128 barcode, QR, line, box) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.

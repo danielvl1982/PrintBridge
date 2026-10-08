@@ -19,7 +19,7 @@
  *   each field's width kept and numbers clamped to their range; unknown keys, invalid values, items without source or
  *   without editable fields are ignored (unchanged text if nothing changes).
  * describeItem (optional): the fields updateItem accepts for an item, language-agnostic, so the UI can build a panel:
- *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox', value, min, max, step?, options?: [{ value, label }] }] }
+ *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox' | 'text', value, min, max, step?, options?: [{ value, label }] }] }
  *   with the current values (read from the command in text if given, else from the item) and an empty list if none.
  * componentTemplates (optional): the neutral component kinds the palette offers, in order (text, barcode, qr, line, box).
  * buildComponent (optional): the text with a new component of that kind whose top-left corner is at x/y (0.1 mm,

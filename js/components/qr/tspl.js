@@ -71,7 +71,7 @@
 
   function tspl(helpers) {
     const {
-      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField,
+      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField, textField,
       insertCommand, freePlaceholder, dropDots,
     } = helpers;
 
@@ -115,13 +115,17 @@
       build,
       // Move: QRCODE x,y are arguments 0 and 1 (dots)
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'QRCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
-      // Properties: ECC level, cell width and rotation (mode, extra options and content are never touched)
+      // Properties: ECC level, cell width and rotation (mode and extra options are never touched; content only outside manual mode)
       editable: [{
         applies: (item, cmd) => (cmd ? cmd.name === 'QRCODE' : item.ref === 'QRCODE'),
         fields: [
           eccField,
           numberField('cell', 'Celda (puntos)', 3, 1, MAX_CELL, item => item.native && item.native.cell),
           selectField('rotation', 'Rotación', 5, [0, 90, 180, 270], item => item.native && item.native.rotation),
+          // The content is the last argument; in manual mode the parser strips the prefixes, so it is left out there
+          textField('content', 'Contenido', cmd => cmd.args.length - 1,
+            item => (item.native && item.native.mode !== 'M' && !COUNTER.test(String(item.data)) ? item.data : undefined),
+            cmd => !cmd.args[4] || cmd.args[4].value.toUpperCase() !== 'M'),
         ],
       }],
       handlers: [

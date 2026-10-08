@@ -9,9 +9,10 @@
  *     the first entry that applies is used; each field is a coordinate argument in dots, moved with the item.
  *   editable: [{ applies(item, cmd) -> bool, fields: [field] }] (describeItem without text calls applies(item, undefined):
  *     decide by item.kind then), field =
- *     { key, label, type: 'number' | 'select', arg, min?, max?, step?, options?: [{ value, label }],
- *       read(arg) -> value | undefined, write(value) -> new raw text | null, model?(item, { dpi }) -> value }
- *     numberField() and selectField() build the usual ones.
+ *     { key, label, type: 'number' | 'select' | 'text', arg, min?, max?, step?, options?: [{ value, label }],
+ *       read(arg, cmd) -> value | undefined, write(value) -> new raw text | null, model?(item, { dpi }) -> value }
+ *     arg is an argument index, or a function (cmd) -> index when the position depends on the optional arguments.
+ *     numberField(), selectField() and textField() build the usual ones.
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so quoted strings (commas inside), counters
  * (@1), BLOCK content, BITMAP bytes and every other line stay byte for byte. An argument that is not a plain number is
@@ -48,6 +49,32 @@
       write: v => (list.some(o => o.value === v) ? String(v) : null),
     };
   }
+
+  /** Counter/variable content: "@1", "x"+@1+"y". */
+  const COUNTER = /(?:^|\+)\s*@\d+/;
+  const QUOTE_ESCAPES = /\\\["\]|\\"/g;
+
+  /** True when raw is exactly one quoted string (no concatenation, no stray quote). */
+  const isQuotedString = raw => raw.length >= 2 && raw[0] === '"' && raw.endsWith('"') && !raw.endsWith('\\"')
+    && !raw.slice(1, -1).replace(QUOTE_ESCAPES, '').includes('"');
+
+  /**
+   * Quoted string argument (the content of a command). Only a single quoted string that is not a counter is read;
+   * usable(cmd) can rule a command out (e.g. a barcode type whose data the parser rewrites). write() keeps the quoting
+   * of the emitters (PB.emit.escapeQuotes), turns line breaks into spaces and ignores a non-string and a trailing
+   * backslash (it would escape the closing quote). model(item) gives the value when there is no text (undefined leaves
+   * the field out).
+   */
+  function textField(key, label, arg, model, usable) {
+    return {
+      key, label, type: 'text', arg, model,
+      read: (a, cmd) => (isQuotedString(a.raw) && !COUNTER.test(a.raw) && (!usable || usable(cmd)) ? a.value : undefined),
+      write: v => (typeof v === 'string' && !v.endsWith('\\') ? `"${PB.emit.escapeQuotes(v.replace(/\r\n|\r|\n/g, ' '))}"` : null),
+    };
+  }
+
+  /** Argument of a command that a field addresses. */
+  const argOf = (field, cmd) => cmd.args[typeof field.arg === 'function' ? field.arg(cmd) : field.arg];
 
   /** Replaces [start, end) ranges of text with values; ranges must not overlap. */
   function applyEdits(text, edits) {
@@ -144,7 +171,8 @@
       const fields = [];
       for (const f of shape.fields) {
         let value;
-        if (found) value = found.cmd.args[f.arg] ? f.read(found.cmd.args[f.arg]) : undefined;
+        const a = found && argOf(f, found.cmd);
+        if (found) value = a ? f.read(a, found.cmd) : undefined;
         else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
         const { key, label, type, min, max, step, options } = f;
@@ -160,8 +188,8 @@
       if (!shape) return text;
       const edits = [];
       for (const f of shape.fields) {
-        const a = found.cmd.args[f.arg];
-        if (!Object.hasOwn(changes, f.key) || !a || f.read(a) === undefined) continue;
+        const a = argOf(f, found.cmd);
+        if (!Object.hasOwn(changes, f.key) || !a || f.read(a, found.cmd) === undefined) continue;
         const value = f.write(changes[f.key]);
         if (value !== null && value !== a.raw) edits.push({ start: a.start, end: a.end, value });
       }
@@ -171,5 +199,5 @@
     return { moveItem, describeItem, updateItem };
   }
 
-  PB.tsplEdit = Object.freeze({ createTsplEditing, dropDots, numberField, selectField });
+  PB.tsplEdit = Object.freeze({ createTsplEditing, dropDots, numberField, selectField, textField });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
