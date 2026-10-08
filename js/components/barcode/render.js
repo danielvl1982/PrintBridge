@@ -117,14 +117,29 @@
     return widths;
   }
 
+  /** Bars of an item for its (already substituted) data: { rects, total, exact, readable, ... } by the family of its symbology. */
+  function barsOf(item, data) {
+    const encoder = WIDE_NARROW_ENCODERS[item.symbology];
+    return Object.hasOwn(ean.NAMES, item.symbology)
+      ? eanBars(item, ean.encode(item.symbology, data, { check: item.check, addon: item.addon }))
+      : encoder ? wideNarrowBars(item, encoder.encode(data, { check: item.check })) : moduleBars(item, data);
+  }
+
+  /**
+   * Length in 0.1 mm of the bars an item draws along its reading direction (the human-readable text is not counted); 0 when nothing can be
+   * drawn (content that cannot be encoded). Variables are not substituted: the length of the data as written. ZPL uses it to place rotated
+   * barcodes, whose origin is a corner of the field box and not the anchor the renderer rotates around.
+   */
+  function measure(item) {
+    const bars = barsOf({ ...item, x: 0, y: 0 }, String(item.data ?? ''));
+    return bars.rects.length ? bars.total : 0;
+  }
+
   /** ctx comes from drawing.js: { n } rounds to 2 decimals, { esc } escapes markup, { rectsPath } joins rectangles, { value } substitutes variables. */
   function render(item, ctx) {
     const { n, esc, rectsPath } = ctx;
     const data = ctx.value(item.data);
-    const encoder = WIDE_NARROW_ENCODERS[item.symbology];
-    const bars = Object.hasOwn(ean.NAMES, item.symbology)
-      ? eanBars(item, ean.encode(item.symbology, data, { check: item.check, addon: item.addon }))
-      : encoder ? wideNarrowBars(item, encoder.encode(data, { check: item.check })) : moduleBars(item, data);
+    const bars = barsOf(item, data);
     const { rects, total, exact } = bars;
     let text = '';
     if (bars.texts) {
@@ -149,4 +164,5 @@
   }
 
   PB.slices.barcode.render = render;
+  PB.slices.barcode.measure = measure;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

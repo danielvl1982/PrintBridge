@@ -21,9 +21,9 @@ const near = (a, b, tol, label) => assert.ok(Math.abs(a - b) <= tol + 1e-6, `${l
 // ---------------------------------------------------------------------------------------------------------------
 // Parse: fonts, origin, orientation
 
-test('the text slice registers a zpl factory next to tpcl and tspl, and ZPL offers the Texto palette entry', () => {
+test('the text slice registers a zpl factory next to tpcl and tspl, and ZPL offers the Texto palette entry (first)', () => {
   assert.deepEqual(Object.keys(PB.components.get('text').languages), ['tpcl', 'tspl', 'zpl']);
-  assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]), [['text', 'Texto']]);
+  assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]).slice(0, 1), [['text', 'Texto']]);
 });
 
 test('^FO is the top-left of the text box: the neutral origin is the baseline, one ascent (0.8 of the height) below it', () => {

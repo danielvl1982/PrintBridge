@@ -2,6 +2,8 @@
  * Barcode slice: Interleaved 2 of 5 (ITF) encoder (wide/narrow symbology), published as PB.itf.
  * encode(data, { check }) returns { elements, text, characters, warnings } like PB.code39 (see code39.js): elements are
  * alternating bars and spaces, starting with a bar, as { bar, wide }; if the data cannot be encoded, elements is [].
+ * check: 'none' (default) | 'auto' (the modulus 10 check digit is attached before the pair padding; ZPL ^B2 e = Y, "Mod 10 check digit") |
+ * 'unsupported' (an option the viewer does not know: drawn without it and reported).
  */
 (function (PB) {
   'use strict';
@@ -18,12 +20,16 @@
   const ITF_START = 'nnnn';
   const ITF_STOP = 'wnn';
 
+  /** Modulus 10 check digit of the digits without it: the rightmost weighs 3, then 1, 3, 1... (the one of EAN and ITF-14). */
+  const mod10 = digits => String((10 - ([...digits].reverse().reduce((sum, d, i) => sum + Number(d) * (i % 2 === 0 ? 3 : 1), 0) % 10)) % 10);
+
   function encodeItf(data, { check = 'none' } = {}) {
     let text = String(data);
     if (!/^\d*$/.test(text)) {
       return { elements: [], text, characters: 0, warnings: ['ITF: solo admite dígitos, no se dibuja'] };
     }
     const warnings = check === 'unsupported' ? [`ITF: ${UNSUPPORTED_CHECK}`] : [];
+    if (check === 'auto') text += mod10(text);
     if (text.length % 2) {
       // Unverified printer behavior (research gap): the viewer assumes a leading 0, as is usual for ITF
       text = '0' + text;

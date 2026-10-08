@@ -48,7 +48,8 @@
  *     applied; sourceOf(field) -> item.source covering the whole field.
  *   - ctx: model, dot, dpi, report, once(key, fn), addItem, len(dots), pos(xDots, yDots) -> { x, y } in 0.1 mm, origin(field), sourceOf, and the
  *     printer state: lh { x, y }, ls, lt, orientation (^FW, 'N' at power-up), font { name, height, width } (^CF; A,9,5 at power-up; a null
- *     height or width is "proportional to the other"), by { module, ratio, height } (^BY; 2, 3, 10), charset (^CI), invert (^PO).
+ *     height or width is "proportional to the other"), by { module, ratio, height } (^BY; 2, 3, 10: the 2003 guide gives the initial module and height only, the ratio 3.0
+ *     is assumed; read through byValues(), which the barcode slice's editing shares), charset (^CI), invert (^PO).
  *
  * ---- Formats ---------------------------------------------------------------------------------------------------------------------
  * A file may hold several ^XA .. ^XZ formats. The viewer draws the FIRST one (commands before the first ^XA are printer state and apply) and
@@ -284,8 +285,21 @@
   /** Length in 0.1 mm of a new component -> whole dots at the build options' resolution (at least 1). */
   const lengthDots = (options, mm10) => Math.max(1, toDots({ dpi: optionDpi(options) }, mm10));
 
+  /**
+   * The valid values a ^BY command gives: { module, ratio, height } (undefined when the argument is absent, empty or out of range: module 1..10,
+   * ratio 2.0..3.0, height 1 or more) and `invalid` (it has arguments and none is usable). The persistent state and the barcode editing of
+   * js/components/barcode/zpl.js read ^BY through this one function.
+   */
+  function byValues(cmd) {
+    const [w, r, h] = [int(cmd.args[0]), num(cmd.args[1]), int(cmd.args[2])];
+    const out = { module: w !== null && w >= 1 && w <= 10 ? w : undefined, ratio: r !== null && r >= 2 && r <= 3 ? r : undefined, height: h !== null && h >= 1 ? h : undefined };
+    out.invalid = cmd.args.some(a => a.raw !== '') && out.module === undefined && out.ratio === undefined && out.height === undefined;
+    return out;
+  }
+
   /** Helpers the slices' ZPL hooks share with this file. Passed once to each slice's `languages.zpl` factory. */
   const SLICE_HELPERS = Object.freeze({
+    commands, byValues, isImmediate: id => Boolean(handlerFor(id, true)), argEdit: zplEdit.argEdit,
     sourceOf, argValue, num, int, ROTATIONS, ORIENTATIONS, rotationOf, orientationOf,
     roundDots, exactDots, toDots, safeData, fieldData, fo, ft,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
@@ -393,10 +407,9 @@
       pattern: /^\^BY$/,
       immediate: true,
       handle(m, cmd, ctx) {
-        const [w, r, h] = [int(cmd.args[0]), num(cmd.args[1]), int(cmd.args[2])];
-        const ok = { w: w !== null && w >= 1 && w <= 10, r: r !== null && r >= 2 && r <= 3, h: h !== null && h >= 1 };
-        if (cmd.args.some(a => a.raw !== '') && !ok.w && !ok.r && !ok.h) { invalid(ctx, '^BY', cmd); return; }
-        ctx.by = { module: ok.w ? w : ctx.by.module, ratio: ok.r ? r : ctx.by.ratio, height: ok.h ? h : ctx.by.height };
+        const v = byValues(cmd);
+        if (v.invalid) { invalid(ctx, '^BY', cmd); return; }
+        ctx.by = { module: v.module ?? ctx.by.module, ratio: v.ratio ?? ctx.by.ratio, height: v.height ?? ctx.by.height };
       },
     },
     {

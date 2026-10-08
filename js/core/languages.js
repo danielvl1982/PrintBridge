@@ -19,7 +19,9 @@
  *   each field's width kept and numbers clamped to their range; unknown keys, invalid values, items without source or
  *   without editable fields are ignored (unchanged text if nothing changes). The barcode `symbology` / `check` / `addon` fields (select) rewrite
  *   the whole format command instead (the type moves other parameters; see js/components/barcode); a change that would lose
- *   information (nothing in the model holds it) is refused: the text comes back unchanged.
+ *   information (nothing in the model holds it) is refused: the text comes back unchanged. A ZPL barcode's `module` / `ratio` live in the persistent
+ *   ^BY command, which may govern other barcodes: it is rewritten in place when the barcode owns it, else a field-local ^BY and a restoring one
+ *   are written around the field (js/components/barcode/zpl.js).
  * describeItem (optional): the fields updateItem accepts for an item, language-agnostic, so the UI can build a panel:
  *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox' | 'text', value, min, max, step?, options?: [{ value, label }] }] }
  *   with the current values (read from the command in text if given, else from the item) and an empty list if none.
