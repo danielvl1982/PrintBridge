@@ -26,9 +26,10 @@ and conversion to and from TPCL and TSPL ("Convertir a…"). Reference: `docs/zp
       `^FD` content with `^FH` hex escapes, `^FR` reverse: parse, draw (font simulation like TPCL/TSPL), emit, move, edit (font, size, rotation, content, reverse), palette entry, tests.
 
 ### Group B: barcodes and 2D (branch `feat/zpl-barcodes`)
-- [ ] Z3 Linear barcodes: `^BY` module and ratio, Code 128 (`^BC`), Code 39 (`^B3`), Interleaved 2 of 5 (`^B2`), EAN-13 (`^BE`), EAN-8 (`^B8`), UPC-A (`^BU`), UPC-E (`^B9`),
+- [x] Z3 Linear barcodes: `^BY` module and ratio, Code 128 (`^BC`), Code 39 (`^B3`), Interleaved 2 of 5 (`^B2`), EAN-13 (`^BE`), EAN-8 (`^B8`), UPC-A (`^BU`), UPC-E (`^B9`),
       Code 93 (`^BA`), Codabar (`^BK`), MSI (`^BM`), Industrial 2 of 5 (`^BI`): parse/emit/edit/move, rotation, height, human-readable, check digit options,
       the data-driven selector rows, palette entry, tests with the encoders already built.
+      Done in `bed1c4c` (code, tests, README; one commit because the parse / emit / edit code lives in one slice file). Route: inline single writer.
 - [ ] Z4 QR (`^BQ`) and Data Matrix (`^BX`): parse/emit/edit/move/palette, parameters of the guide (QR model, magnification, error correction level, mask; Data Matrix quality
       200, columns/rows, aspect), tests.
 
@@ -56,6 +57,7 @@ Each task round-trips parse -> emit -> parse, keeps unrelated commands untouched
 
 ## Progress
 Manual renamed to `docs/zpl/Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` and documented in `docs/README.md`. Plan created. Z1 done on `feat/zpl-foundation` (`ca1e060`, `31764b2`; `node --test` 1351 green, 92 new). Z2 done (`08698aa` code and tests, `a954bde` README; `node --test` 1389 green, 38 new in tests/zpl-text.test.js, RED observed first). Next: Chrome check of the ZPL text and example, then merge group A.
+Z3 done on `feat/zpl-barcodes` (`bed1c4c`; `node --test` 1531 green, 142 new in tests/zpl-barcodes.test.js, RED observed first: 137 of 139 failed before the implementation, the 2 that passed were vacuous and were tightened). The 2003 guide documents the parameter layouts, the `^FT` base-of-the-bars origin, the Code 128 invocation codes (Table G, an image in the PDF) and `^BY` (initial module 2 and height 10, Table J of ratios); it does NOT give the default ratio (3.0 assumed), the `^FO` box of rotated bars (bars only assumed), the font of the line, or the exact rounding of the wide bar. Engine additions: `custom` descriptor fields and `argEdit` in zpl-edit.js, `byValues` shared with the barcode slice; the ITF encoder got the modulus 10 check (`check: auto`), render.js got `measure`.
 
 ## Result of group A
 ZPL reads, draws, emits, edits and conversions of text work: `^FO` / `^FT` origins, `^A` fonts (bitmapped A..H as multiples of the matrix, scalable `0`), `^CF` / `^FW` defaults, `^FH` escapes, `^FR` reverse (white text blended with difference), Propiedades fields (font, height, width, rotation, content, reverse), the Texto palette entry and one ZPL example. Not in the 2003 Volume One (so unverified, marked in code and README): the font matrices (Volume Two), the baseline of `^FO` and the length of rotated `^FO` text. Engine additions: `flag` fields (presence of `^FR`) and fields sharing one argument. Pending: browser check of the reverse blend and the example.
