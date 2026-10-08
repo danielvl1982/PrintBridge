@@ -10,7 +10,8 @@
  *   - language: id of the language that parsed it (key of PB.languages).
  *   - size: { width, height, pitch, gap, native }. Measures in 0.1 mm (null if the label does not declare them);
  *     pitch = distance between labels, gap = separation between labels; native = language-specific data
- *     (TPCL: dRaw, axRaw), which only that language interprets.
+ *     (TPCL: dRaw, axRaw; TSPL: sizeRaw, gapRaw...; ZPL: pw, ll (dots), pwRaw, llRaw, invert), which only that language interprets. ZPL sizes are
+ *     whole dots rounded to 0.1 mm, pitch and gap are null (ZPL has neither).
  *   - items (every measure in 0.1 mm, rotation in degrees clockwise):
  *       text    { ref, x, y, rotation, font:{ size, scaleX, family, weight, style }, data }
  *               font.size = height of the letter square (em) in 0.1 mm; scaleX = horizontal stretch;
@@ -29,6 +30,9 @@
  *               absent); TPCL PC/PV/XB "noooooooooo" skip value 0000000000..9999999999, native = the token as written ("+0000000010");
  *               TSPL "SET COUNTER @n step" -999999999..999999999 with the content "@n", native = { n, start, end } (the counter number
  *               and where its step sits in the text, for the panel). Barcodes carry it too; QR does not.)
+ *               reverse? = true (ZPL ^FR field reverse print: the viewer draws the text white blended with `difference`, so it reads inverted over
+ *               black; absent = normal). ZPL specific: it is NOT the TPCL attribute 'reverse' (a black box behind the text), the two never convert.
+ *               ZPL: x, y is the baseline origin (^FT as written; ^FO converted, see js/components/text/zpl.js); font.size = character height in dots.
  *               zeroSuppress? = 1..20 (TPCL PC/PV "Zpp", XB "qq": the number of characters kept after replacing the leading zeros by
  *               spaces; absent = none or 00). The preview applies it to the drawn text only (PB.slices.text.suppressZeros), never to data.
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }

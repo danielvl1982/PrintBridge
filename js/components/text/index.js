@@ -5,7 +5,7 @@
 (function (PB) {
   'use strict';
 
-  const { render, layout, tpcl, tspl } = PB.slices.text;
+  const { render, layout, tpcl, tspl, zpl } = PB.slices.text;
 
   PB.components.register({
     kind: 'text',
@@ -15,6 +15,6 @@
     glyph: 'Aa',
     render,
     layout,
-    languages: { tpcl, tspl },
+    languages: { tpcl, tspl, zpl },
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

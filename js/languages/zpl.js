@@ -1,0 +1,715 @@
+/**
+ * ZPL II parser and writer (language of the Zebra printers).
+ * Converts ZPL text into the neutral model (js/core/model.js): the declared size and a list of drawable items. ZPL gives every
+ * coordinate and measure in printer dots: they are converted to 0.1 mm with the resolution (dpi, a user setting) and the original
+ * value is kept in item.native.
+ *
+ * Source: ZPL II Programming Guide, Volume One (2003), local copy in docs/zpl (never committed). What that guide does not document is marked
+ * "not verified" below; nothing here has been checked on a printer.
+ *
+ * This file holds the language skeleton: the tokenizer, the field grouping and the DEFERRED DISPATCH, the context (ctx), the label setup
+ * commands (^PW ^LL ^LH ^LS ^LT ^PO ^CF ^FW ^CI ^BY), detection, emit skeleton, size writing and insertCommand. The drawing commands come from
+ * the slices of js/components/<kind>/zpl.js, registered with `languages: { zpl }` (Z2 onwards): PB.composeSlices adds their handlers after the
+ * base ones and hands them SLICE_HELPERS. The generic move / describe / update engines are in js/languages/zpl-edit.js.
+ *
+ * ---- Tokenizer (commands()) ------------------------------------------------------------------------------------------------------
+ * A command is a prefix, a name and its parameters up to the next prefix: `^` format commands and `~` control commands (the guide's
+ * conventions). The name has 2 characters (^FO, ^BC, ~SD), except ^A (1: the font letter and the orientation are the start of its first
+ * parameter, ^A0N,50,50) and ^A@ (2). Parameters are separated by the delimiter (comma), trimmed, with their [start, end) offsets. Blanks and
+ * line breaks between commands are ignored. ^FD and ^FV take the whole run up to the next prefix as ONE argument (commas included; the line
+ * break before the next command is not part of it; line breaks inside are dropped from its `value` but kept in `raw`); ^FX is a comment with
+ * the same shape. ^FH switches on the hex escapes (indicator + two hex digits) for the data of the field, until ^FS: the `value` of the
+ * data is decoded and `cmd.hex` holds the indicator. ^GF takes its data (everything after the fourth comma) as one argument because the
+ * ASCII hex data uses commas as fill characters. ^CC / ~CC change the format prefix, ^CT / ~CT the control prefix and ^CD / ~CD the
+ * delimiter: SUPPORTED by the tokenizer (one character right after the name); `id` always shows the standard prefix. The control characters
+ * STX, ETX and SI are read as ^XA, ^XZ and ^FS, like the guide says. Each command: { name (upper case), id ('^FO', '~SD'), raw, args, start, end,
+ * prefix (the character written), control (introduced by the control prefix), data? / hex? (data commands) }.
+ *
+ * ---- Fields and the deferred dispatch (run()) ------------------------------------------------------------------------------------
+ * In ZPL a drawing is a FIELD: ^FO / ^FT (the origin), the command that says what it is (^A text, ^BC bar code, ^GB box...), its data (^FD /
+ * ^FV, which may come BEFORE or AFTER the command) and ^FS. So no command can be turned into an item when it is read. The driver keeps
+ * one open field (ctx.field) that accumulates the commands, and dispatches it to the slice handler when the field is CLOSED:
+ *   - ^FO / ^FT open a field (origin x,y in dots, LH not applied yet); ^FS closes it; a field still open when the next ^FO / ^FT arrives is
+ *     closed there (one warning per label: the guide shows the ^FS in every field), and one still open at ^XZ or at the end of the text is
+ *     closed silently (the guide: ^XZ "ends the field data").
+ *   - ^FD, ^FV, ^FH, ^FR, ^FN, ^FP, ^SN are field MODIFIERS: they are stored in the field (field.data, field.reverse) and never dispatched.
+ *   - the setup commands (^PW ^LL ^LH ^LS ^LT ^PO ^CF ^FW ^CI ^BY and the recognised-but-not-drawn configuration ones) are IMMEDIATE: they run when they
+ *     are read, inside an open field too, so the state the handler sees at ^FS is the state after all of them (the guide's ^CF inside a field
+ *     example relies on it). A slice may declare an immediate handler too (`immediate: true`, e.g. ^LR in Z5).
+ *   - any other command is the content of a field; one that arrives outside a field starts an implicit one with no origin (0,0, one info
+ *     per label). A command with no handler is reported once (warning) when it is read.
+ *   - at close, the MAIN command is the LAST command of the field that has a handler (so ^A0N,..^BCN,.. is a bar code, the ^A is ignored);
+ *     a field with no content command but with data is a text field in the default font (^CF) and is dispatched with the key '^FD'; a field
+ *     with only unknown commands, or with only an origin, draws nothing.
+ *   - handler: { pattern, immediate?, handle(m, cmd, ctx, field) }. The pattern is tested against cmd.id of the main command ('^A', '^BC',
+ *     '^FD'); the first match wins. `cmd` is the main command, `field` = { start, end, raw, cmds, origin: { cmd, kind: 'FO' | 'FT', x, y } | null
+ *     (dots as written), data: { cmd, kind: 'FD' | 'FV', value (decoded), raw, start, end, hex } | null, reverse, closed, find(names), findAll(names),
+ *     has(names) } (names without the prefix; find gives the last match). ctx.origin(field) -> { x, y, kind } in 0.1 mm with ^LH / ^LS / ^LT
+ *     applied; sourceOf(field) -> item.source covering the whole field.
+ *   - ctx: model, dot, dpi, report, once(key, fn), addItem, len(dots), pos(xDots, yDots) -> { x, y } in 0.1 mm, origin(field), sourceOf, and the
+ *     printer state: lh { x, y }, ls, lt, orientation (^FW, 'N' at power-up), font { name, height, width } (^CF; A,9,5 at power-up; a null
+ *     height or width is "proportional to the other"), by { module, ratio, height } (^BY; 2, 3, 10), charset (^CI), invert (^PO).
+ *
+ * ---- Formats ---------------------------------------------------------------------------------------------------------------------
+ * A file may hold several ^XA .. ^XZ formats. The viewer draws the FIRST one (commands before the first ^XA are printer state and apply) and
+ * reports one info with the number of formats; the other formats are ignored. Not verified: whether printers apply ^LH / ^PW changes made
+ * in one format to the next (the guide says the settings are retained until power off).
+ *
+ * ---- Not drawn / not verified ----------------------------------------------------------------------------------------------------
+ * ^PO I (inverted 180) is reported and not applied. ^FO's third parameter (justification, later guides) is accepted and ignored. ^LS / ^LT
+ * are applied as the guide describes (shift left / label top), not verified. The ^PW / ^LL size is rounded to 0.1 mm. The configuration commands
+ * of CONFIG_NAMES (^MM ^MN ^MT ^PR ~SD ^MD ^PM ^PQ ...) are listed in one info per label. Character set: the guide's ^CI table is about code
+ * pages (default 0, USA 1; 13 = CP850); it does not mention UTF-8, so the viewer reads and writes the text as UTF-8 (the app decodes files
+ * that way) and a non-ASCII emit reports one info. ^CC / ^CT / ^CD prefix changes are read by the tokenizer but the emitter always writes
+ * the standard prefixes and never escapes the changed ones.
+ */
+(function (PB) {
+  'use strict';
+
+  const { units, diagnostics: diag, zplEdit } = PB;
+
+  /** Valid ZPL orientations and their rotation in degrees, clockwise (the guide: N normal, R rotated 90, I inverted 180, B bottom-up 270). */
+  const ORIENTATIONS = Object.freeze({ N: 0, R: 90, I: 180, B: 270 });
+  const ROTATIONS = Object.freeze([0, 90, 180, 270]);
+
+  /** Names of the printer configuration commands that are recognised and not drawn (either prefix). */
+  const CONFIG_NAMES = Object.freeze([
+    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'DY', 'EF', 'EG', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
+    'HY', 'HZ', 'ID', 'JA', 'JB', 'JC', 'JD', 'JE', 'JF', 'JG', 'JI', 'JJ', 'JL', 'JM', 'JN', 'JO', 'JP', 'JQ', 'JR', 'JS', 'JT', 'JU', 'JW',
+    'JX', 'JZ', 'KB', 'KD', 'KL', 'KN', 'KP', 'MC', 'MD', 'MF', 'ML', 'MM', 'MN', 'MP', 'MT', 'MU', 'MW', 'NC', 'NI', 'NR', 'NS', 'NT', 'PF',
+    'PM', 'PP', 'PQ', 'PR', 'PS', 'RO', 'SC', 'SD', 'SE', 'SL', 'SO', 'SP', 'SQ', 'SR', 'SS', 'ST', 'SX', 'SZ', 'TA', 'TO', 'WC', 'WD', 'XB',
+    'ZZ',
+  ]);
+
+  /** Every command of the 2003 guide, for the detection (the drawing ones are matched by pattern below). */
+  const KNOWN_NAMES = new Set([
+    ...CONFIG_NAMES, 'A', 'A@', 'CC', 'CD', 'CF', 'CI', 'CT', 'DF', 'DG', 'FB', 'FC', 'FD', 'FH', 'FM', 'FN', 'FO', 'FP', 'FR', 'FS', 'FT', 'FV',
+    'FW', 'FX', 'GB', 'GC', 'GD', 'GE', 'GF', 'GS', 'IL', 'IM', 'IS', 'LH', 'LL', 'LR', 'LS', 'LT', 'PO', 'PW', 'SF', 'SN', 'XA', 'XF', 'XG', 'XZ',
+  ]);
+  const isKnownName = name => KNOWN_NAMES.has(name) || /^B[0-9A-Z]$/.test(name);
+
+  /** Commands that only complete a field (never its main command). */
+  const MODIFIERS = new Set(['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^FS', '^FX', '^SN']);
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Tokenizer
+
+  const STX = '\x02';
+  const ETX = '\x03';
+  const SI = '\x0F';
+  /** Control characters that stand for commands. */
+  const CONTROL_CHARS = Object.freeze({ [STX]: 'XA', [ETX]: 'XZ', [SI]: 'FS' });
+  /** Commands whose parameter is one character taken right after the name (they change the prefixes and the delimiter). */
+  const SINGLE_CHAR = new Set(['CC', 'CD', 'CT']);
+  /** Commands whose parameter is the whole run up to the next command (data and comments). */
+  const RAW_RUN = new Set(['FD', 'FV', 'FX']);
+  /** Commands that split only a number of parameters: the rest is data (^GF: format, total, total, bytes per row, DATA). */
+  const ARG_LIMIT = Object.freeze({ GF: 4 });
+
+  const isEol = c => c === '\r' || c === '\n';
+  const isSpace = c => c === ' ' || c === '\t' || isEol(c);
+
+  /**
+   * Splits src[from, to) at the delimiter. Each argument keeps its raw text (trimmed), its value (the same) and where it sits in src (an
+   * empty argument sits at the end of its blanks). With `limit`, only that many delimiters split: the rest is the last argument.
+   */
+  function splitArgs(src, from, to, delimiter, limit = Infinity) {
+    const args = [];
+    let tokenStart = from;
+    let count = 0;
+    const push = end => {
+      const text = src.slice(tokenStart, end);
+      const raw = text.trim();
+      const start = tokenStart + (raw ? text.length - text.trimStart().length : text.length);
+      args.push({ raw, value: raw, start, end: start + raw.length });
+    };
+    for (let i = from; i < to; i++) {
+      if (src[i] !== delimiter) continue;
+      push(i);
+      tokenStart = i + 1;
+      if (++count === limit) break;
+    }
+    if (tokenStart < to || count > 0) push(to);
+    return args;
+  }
+
+  /** Walks the commands of the text in order (see the header for the shape of each one). */
+  function* commands(src) {
+    const n = src.length;
+    let format = '^';
+    let control = '~';
+    let delimiter = ',';
+    let hex = null; // ^FH indicator in force for the data of the current field
+    const isBoundary = c => c === format || c === control || c === STX || c === ETX || c === SI;
+    let i = 0;
+    while (i < n) {
+      const c = src[i];
+      if (CONTROL_CHARS[c]) {
+        const name = CONTROL_CHARS[c];
+        hex = null;
+        yield { name, id: `^${name}`, raw: c, args: [], start: i, end: i + 1, prefix: c, control: false };
+        i++;
+        continue;
+      }
+      if (c !== format && c !== control) { i++; continue; }
+      const start = i;
+      const isControl = c === format ? false : true;
+      const at = start + 1;
+      let nameEnd = at;
+      if (src[at] === 'A' || src[at] === 'a') nameEnd = src[at + 1] === '@' ? at + 2 : at + 1;
+      else while (nameEnd < at + 2 && nameEnd < n && /[0-9A-Za-z]/.test(src[nameEnd])) nameEnd++;
+      const name = src.slice(at, nameEnd).toUpperCase();
+      const id = `${isControl ? '~' : '^'}${name}`;
+      let regionEnd = nameEnd;
+      while (regionEnd < n && !isBoundary(src[regionEnd])) regionEnd++;
+
+      if (SINGLE_CHAR.has(name)) {
+        const has = nameEnd < regionEnd && !isSpace(src[nameEnd]);
+        const end = has ? nameEnd + 1 : nameEnd;
+        const ch = has ? src[nameEnd] : '';
+        if (has) { if (name === 'CC') format = ch; else if (name === 'CT') control = ch; else delimiter = ch; }
+        yield { name, id, raw: src.slice(start, end), args: has ? [{ raw: ch, value: ch, start: nameEnd, end }] : [], start, end, prefix: c, control: isControl };
+        i = end;
+        continue;
+      }
+
+      if (RAW_RUN.has(name)) {
+        let end = regionEnd;
+        while (end > nameEnd && isEol(src[end - 1])) end--;
+        const raw = src.slice(nameEnd, end);
+        const value = name === 'FX' ? raw : zplEdit.decodeData(raw.replace(/\r\n|\r|\n/g, ''), hex);
+        yield {
+          name, id, raw: src.slice(start, end), args: [{ raw, value, start: nameEnd, end }], start, end, prefix: c, control: isControl,
+          data: true, hex: name === 'FX' ? null : hex,
+        };
+        i = regionEnd;
+        continue;
+      }
+
+      let end = regionEnd;
+      while (end > nameEnd && isSpace(src[end - 1])) end--;
+      const args = splitArgs(src, nameEnd, end, delimiter, ARG_LIMIT[name]);
+      if (name === 'FH') hex = args[0] && args[0].raw ? args[0].raw[0] : '_';
+      else if (name === 'FS' || name === 'XA' || name === 'XZ') hex = null;
+      yield { name, id, raw: src.slice(start, end), args, start, end, prefix: c, control: isControl };
+      i = regionEnd;
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Helpers shared with the slices
+
+  /** Value of the i-th argument of a command (undefined if absent). */
+  const argValue = (cmd, i) => (cmd.args[i] ? cmd.args[i].value : undefined);
+
+  /** Number of an argument (object, command argument or text): null if it is not a finite decimal number. */
+  function num(arg) {
+    const text = arg && typeof arg === 'object' ? arg.value : arg;
+    if (typeof text !== 'string' || !/^[+-]?(\d+\.?\d*|\.\d+)$/.test(text.trim())) return null;
+    return Number(text);
+  }
+
+  /** Whole number of an argument (null if it is not one). */
+  const int = arg => { const v = num(arg); return v !== null && Number.isInteger(v) ? v : null; };
+
+  /** Orientation letter (N / R / I / B, any case) -> rotation in degrees clockwise; null if it is not one. */
+  const rotationOf = letter => (typeof letter === 'string' && Object.hasOwn(ORIENTATIONS, letter.toUpperCase()) ? ORIENTATIONS[letter.toUpperCase()] : null);
+
+  /** Rotation in degrees clockwise -> orientation letter; null if it is not 0 / 90 / 180 / 270. */
+  const orientationOf = degrees => Object.keys(ORIENTATIONS).find(k => ORIENTATIONS[k] === degrees) || null;
+
+  /** Item -> position of the field in the source text (one span: from its first command to its ^FS). */
+  const sourceOf = field => ({ spans: [{ start: field.start, end: field.end }], label: field.raw.replace(/\s*[\r\n]+\s*/g, ' ').trim() });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Emit helpers shared with the slices
+
+  /** Rounds to whole dots; the epsilon keeps x.5 values that float noise nudged just below from rounding down. */
+  const roundDots = v => Math.round(v + 1e-6);
+
+  /** 0.1 mm -> dots at the context's resolution, without rounding. */
+  const exactDots = (ctx, mm10) => mm10 / units.dotSize(ctx.dpi);
+
+  /** 0.1 mm -> whole dots, never negative. */
+  const toDots = (ctx, mm10) => Math.max(0, roundDots(exactDots(ctx, Number.isFinite(mm10) ? mm10 : 0)));
+
+  /**
+   * Field data as it can be written after ^FD / ^FV: { hex, text }. Line breaks become spaces (one warning per emit: ZPL ignores them inside the
+   * data); ^ and ~ (and _ when they are present) are written as ^FH hex escapes (_5E, _7E, _5F), hex = true says the caller must write ^FH
+   * before the ^FD; text outside ASCII is written as it is, with one info per emit (the guide ties it to ^CI and the font: not verified).
+   */
+  function safeData(ctx, data) {
+    let value = data == null ? '' : String(data);
+    if (/[\r\n]/.test(value)) {
+      ctx.once('zpl-framing', () => diag.warning('Hay datos con saltos de línea: ZPL los ignora dentro del campo, se sustituyen por espacios'));
+      value = value.replace(/\r\n|\r|\n/g, ' ');
+    }
+    if (/[^\x00-\x7F]/.test(value)) {
+      ctx.once('zpl-charset', () => diag.info('Hay caracteres fuera de ASCII: ZPL los interpreta según ^CI y la fuente de la impresora (el archivo se guarda en UTF-8; no verificado en impresora)'));
+    }
+    return zplEdit.encodeData(value);
+  }
+
+  /** The data command of a field: "^FDtext" or "^FH^FDa_5Eb" when the text needs the hex escapes (tag: 'FD' or 'FV'). */
+  function fieldData(ctx, data, tag = 'FD') {
+    const { hex, text } = safeData(ctx, data);
+    return `${hex ? '^FH' : ''}^${tag}${text}`;
+  }
+
+  /** ^FOx,y / ^FTx,y for a position in 0.1 mm (never below 0). */
+  const fo = (ctx, x, y) => `^FO${toDots(ctx, x)},${toDots(ctx, y)}`;
+  const ft = (ctx, x, y) => `^FT${toDots(ctx, x)},${toDots(ctx, y)}`;
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Helpers of the palette `build` hooks
+
+  /** <#NAME{k}#> with the smallest k >= 1 that does not appear in the text (as #NAME{k}# or <#NAME{k}#>), like TPCL's and TSPL's. */
+  function freePlaceholder(text, name) {
+    let k = 1;
+    while (text.includes(`#${name}${k}#`)) k++;
+    return `<#${name}${k}#>`;
+  }
+
+  /** Rotation of a new item: (360 - view rotation) % 360 so that it looks upright in the view (missing/invalid view = 0). */
+  const itemRotation = options => {
+    const view = options && ROTATIONS.includes(options.viewRotation) ? options.viewRotation : 0;
+    return (360 - view) % 360;
+  };
+
+  const optionDpi = options => (options && options.dpi ? options.dpi : PB.config.resolutions[0]);
+
+  /** Dots of a new field's origin for a drop point in 0.1 mm (^LH / ^LS / ^LT subtracted, never below 0). */
+  const dropDots = (text, point, options) => zplEdit.dropDots(text, point, { dpi: optionDpi(options) }, commands);
+
+  /** Length in 0.1 mm of a new component -> whole dots at the build options' resolution (at least 1). */
+  const lengthDots = (options, mm10) => Math.max(1, toDots({ dpi: optionDpi(options) }, mm10));
+
+  /** Helpers the slices' ZPL hooks share with this file. Passed once to each slice's `languages.zpl` factory. */
+  const SLICE_HELPERS = Object.freeze({
+    sourceOf, argValue, num, int, ROTATIONS, ORIENTATIONS, rotationOf, orientationOf,
+    roundDots, exactDots, toDots, safeData, fieldData, fo, ft,
+    insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
+    encodeData: zplEdit.encodeData, decodeData: zplEdit.decodeData,
+    numberField: zplEdit.numberField, selectField: zplEdit.selectField, stringSelectField: zplEdit.stringSelectField,
+    checkboxField: zplEdit.checkboxField, textField: zplEdit.textField, contentField: zplEdit.contentField,
+  });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Handlers of the setup commands (all immediate)
+
+  const brief = cmd => cmd.raw.slice(0, 40);
+  const invalid = (ctx, label, cmd) => ctx.report(diag.warning(`${label} no válido: ${brief(cmd)}`));
+
+  /** 0.1 mm of a number of dots, rounded to 0.1 mm (the neutral size is never finer than that). */
+  const toTenthMm = (dots, dot) => Math.round(dots * dot + 1e-6);
+
+  const HANDLERS = [
+    {
+      // ^PWw: print width in dots (2 .. the label width)
+      pattern: /^\^PW$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const w = int(cmd.args[0]);
+        if (w === null || w < 2 || w > 32000) { invalid(ctx, '^PW', cmd); return; }
+        ctx.model.size.width = toTenthMm(w, ctx.dot);
+        ctx.model.size.native.pw = w;
+        ctx.model.size.native.pwRaw = cmd.raw;
+      },
+    },
+    {
+      // ^LLy: label length in dots (1 .. 32000)
+      pattern: /^\^LL$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const l = int(cmd.args[0]);
+        if (l === null || l < 1 || l > 32000) { invalid(ctx, '^LL', cmd); return; }
+        ctx.model.size.height = toTenthMm(l, ctx.dot);
+        ctx.model.size.native.ll = l;
+        ctx.model.size.native.llRaw = cmd.raw;
+      },
+    },
+    {
+      // ^LHx,y label home, ^LSa shift left, ^LTx label top: they move every later field (state shared with the edit engines)
+      pattern: /^\^(LH|LS|LT)$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        if (ctx.offsets.feed(cmd) === false) invalid(ctx, `^${m[1]}`, cmd);
+      },
+    },
+    {
+      // ^POa: N normal, I inverted 180 degrees (reported, not applied: the viewer draws it as N)
+      pattern: /^\^PO$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const a = cmd.args[0] ? cmd.args[0].raw.toUpperCase() : '';
+        if (a !== 'N' && a !== 'I') { invalid(ctx, '^PO', cmd); return; }
+        ctx.invert = a === 'I';
+        ctx.model.size.native.invert = ctx.invert;
+        if (ctx.invert) ctx.report(diag.info('^POI gira la etiqueta 180°: el visor la dibuja sin girar (no verificado en impresora)'));
+      },
+    },
+    {
+      // ^CFf,h,w: default font. Only the height (or only the width) given makes the other one proportional (null); nothing given keeps all
+      pattern: /^\^CF$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const name = cmd.args[0] && /^[A-Za-z0-9]$/.test(cmd.args[0].raw) ? cmd.args[0].raw.toUpperCase() : null;
+        const [h, w] = [int(cmd.args[1]), int(cmd.args[2])];
+        if (name === null && h === null && w === null) {
+          if (cmd.args.some(a => a.raw !== '')) invalid(ctx, '^CF', cmd);
+          return;
+        }
+        const f = ctx.font;
+        ctx.font = {
+          name: name === null ? f.name : name,
+          height: h !== null ? h : w !== null ? null : f.height,
+          width: w !== null ? w : h !== null ? null : f.width,
+        };
+      },
+    },
+    {
+      // ^FWr: default orientation of the fields (a missing parameter is ignored, as the guide says)
+      pattern: /^\^FW$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const r = cmd.args[0] ? cmd.args[0].raw.toUpperCase() : '';
+        if (r === '') return;
+        if (rotationOf(r) === null) invalid(ctx, '^FW', cmd);
+        else ctx.orientation = r;
+      },
+    },
+    {
+      // ^CIa: international character set (kept; nothing is drawn differently)
+      pattern: /^\^CI$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const a = int(cmd.args[0]);
+        if (a === null || a < 0 || a > 24) invalid(ctx, '^CI', cmd);
+        else ctx.charset = a;
+      },
+    },
+    {
+      // ^BYw,r,h: module width (1..10 dots), wide/narrow ratio (2.0..3.0) and height (dots) of the bar codes that follow
+      pattern: /^\^BY$/,
+      immediate: true,
+      handle(m, cmd, ctx) {
+        const [w, r, h] = [int(cmd.args[0]), num(cmd.args[1]), int(cmd.args[2])];
+        const ok = { w: w !== null && w >= 1 && w <= 10, r: r !== null && r >= 2 && r <= 3, h: h !== null && h >= 1 };
+        if (cmd.args.some(a => a.raw !== '') && !ok.w && !ok.r && !ok.h) { invalid(ctx, '^BY', cmd); return; }
+        ctx.by = { module: ok.w ? w : ctx.by.module, ratio: ok.r ? r : ctx.by.ratio, height: ok.h ? h : ctx.by.height };
+      },
+    },
+    {
+      // ^CC / ^CD / ^CT: the tokenizer applies the prefix and delimiter changes; nothing else to do
+      pattern: /^[\^~](CC|CD|CT)$/,
+      immediate: true,
+      handle() {},
+    },
+    {
+      // Printer configuration: recognised, not drawn (one info per label lists them)
+      pattern: new RegExp(`^[\\^~](?:${CONFIG_NAMES.join('|')})$`),
+      immediate: true,
+      handle(m, cmd, ctx) { ctx.ignored.add(cmd.id); },
+    },
+  ];
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Parse driver
+
+  /** Context of a parse: the model under construction, the printer state and the coordinate conversion. */
+  function createContext(model, dpi, src = '') {
+    const offsets = zplEdit.createOffsets();
+    const seen = new Set();
+    return {
+      model,
+      src,
+      dpi,
+      dot: units.dotSize(dpi),
+      offsets,
+      get lh() { return offsets.lh; },
+      get ls() { return offsets.ls; },
+      get lt() { return offsets.lt; },
+      orientation: 'N',
+      font: { name: 'A', height: 9, width: 5 },
+      by: { module: 2, ratio: 3, height: 10 },
+      charset: 0,
+      invert: false,
+      /** The open field (see the header), and the ids of the configuration commands seen. */
+      field: null,
+      ignored: new Set(),
+      report: d => model.diagnostics.push(d),
+      /** Reports fn()'s diagnostic only the first time `key` is seen in this parse. */
+      once(key, fn) {
+        if (seen.has(key)) return;
+        seen.add(key);
+        const d = fn();
+        if (d) model.diagnostics.push(d);
+      },
+      addItem(item) { model.items.push(item); return item; },
+      sourceOf,
+      /** Dots -> 0.1 mm. */
+      len(dots) { return dots * this.dot; },
+      /** Point in dots (as written in the command) -> 0.1 mm, with ^LH, ^LS and ^LT applied. */
+      pos(xDots, yDots) {
+        const o = offsets.offset();
+        return { x: (xDots + o.x) * this.dot, y: (yDots + o.y) * this.dot };
+      },
+      /** Origin of a field in 0.1 mm: { x, y, kind: 'FO' | 'FT' | 'default' } (a field with no ^FO / ^FT sits at 0,0 of the label home). */
+      origin(field) {
+        if (!field.origin) {
+          this.once('zpl-no-origin', () => diag.info('Hay campos sin ^FO ni ^FT: se colocan en el origen de la etiqueta (0,0)'));
+          return { ...this.pos(0, 0), kind: 'default' };
+        }
+        return { ...this.pos(field.origin.x, field.origin.y), kind: field.origin.kind };
+      },
+    };
+  }
+
+  const handlerFor = (id, immediate) => ALL_HANDLERS.find(h => Boolean(h.immediate) === immediate && h.pattern.test(id));
+
+  /** Starts a field; its start offset is the one of its first command. */
+  function openField(ctx) {
+    const cmds = [];
+    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, reverse: false, closed: false, ...zplEdit.fieldMethods(cmds) };
+    return ctx.field;
+  }
+
+  function addToField(ctx, cmd) {
+    const field = ctx.field || openField(ctx);
+    if (field.start === null) field.start = cmd.start;
+    field.cmds.push(cmd);
+    return field;
+  }
+
+  /** A field start (^FO / ^FT): the origin in dots as written; a missing or empty value is 0 (the guide's default), a non numeric one a warning. */
+  function startField(ctx, cmd) {
+    const open = ctx.field;
+    if (open && open.cmds.some(c => c.id !== '^FO' && c.id !== '^FT')) {
+      ctx.once('zpl-missing-fs', () => diag.warning('Hay campos sin ^FS: se cierran en el campo siguiente (^FO / ^FT) o en ^XZ'));
+      closeField(ctx);
+    }
+    ctx.field = null;
+    const field = addToField(ctx, cmd);
+    const [x, y] = [0, 1].map(i => {
+      const a = cmd.args[i];
+      if (!a || a.raw === '') return 0;
+      const v = num(a);
+      if (v === null) { invalid(ctx, `^${cmd.name}`, cmd); return 0; }
+      return v;
+    });
+    field.origin = { cmd, kind: cmd.name, x, y };
+  }
+
+  /** Closes the open field (explicitly with ^FS, or implicitly) and hands it to the slice handler of its main command. */
+  function closeField(ctx, fs) {
+    const field = ctx.field;
+    if (!field) return;
+    ctx.field = null;
+    if (fs) { field.cmds.push(fs); field.closed = true; }
+    if (field.start === null) return;
+    field.end = field.cmds[field.cmds.length - 1].end;
+    field.raw = ctx.src.slice(field.start, field.end);
+    dispatch(ctx, field);
+  }
+
+  function dispatch(ctx, field) {
+    const content = field.cmds.filter(c => !MODIFIERS.has(c.id) && c.id !== '^FO' && c.id !== '^FT');
+    let main;
+    let key;
+    if (content.length) {
+      main = content.filter(c => !c.unsupported).pop();
+      if (!main) return; // only commands the viewer does not know: already reported
+      key = main.id;
+    } else if (field.data) {
+      main = field.data.cmd;
+      key = '^FD';
+    } else return; // only an origin: nothing to draw
+    const handler = handlerFor(key, false);
+    if (!handler) {
+      if (!main.unsupported) ctx.report(diag.warning(`Comando no soportado por el visor: ${brief(main)}`));
+      return;
+    }
+    handler.handle(key.match(handler.pattern), main, ctx, field);
+  }
+
+  /** One command read, in order. */
+  function feed(ctx, cmd) {
+    const { id } = cmd;
+    if (id === '^FS') { closeField(ctx, cmd); return; }
+    if (id === '^FX') return;
+    if (id === '^FO' || id === '^FT') { startField(ctx, cmd); return; }
+    const immediate = cmd.name ? handlerFor(id, true) : null;
+    if (immediate) { immediate.handle(id.match(immediate.pattern), cmd, ctx); return; }
+    if (MODIFIERS.has(id)) {
+      const field = addToField(ctx, cmd);
+      if (id === '^FR') field.reverse = true;
+      else if (cmd.data) field.data = { cmd, kind: cmd.name, value: cmd.args[0].value, raw: cmd.args[0].raw, start: cmd.args[0].start, end: cmd.args[0].end, hex: !!cmd.hex };
+      return;
+    }
+    if (!handlerFor(id, false)) {
+      cmd.unsupported = true;
+      ctx.report(diag.warning(`Comando no soportado por el visor: ${brief(cmd)}`));
+    }
+    addToField(ctx, cmd);
+  }
+
+  /** Parses and returns { model, ctx } (the ctx as left by the last command). */
+  function run(src, { dpi = PB.config.resolutions[0] } = {}) {
+    const model = {
+      language: 'zpl',
+      size: { width: null, height: null, pitch: null, gap: null, native: { pw: null, ll: null, pwRaw: null, llRaw: null, invert: null } },
+      items: [],
+      diagnostics: [],
+    };
+    const ctx = createContext(model, dpi, src);
+    let formats = 0;
+    let done = false;
+    for (const cmd of commands(src)) {
+      if (cmd.id === '^XA') { formats++; if (!done) closeField(ctx); continue; }
+      if (cmd.id === '^XZ') { if (!done) { closeField(ctx); done = true; } continue; }
+      if (!done) feed(ctx, cmd);
+    }
+    if (!done) closeField(ctx);
+    if (formats > 1) ctx.report(diag.info(`El archivo tiene ${formats} formatos (^XA ... ^XZ): el visor muestra solo el primero`));
+    if (ctx.ignored.size) ctx.report(diag.info(`Comandos de configuración de la impresora sin efecto en el visor: ${[...ctx.ignored].join(', ')}`));
+    return { model, ctx };
+  }
+
+  /** opts: { dpi } (default: the first resolution of the configuration). */
+  const parse = (src, opts) => run(src, opts).model;
+
+  const COMPOSED = PB.composeSlices('zpl', SLICE_HELPERS, { handlers: HANDLERS });
+  const ALL_HANDLERS = COMPOSED.handlers;
+  // Move / describe / update engines (js/languages/zpl-edit.js) driven by the slices' coordinates and editable definitions
+  const EDITING = zplEdit.createZplEditing({ coordinates: COMPOSED.coordinates, editable: COMPOSED.editable, commands });
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Detection
+
+  const FORMAT_START = /\^XA/i;
+
+  /**
+   * A format (^XA) or at least two commands of the guide. TPCL ({...|}) and TSPL texts are never ZPL (the registry asks them first, and this
+   * checks them too, so the order of registration does not matter).
+   */
+  function detect(src) {
+    if (typeof src !== 'string' || src === '') return false;
+    if (/\{[\s\S]*?\|\}/.test(src)) return false;
+    if (['tpcl', 'tspl'].some(id => { const language = PB.languages.get(id); return language && language.detect(src); })) return false;
+    if (FORMAT_START.test(src)) return true;
+    let found = 0;
+    for (const cmd of commands(src)) if (cmd.name && isKnownName(cmd.name) && ++found >= 2) return true;
+    return false;
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Emit: neutral model -> ZPL text
+
+  /** ^XA, then ^PW and ^LL when the model knows the size (else omitted with a warning). ^LH is never written: the parser folds it into the coordinates. */
+  function headerLines(model, ctx) {
+    const size = (model && model.size) || {};
+    const out = ['^XA'];
+    const width = Number.isFinite(size.width);
+    const height = Number.isFinite(size.height);
+    if (width) out.push(`^PW${Math.max(1, roundDots(exactDots(ctx, size.width)))}`);
+    if (height) out.push(`^LL${Math.max(1, roundDots(exactDots(ctx, size.height)))}`);
+    if (!width || !height) ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe ^PW / ^LL, indique el tamaño antes de exportar'));
+    return out;
+  }
+
+  /**
+   * Neutral model -> { text, diagnostics }: ^XA, the size, the items (slices' emit hooks), ^XZ. Lines are joined with CRLF and the text ends with
+   * one (printers accept either; the file keeps the line ending the other languages use).
+   */
+  function emit(model, { dpi = PB.config.resolutions[0] } = {}) {
+    const ctx = PB.emit.createContext({ dpi, language: 'zpl' });
+    const header = headerLines(model, ctx);
+    const { lines } = PB.emit.run(model, COMPOSED, ctx);
+    return { text: [...header, ...lines, '^XZ', ''].join('\r\n'), diagnostics: ctx.diagnostics };
+  }
+
+  // ---------------------------------------------------------------------------------------------------------------
+  // Size writing: resolved size (0.1 mm: { w, h, p, dpi? }) -> ^PW / ^LL
+
+  /** ^PW and ^LL in dots at size.dpi (the app adds the resolution to the size it hands over; the first configured one otherwise). */
+  function sizeCommands(size) {
+    const dot = units.dotSize(size.dpi || PB.config.resolutions[0]);
+    return [`^PW${Math.max(1, roundDots(size.w / dot))}`, `^LL${Math.max(1, roundDots(size.h / dot))}`];
+  }
+
+  /**
+   * Writes the size in the text: the first ^PW and the first ^LL of the first format are replaced in place; a missing one is added right after
+   * the first ^XA (on its line break when the ^XA ends its line, else glued to it); without any ^XA the commands go on top, and an empty text
+   * becomes a new format. Found with the tokenizer, so data is never matched; the line ending of the file stays.
+   */
+  function applySize(text, size) {
+    const [pwLine, llLine] = sizeCommands(size);
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    let xa = null;
+    let pw = null;
+    let ll = null;
+    for (const cmd of commands(text)) {
+      if (cmd.id === '^XZ') break;
+      if (cmd.id === '^XA' && !xa) xa = cmd;
+      else if (cmd.id === '^PW' && !pw) pw = cmd;
+      else if (cmd.id === '^LL' && !ll) ll = cmd;
+    }
+    const missing = [...(pw ? [] : [pwLine]), ...(ll ? [] : [llLine])];
+    if (!xa && text.trim() === '') return `^XA${eol}${missing.join(eol)}${eol}^XZ${eol}`;
+    const edits = [];
+    if (pw) edits.push({ start: pw.start, end: pw.end, value: pwLine });
+    if (ll) edits.push({ start: ll.start, end: ll.end, value: llLine });
+    if (missing.length) {
+      if (!xa) edits.push({ start: 0, end: 0, value: missing.join(eol) + eol });
+      else {
+        const endsLine = /^[ \t]*[\r\n]/.test(text.slice(xa.end));
+        edits.push({ start: xa.end, end: xa.end, value: missing.map(line => (endsLine ? eol : '') + line).join('') });
+      }
+    }
+    let out = text;
+    for (const e of edits.sort((a, b) => b.start - a.start)) out = out.slice(0, e.start) + e.value + out.slice(e.end);
+    return out;
+  }
+
+  /**
+   * Adds a field (its commands, as written by a slice's `build` hook) to the text: before the closing ^XZ of the first format, at the start of
+   * its line when it has the line to itself, else glued before it. Without ^XZ it goes at the end; an empty text becomes a new ^XA .. ^XZ
+   * format. Uses the line ending of the file (CRLF if it has any, else LF). ^XZ is found with the tokenizer, so the letters inside field data
+   * never match. Not handled: a field left open (no ^FS) just before the ^XZ is closed by the new one, which the parser reports.
+   */
+  function insertCommand(text, command) {
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    if (text.trim() === '') return `^XA${eol}${command}${eol}^XZ${eol}`;
+    for (const cmd of commands(text)) {
+      if (cmd.id !== '^XZ') continue;
+      const head = text.slice(0, cmd.start);
+      const lineStart = Math.max(head.lastIndexOf('\n'), head.lastIndexOf('\r')) + 1;
+      if (/^[ \t]*$/.test(head.slice(lineStart))) return `${text.slice(0, lineStart)}${command}${eol}${text.slice(lineStart)}`;
+      return `${head}${command}${text.slice(cmd.start)}`;
+    }
+    return /\n$/.test(text) ? `${text}${command}${eol}` : `${text}${eol}${command}`;
+  }
+
+  /** Component kinds of the palette (neutral), in display order: the slices that have a `build` hook. */
+  const COMPONENTS = COMPOSED.components;
+
+  /**
+   * Adds a palette component with its top-left corner at the point ({ x, y } in 0.1 mm) using the slice's `build` hook
+   * (each slice owns its template; options: { dpi, viewRotation }). Unknown kind or invalid point: the text unchanged.
+   */
+  function buildComponent(text, kind, point, options) {
+    if (!point || !Number.isFinite(point.x) || !Number.isFinite(point.y)) return text;
+    const slice = COMPOSED.slices.find(s => s.id === kind);
+    return slice && slice.hooks.build ? slice.hooks.build(text, point, options || {}) : text;
+  }
+
+  /** Tokenizer and driver, exposed for the slices' tests and the app. */
+  PB.zpl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CONFIG_NAMES });
+
+  // UTF-8 (the default): see the note on ^CI in the header. No image insertion yet (Z6).
+  PB.languages.register({
+    id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize,
+    insertCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
+  });
+})(globalThis.PrintBridge = globalThis.PrintBridge || {});
