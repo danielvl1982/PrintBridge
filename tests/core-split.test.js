@@ -75,7 +75,7 @@ test('layout.analyze is generic: slices without a hook use the group box, a hook
 
 test('barcode slice owns the "approximate drawing" validation rule', () => {
   assert.equal(typeof PB.components.get('barcode').validate, 'function');
-  const item = { ref: 'B1', kind: 'barcode', symbology: 'ean13', native: { type: '5' }, data: '1' };
+  const item = { ref: 'B1', kind: 'barcode', symbology: 'unknown', native: { type: 'Z' }, data: '1' };
   assert.equal(PB.components.get('barcode').validate(item).length, 1);
   assert.equal(PB.components.get('barcode').validate({ ...item, symbology: 'code128' }).length, 0);
 });
