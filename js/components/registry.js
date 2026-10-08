@@ -33,6 +33,9 @@
  *                                used by js/app.js, which keeps the overlay state
  *     languages: {
  *       tpcl: helpers => ({ handlers?, build?, coordinates?, editable?, rules?, emit? })
+ *       tspl: same shape, one command per item
+ *       zpl:  same shape, but an item is a FIELD (^FO ... ^FS): handlers are tested against the id of the field's main command ('^A', '^BC') and
+ *             called as handle(m, cmd, ctx, field); coordinates / editable address { cmd, arg } inside the field (see js/languages/zpl.js and zpl-edit.js)
  *     }
  *   }
  * emit(item, ctx) (language hook, optional): the lines that item becomes in that language, as a string or string[]

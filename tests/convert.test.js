@@ -79,22 +79,22 @@ test('text of no known language throws no-source-language; so does an unknown so
   const unknown = errorOf(() => PB.convert.run('esto no es una etiqueta', 'tspl'));
   assert.equal(unknown.code, 'no-source-language');
   assert.match(unknown.message, /lenguaje/);
-  const forced = errorOf(() => PB.convert.run(spool.source, 'tspl', { sourceId: 'zpl' }));
+  const forced = errorOf(() => PB.convert.run(spool.source, 'tspl', { sourceId: 'epl' }));
   assert.equal(forced.code, 'no-source-language');
-  assert.match(forced.message, /zpl/);
+  assert.match(forced.message, /epl/);
 });
 
 test('an unknown target, or a language without emit, throws no-target-emit', () => {
-  const unknown = errorOf(() => PB.convert.run(spool.source, 'zpl'));
+  const unknown = errorOf(() => PB.convert.run(spool.source, 'epl'));
   assert.equal(unknown.code, 'no-target-emit');
-  assert.match(unknown.message, /zpl/);
+  assert.match(unknown.message, /epl/);
   const noEmit = errorOf(() => PB.convert.run(spool.source, 'noemit'));
   assert.equal(noEmit.code, 'no-target-emit');
   assert.match(noEmit.message, /Sin emisor|noemit/);
 });
 
 test('the target is checked before the source (a missing target wins over an undetectable text)', () => {
-  assert.equal(errorOf(() => PB.convert.run('nada', 'zpl')).code, 'no-target-emit');
+  assert.equal(errorOf(() => PB.convert.run('nada', 'epl')).code, 'no-target-emit');
 });
 
 test('a source language that cannot emit can still be converted from (parse only is enough)', () => {
@@ -104,7 +104,7 @@ test('a source language that cannot emit can still be converted from (parse only
 
 test('targets() lists the registered languages that emit, as { id, name }', () => {
   const targets = PB.convert.targets();
-  assert.deepEqual(targets.map(t => t.id), ['tpcl', 'tspl']);
+  assert.deepEqual(targets.map(t => t.id), ['tpcl', 'tspl', 'zpl']);
   for (const t of targets) assert.equal(t.name, PB.languages.get(t.id).name);
   assert.deepEqual(Object.keys(targets[0]).sort(), ['id', 'name']);
 });
@@ -149,7 +149,7 @@ test('toBytes in latin1 writes "?" for characters above 255 instead of a wrapped
 });
 
 test('toBytes throws no-target-emit for an unknown language', () => {
-  assert.equal(errorOf(() => PB.convert.toBytes('x', 'zpl')).code, 'no-target-emit');
+  assert.equal(errorOf(() => PB.convert.toBytes('x', 'epl')).code, 'no-target-emit');
 });
 
 test('fileName: .prn for TSPL, .txt for TPCL, default base "etiqueta"', () => {

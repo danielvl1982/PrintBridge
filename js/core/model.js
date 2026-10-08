@@ -10,7 +10,8 @@
  *   - language: id of the language that parsed it (key of PB.languages).
  *   - size: { width, height, pitch, gap, native }. Measures in 0.1 mm (null if the label does not declare them);
  *     pitch = distance between labels, gap = separation between labels; native = language-specific data
- *     (TPCL: dRaw, axRaw), which only that language interprets.
+ *     (TPCL: dRaw, axRaw; TSPL: sizeRaw, gapRaw...; ZPL: pw, ll (dots), pwRaw, llRaw, invert), which only that language interprets. ZPL sizes are
+ *     whole dots rounded to 0.1 mm, pitch and gap are null (ZPL has neither).
  *   - items (every measure in 0.1 mm, rotation in degrees clockwise):
  *       text    { ref, x, y, rotation, font:{ size, scaleX, family, weight, style }, data }
  *               font.size = height of the letter square (em) in 0.1 mm; scaleX = horizontal stretch;

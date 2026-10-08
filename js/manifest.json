@@ -72,6 +72,8 @@
   "js/languages/tpcl.js",
   "js/languages/tspl-edit.js",
   "js/languages/tspl.js",
+  "js/languages/zpl-edit.js",
+  "js/languages/zpl.js",
   "js/view.js",
   "js/drawing.js",
   "js/palette.js",
