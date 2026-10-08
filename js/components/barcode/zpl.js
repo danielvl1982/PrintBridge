@@ -355,7 +355,7 @@
       const { symbology } = item;
       const table = CHECK_CODES[symbology];
       if (item.check === 'unsupported') {
-        ctx.once('zpl-check-unsupported', () => diag.warning('Hay códigos de barras con un dígito de control de precio de TPCL, que ZPL no tiene: se escriben con el dígito de control automático'));
+        ctx.once('zpl-check-unsupported', () => diag.warning('Hay códigos de barras con un dígito de control que ZPL no tiene (el de precio de TPCL o el 25C de TSPL): se escriben con la opción por defecto de su tipo'));
         return table[defaultCheck(symbology)];
       }
       const check = item.check ?? defaultCheck(symbology);

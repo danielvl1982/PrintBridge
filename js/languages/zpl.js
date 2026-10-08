@@ -805,6 +805,14 @@
     if (width) out.push(`^PW${Math.max(1, roundDots(exactDots(ctx, size.width)))}`);
     if (height) out.push(`^LL${Math.max(1, roundDots(exactDots(ctx, size.height)))}`);
     if (!width || !height) ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe ^PW / ^LL, indique el tamaño antes de exportar'));
+    // ^POI (printed rotated 180 degrees) is written back as it was read; a TSPL DIRECTION 0 has no ZPL counterpart here and is reported
+    const native = size.native || {};
+    if (native.invert === true) out.push('^POI');
+    else if (native.direction === 0) ctx.report(diag.info('La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora'));
+    // ZPL declares the width and the length only (^LS and ^LT are offsets): the TPCL pitch and the TSPL gap have nowhere to go
+    if (Number.isFinite(size.pitch) || Number.isFinite(size.gap)) {
+      ctx.report(diag.info('El paso de etiqueta (pitch de TPCL) o la separación entre etiquetas (GAP de TSPL) no se escriben: ZPL solo declara el ancho y el largo (^PW y ^LL), compruebe el ajuste en su impresora'));
+    }
     return out;
   }
 

@@ -48,6 +48,10 @@
         return [];
       }
       const length = Math.abs(horizontal ? x2 - x1 : y2 - y1);
+      if (roundDots(length) < 1) {
+        ctx.once('tspl-line-empty', () => diag.warning('Hay líneas de longitud 0 que no se escriben: BAR necesita al menos 1 punto de largo'));
+        return [];
+      }
       const [lengthDots, left, top] = [roundDots(length), Math.min(x1, x2), Math.min(y1, y2)];
       return horizontal
         ? `BAR ${roundDots(left)},${roundDots((y1 + y2) / 2 - thickness / 2)},${lengthDots},${thickness}`

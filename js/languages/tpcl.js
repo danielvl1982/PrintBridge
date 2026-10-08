@@ -289,6 +289,9 @@
       else ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
       if (size.pitch == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
     }
+    if (native.direction === 0 || native.invert === true) {
+      ctx.report(diag.info('La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora'));
+    }
     out.push(wrap('C'));
     return out;
   }
@@ -315,6 +318,17 @@
   function counterToken(step) {
     const n = clampInt(Number.isFinite(step) ? step : 0, -COUNTER_MAX, COUNTER_MAX);
     return `${n < 0 ? '-' : '+'}${String(Math.abs(n)).padStart(10, '0')}`;
+  }
+
+  /**
+   * counterToken for the emitters: a step beyond the 10 digits of the manual (ZPL ^SN allows 12) is clamped, with one warning per label
+   * instead of silently.
+   */
+  function emitCounterToken(ctx, step) {
+    if (Number.isFinite(step) && Math.abs(Math.trunc(step)) > COUNTER_MAX) {
+      ctx.once('tpcl-counter-step', () => diag.warning(`Hay incrementos de contador fuera de ±${COUNTER_MAX} (10 dígitos, límite de TPCL): se ajustan al límite`));
+    }
+    return counterToken(step);
   }
 
   /** Zero suppression digits ("05") of a count, clamped to 0..20. */
@@ -351,7 +365,7 @@
     sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
     wrap, safeData, coordText, allocId,
-    COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, zeroDigits, readCounterStep, counterFields,
+    COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
   });
 
   // The tables above hold the kinds not migrated to a slice yet; the generic composition (js/components/compose.js)
