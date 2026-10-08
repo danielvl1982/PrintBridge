@@ -226,8 +226,8 @@ test('describeItem: PV fields with values, ranges and rotation options (from tex
   const item = tpcl.parse(PV).items[0];
   const d = tpcl.describeItem(item, PV);
   assert.equal(d.kind, 'text');
-  assert.deepEqual(keys(d), ['width', 'height', 'rotation', 'font', 'attribute']);
-  assert.deepEqual(d.fields.map(f => f.type), ['number', 'number', 'select', 'select', 'select']);
+  assert.deepEqual(keys(d), ['width', 'height', 'rotation', 'font', 'attribute', 'align']);
+  assert.deepEqual(d.fields.map(f => f.type), ['number', 'number', 'select', 'select', 'select', 'select']);
   assert.deepEqual([field(d, 'width').value, field(d, 'height').value, field(d, 'rotation').value], [100, 100, 0]);
   assert.deepEqual([field(d, 'width').min, field(d, 'width').max], [1, 9999]);
   assert.deepEqual(field(d, 'rotation').options.map(o => o.value), [0, 90, 180, 270]);
@@ -243,10 +243,10 @@ test('describeItem: reads current values from the model when no text is given', 
 test('describeItem: PC magnifications come from the text; without text only rotation', () => {
   const item = tpcl.parse('{PC001;0100,0200,12,03,A,11,B|}').items[0];
   const d = tpcl.describeItem(item, '{PC001;0100,0200,12,03,A,11,B|}');
-  assert.deepEqual(keys(d), ['hMag', 'vMag', 'rotation', 'font', 'attribute']);
-  assert.deepEqual(d.fields.map(f => f.value), [12, 3, 90, 'A', 'black']);
+  assert.deepEqual(keys(d), ['hMag', 'vMag', 'rotation', 'font', 'attribute', 'align']);
+  assert.deepEqual(d.fields.map(f => f.value), [12, 3, 90, 'A', 'black', 'left']);
   assert.deepEqual([field(d, 'hMag').min, field(d, 'hMag').max], [1, 99]);
-  assert.deepEqual(keys(tpcl.describeItem(item)), ['rotation', 'attribute']);
+  assert.deepEqual(keys(tpcl.describeItem(item)), ['rotation', 'attribute', 'align']);
 });
 
 test('describeItem: generic barcode', () => {

@@ -30,7 +30,7 @@ Out for now (cost/risk, decide later): G6 barcode type selector, G7 check digit 
 - [x] T2 TPCL content editing: inline `=data` and the separate RC/RV/RB command (framing-unsafe chars rejected, FNC1 `>8` round trip), PC/PV/XB; tests.
 - [x] T3 Font: TPCL PC font letter select, TSPL TEXT font id (string select); tests.
 - [x] T4 TPCL text attribute: parse B/W/F/C (extend the regex) into the item, draw reverse / boxed / stroked in the preview, edit the attribute; tests.
-- [ ] T5 TPCL alignment `P1..P4`: parse, draw in the preview, edit; tests.
+- [x] T5 TPCL alignment `P1..P4`: parse, draw in the preview, edit; tests.
 - [ ] T6 TPCL spacing `±hh` and bold `Jkkll`: parse, show, edit; README and contract docs.
 
 ## Route declaration
@@ -49,3 +49,4 @@ T1 done: panel `text` field + TSPL content (TEXT/BARCODE/QR); `node --test` 771/
 T2 done: TPCL content (inline =data, RC/RV/RB command, FNC1 >8 round trip, unsafe chars rejected, max 255); `node --test` 792/792 green; commit c81e1a6. Next: T3.
 T3 done: TPCL PC/PV font letter select and TSPL TEXT font id (string select, extra option for a current unknown value); `node --test` 804/804 green; commit a442d2e. Next: T4.
 T4 done: TPCL text attribute B/W/F/C parsed into item.attribute, drawn (pure geometry in text/render.js, sized from the measured text in layout.js), written back by emit and editable (kind + margins in dots); TSPL warns once; `node --test` 833/833 green; commit 573bef2 (browser check pending). Next: T5.
+T5 done: TPCL alignment Pq/Po parsed into item.align (P1 = none), drawn via text-anchor / textLength (pure alignAttributes in text/render.js; center/right relative to the origin = approximation, the manual gives an area width only to P4), written back by emit and editable (kind + equal-space width); TSPL info once; `node --test` 858/858 green; commit PENDING (browser check pending). Next: T6.

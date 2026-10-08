@@ -136,6 +136,9 @@
       if (item.attribute && item.attribute.kind !== 'black') {
         ctx.once('tspl-text-attribute', () => diag.warning('Hay textos con atributo (invertido, con marco o tachado), que TSPL no tiene: se escriben sin él'));
       }
+      if (item.align && item.align.kind !== 'left' && item.align.kind) {
+        ctx.once('tspl-text-align', () => diag.info('Hay textos con alineación (centro, derecha o espaciado igual), que TEXT de TSPL no escribe: se escriben a la izquierda'));
+      }
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
       return `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${quoted(safeData(ctx, item.data))}`;
     }

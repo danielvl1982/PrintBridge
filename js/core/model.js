@@ -18,6 +18,8 @@
  *               attribute? = { kind: 'reverse' | 'box' | 'strike', h, v?, native?: { h, v? }, defaultDots } (TPCL PC/PV attribute,
  *               absent = black); h/v = distance from the string to the end of the background / box / stroke in 0.1 mm (strike: h
  *               only), native = the dots written in the file (absent when omitted), defaultDots = the manual default in dots
+ *               align? = { kind: 'center' | 'right' | 'equal', width? } (TPCL Pq / Po alignment relative to x; absent = left;
+ *               width = the string area of an equal space in 0.1 mm, 50..1040)
  *       qr      { ref, x, y, ecc, cell, symbology:'qr', native:{ type, cell }, data }
  *               cell = side of each module in 0.1 mm (native.cell = the language's value, in dots)
  *               neutral ecc: 'L' | 'M' | 'Q' | 'H'; each language translates it to its own letter (TPCL: inside tpcl.js)

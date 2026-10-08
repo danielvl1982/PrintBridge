@@ -30,7 +30,8 @@
     const lead = content.length - content.trimStart().length;
     const end = content.trimEnd().length;
     const size = Number(textEl.getAttribute('font-size'));
-    const x = lead ? textEl.getSubStringLength(0, lead) : 0;
+    // Start of the first visible character: includes the shift of an aligned text (text-anchor) and of an equal space
+    const x = textEl.getStartPositionOfChar(lead).x;
     const width = textEl.getSubStringLength(lead, end - lead);
     const ink = boxInGroup(textEl, { x, y: -size * PB.config.capHeightRatio, width, height: size * PB.config.capHeightRatio });
     return { full, ink };

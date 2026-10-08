@@ -423,7 +423,8 @@
         const [s, e] = match.indices[f.group];
         const digits = f.write(changes[f.key], e - s, match[f.group], changes);
         // `exact` fields write a whole token (not digits): no zero padding
-        if (digits !== null) edits.push({ start: span.start + map[s], end: span.start + map[e - 1] + 1, value: f.exact ? digits : digits.padStart(e - s, '0') });
+        // An empty range (an omitted optional token) is an insertion point: it has no end to map back through the stripped line breaks
+        if (digits !== null) edits.push({ start: span.start + map[s], end: s === e ? span.start + map[s] : span.start + map[e - 1] + 1, value: f.exact ? digits : digits.padStart(e - s, '0') });
       }
     }
     // Content: the framing characters have no escape, so a value holding one is rejected (never altered)

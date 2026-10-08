@@ -60,8 +60,43 @@
   /** Outline font (PV command): always simulated with this family and weight. */
   const OUTLINE_FONT = Object.freeze({ family: 'sans', weight: 700 });
 
-  // Options common to PC and PV after the font type: [spacing adjustment,]rotation,attribute[,…][=text]
-  const TEXT_TAIL = String.raw`([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC])(\d{0,4})[^=]*(?:=([\s\S]*))?$`;
+  // Options common to PC and PV after the font type: [spacing adjustment,]rotation,attribute[,J][,M][,n][,Z][,Pq][=text].
+  // Group 10 holds the optional parameters between the attribute and the data (only the alignment is interpreted), 11 the data.
+  const TEXT_TAIL = String.raw`([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC])(\d{0,4})([^=]*)(?:=([\s\S]*))?$`;
+
+  /** Alignment kinds of the Pq / Po option: 1 left (default), 2 center, 3 right, 4aaaa equal space over an area aaaa wide (0.1 mm). */
+  const ALIGN_CODES = Object.freeze({ left: '1', center: '2', right: '3', equal: '4' });
+  const ALIGN_KINDS = Object.freeze(Object.fromEntries(Object.entries(ALIGN_CODES).map(([kind, code]) => [code, kind])));
+  const ALIGN_MIN_WIDTH = 50;
+  const ALIGN_MAX_WIDTH = 1040;
+  /** Area width written when an item switches to equal space without one (0.1 mm). */
+  const ALIGN_DEFAULT_WIDTH = 500;
+
+  /** The "P" parameter as its own comma-separated token among the skipped optional parameters; P4 needs its 4 digits. */
+  const ALIGN_PARAM = /(?:^|,)P(?:([123])|4(\d{4}))(?=,|;|$)/;
+
+  /** { kind, width? } of the alignment in the optional parameters, nothing for P1, an absent or a malformed option (left). */
+  function parseAlign(params) {
+    const m = ALIGN_PARAM.exec(params || '');
+    if (!m || m[1] === '1') return {};
+    return { align: m[1] ? { kind: ALIGN_KINDS[m[1]] } : { kind: 'equal', width: +m[2] } };
+  }
+
+  const isAlignKind = k => typeof k === 'string' && Object.hasOwn(ALIGN_CODES, k);
+
+  /** Alignment token (",P2", ",P40300") from a kind and the area width; the width is clamped, a missing one defaults. */
+  function alignToken(kind, width) {
+    if (kind !== 'equal') return `,P${ALIGN_CODES[kind]}`;
+    const w = clampInt(Number.isFinite(width) ? width : ALIGN_DEFAULT_WIDTH, ALIGN_MIN_WIDTH, ALIGN_MAX_WIDTH);
+    return `,P4${String(w).padStart(4, '0')}`;
+  }
+
+  /** Kind and width of an alignment token as found in the command ("" = none = left). */
+  function readAlignToken(raw) {
+    const m = /^,P(?:([123])|4(\d{4}))$/.exec(raw);
+    if (!m) return { kind: 'left', width: null };
+    return m[1] ? { kind: ALIGN_KINDS[m[1]], width: null } : { kind: 'equal', width: +m[2] };
+  }
 
   /**
    * Font select of the properties panel: the letter is written as is, and a letter outside `letters` that the item
@@ -174,6 +209,44 @@
     ];
   }
 
+  const ALIGN_OPTIONS = Object.freeze([
+    { value: 'left', label: 'Izquierda' }, { value: 'center', label: 'Centro' }, { value: 'right', label: 'Derecha' }, { value: 'equal', label: 'Espaciado igual' },
+  ]);
+
+  /**
+   * The two panel fields over the one alignment token (",Pq", written whole: `exact`; empty in the command when omitted, so
+   * a change inserts it after the other optional parameters). The kind select composes the token, including the width of an
+   * equal space (alignWidth of the change set, else the one it had, else a default); the width field writes only when the
+   * kind is not being changed and the item already has an equal space. Left keeps an explicit P1 and never writes an omitted one.
+   */
+  function alignFields(group) {
+    return [
+      {
+        key: 'align', label: 'Alineación', type: 'select', group, exact: true, options: ALIGN_OPTIONS,
+        read: raw => readAlignToken(raw).kind,
+        model: item => (item.align && item.align.kind) || 'left',
+        write: (v, width, raw, changes) => {
+          if (!isAlignKind(v)) return null;
+          if (v === 'left') return raw === '' ? null : ',P1';
+          const had = readAlignToken(raw);
+          return alignToken(v, isOffset(changes.alignWidth) ? changes.alignWidth : had.width);
+        },
+      },
+      {
+        key: 'alignWidth', label: 'Ancho del área', type: 'number', min: ALIGN_MIN_WIDTH, max: ALIGN_MAX_WIDTH, step: 1, group, exact: true,
+        read: raw => readAlignToken(raw).width ?? undefined,
+        model: item => (item.align && item.align.kind === 'equal' ? item.align.width : undefined),
+        write: (v, width, raw, changes) => {
+          if (!isOffset(v) || isAlignKind(changes.align) || readAlignToken(raw).kind !== 'equal') return null;
+          return alignToken('equal', v);
+        },
+      },
+    ];
+  }
+
+  /** Optional parameters between the attribute and the data (J, M, n, Z, never P), then the alignment token, possibly empty. */
+  const ALIGN_SLOT = String.raw`(?:,(?!P)[^,=;|]*)*((?:,P(?:[123]|4\d{4}))?)`;
+
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
@@ -210,10 +283,11 @@
       const data = safeData(ctx, item.data);
       const choice = bitmapChoice({ ...font, size, scaleX });
       const attribute = attributeText(item.attribute, ctx);
+      const align = item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignToken(item.align.kind, item.align.width) : '';
       if (choice) {
         const id = allocId(ctx, 'PC');
         const mag = n => String(n).padStart(2, '0');
-        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${rot},${attribute}`), wrap(`RC${id};${data}`)];
+        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${rot},${attribute}${align}`), wrap(`RC${id};${data}`)];
       }
       // The outline font is always drawn sans bold: any other family, weight or style is lost
       if ((font.family || OUTLINE_FONT.family) !== OUTLINE_FONT.family || (font.weight == null ? OUTLINE_FONT.weight : font.weight) !== OUTLINE_FONT.weight || (font.style || 'normal') !== 'normal') {
@@ -221,7 +295,7 @@
       }
       const id = allocId(ctx, 'PV');
       const dim = n => pad4(Math.max(1, clampCoord(n)));
-      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${rot},${attribute}`), wrap(`RV${id};${data}`)];
+      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${rot},${attribute}${align}`), wrap(`RV${id};${data}`)];
     }
 
     function textRotation(ctx, ref, rotationCode) {
@@ -283,7 +357,8 @@
               font: bitmapFont(ctx, ref, m[6].toUpperCase(), m[4], m[5]),
               rotation: textRotation(ctx, ref, m[7]),
               ...textAttribute(ctx, m[8], m[9], Math.max(magnification(m[4]), magnification(m[5])) * PC_DEFAULT_DOTS),
-              data: m[10] ?? null,
+              ...parseAlign(m[10]),
+              data: m[11] ?? null,
             });
           },
         },
@@ -298,7 +373,8 @@
               font: { size: +m[5], scaleX: +m[4] / +m[5], family, weight, style: 'normal' },
               rotation: textRotation(ctx, ref, m[7]),
               ...textAttribute(ctx, m[8], m[9], (Math.max(+m[4], +m[5]) / 10) * PV_DEFAULT_DOTS_PER_MM),
-              data: m[10] ?? null,
+              ...parseAlign(m[10]),
+              data: m[11] ?? null,
             });
           },
         },
@@ -315,24 +391,26 @@
       editable: [
         { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
-          pattern: /^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC]\d{0,4})/d,
+          pattern: new RegExp(String.raw`^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC]\d{0,4})` + ALIGN_SLOT, 'd'),
           fields: [
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
             rotationField(4),
             fontField(3, OUTLINE_FONT_OPTIONS),
             ...attributeFields(5),
+            ...alignFields(6),
           ],
         },
         { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
-          pattern: /^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC]\d{0,4})/d,
+          pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),(?:[+-]\d+,)?(\d{2}),([BWFC]\d{0,4})` + ALIGN_SLOT, 'd'),
           fields: [
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
             rotationField(4),
             fontField(3, BITMAP_FONT_OPTIONS),
             ...attributeFields(5),
+            ...alignFields(6),
           ],
         },
       ],
