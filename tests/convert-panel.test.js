@@ -379,23 +379,18 @@ test('Copiar writes the exact ZPL output (CRLF kept)', async () => {
   });
 });
 
-test('the label losses are listed: the pitch / gap that ZPL cannot hold, and what the source parser did not read', async () => {
+test('the label losses are listed: the pitch / gap that ZPL cannot hold', async () => {
   await withPanel({}, async ({ els }) => {
     els.select.value = 'zpl';
     await els.convert.fire('click');
     assert.ok(texts(els.diagnostics).some(t => /ZPL solo declara el ancho y el largo/.test(t)));
   });
+});
+
+test('the warnings of reading the source are not repeated in the conversion list', async () => {
   await withPanel({ text: '^XA\r\n^PW799\r\n^LL480\r\n^FO30,30^A0N,30,30^FDHola^FS\r\n^FB300,3^FDblock^FS\r\n^XZ\r\n' }, async ({ els }) => {
     els.select.value = 'tspl';
     await els.convert.fire('click');
-    const unread = els.diagnostics.children.filter(c => c.textContent.startsWith('Origen: '));
-    assert.equal(unread.length, 1);
-    assert.match(unread[0].textContent, /Comando no soportado/);
-    assert.equal(unread[0].className, 'warning');
-  });
-  await withPanel({ text: ZPL_EXAMPLE.source }, async ({ els }) => {
-    els.select.value = 'tspl';
-    await els.convert.fire('click');
-    assert.ok(!texts(els.diagnostics).some(t => t.startsWith('Origen: ')), 'a label the parser read completely adds nothing');
+    assert.ok(!texts(els.diagnostics).some(t => t.startsWith('Origen: ')));
   });
 });

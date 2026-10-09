@@ -196,8 +196,7 @@ between dots and mm (set it to the printer's before converting), and the target 
 
 - **Convertir:** writes the label in the chosen language in the output box. A line above it says what was converted
   ("Convertido de … a …"); with an empty or unrecognized label it shows the reason instead.
-- **Avisos de conversión:** a list of everything the conversion could not carry over exactly (orange = warning, gray = information), plus, marked **Origen:**, the warnings
-  and errors of reading the source (a command the viewer does not know is not in the output either). Read it before printing.
+- **Avisos de conversión:** a list of everything the conversion could not carry over exactly (orange = warning, gray = information). Read it before printing.
 - **Copiar:** copies the output to the clipboard. A TSPL label with images holds raw binary data that the clipboard can alter, so in that case the panel says so and
   **Descargar** is the reliable way. TPCL and ZPL are plain text (a ZPL image is ASCII hexadecimal `^GF` data), so Copiar is safe and the note never appears for them.
 - **Descargar:** saves the output as a file: ZPL as **`.zpl`** and TPCL as `.txt`, both UTF-8 (no byte order mark); TSPL as **`.prn`, one byte per character (latin1)**, because the
