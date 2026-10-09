@@ -12,7 +12,7 @@
  * is drawn as one line of text; a counter "@n" content shows the start value assigned with @n="..." (SET COUNTER gives the step, the
  * printer increments it per label); an unassigned counter, a mix ("x"+@1) and a BLOCK content keep the literal text.
  * Origin: TEXT x,y is the top-left corner of the character cell (TSC manual) while the model draws from the baseline, so the reader adds the
- * ascent (ASCENT of the height, whole dots, on the side the letters stand to) and emit takes it off.
+ * ascent (ASCENT / SCALABLE_ASCENT of the height, whole dots, on the side the letters stand to) and emit takes it off.
  * Emit (the inverse): `emit(item, ctx)` writes a TEXT command. A mono font whose size and width are whole multiples of a
  * built-in bitmap font becomes that font "1".."8"; anything else becomes the scalable font "0" with POINT sizes (the
  * exact inverse of fontOf), with one info that the TSPL fonts differ from the source font when family, weight or style
@@ -56,15 +56,20 @@
   /** Largest point size of a scalable font offered in the properties panel. */
   const MAX_POINTS = 200;
 
-  /** Share of the character height above the baseline (ascent), as in the ZPL slice. Not verified on a printer. */
+  /**
+   * Share of the character height above the baseline (ascent). The scalable font takes 3/4, the share of the ZPL font 0 (ZPL II Volume Two,
+   * Table 10) so that a ZPL <-> TSPL conversion of a scalable text keeps its top edge; the bitmap fonts keep 0.8 (no manual gives it).
+   * Neither is verified on a TSC printer.
+   */
   const ASCENT = 0.8;
+  const SCALABLE_ASCENT = 0.75;
 
   /**
    * Offset (0.1 mm) from the TEXT reference point (the top-left corner of the character cell, TSC manual) to the baseline origin the
    * neutral model draws from, for a rotation in degrees: the ascent lies on the side the letters stand to.
    */
-  function baselineShift(rotation, size, dot) {
-    const a = Math.round(size / dot * ASCENT) * dot; // whole dots, so a read / write round trip does not drift
+  function baselineShift(rotation, size, dot, scalable) {
+    const a = Math.round(Math.round(size / dot) * (scalable ? SCALABLE_ASCENT : ASCENT)) * dot; // height in whole dots first, as ZPL does // whole dots, so a read / write round trip does not drift
     if (rotation === 90) return { x: -a, y: 0 };
     if (rotation === 180) return { x: 0, y: -a };
     if (rotation === 270) return { x: a, y: 0 };
@@ -162,7 +167,7 @@
       if (item.bold) ctx.once('tspl-text-bold', () => diag.info('Hay textos en negrita (sobreimpresión), que TEXT de TSPL no escribe: se escriben sin ella'));
       const degrees = rotationDegrees(ctx, item.rotation);
       // The model keeps the baseline origin; TEXT writes the top-left corner of the character cell
-      const shift = baselineShift(degrees, size, units.dotSize(ctx.dpi));
+      const shift = baselineShift(degrees, size, units.dotSize(ctx.dpi), !choice);
       const [x, y] = [roundDots(exactDots(ctx, (item.x || 0) - shift.x)), roundDots(exactDots(ctx, (item.y || 0) - shift.y))];
       const data = safeData(ctx, item.data);
       // A counter writes SET COUNTER and the start value before the command, which then prints "@n"
@@ -232,7 +237,7 @@
       const font = fontOf(ctx, ref, fontArg.value, xmul, ymul);
       const rotation = rotationOf(ctx, ref, rotArg);
       const origin = ctx.pos(point.x, point.y);
-      const shift = baselineShift(rotation, font.size, ctx.dot);
+      const shift = baselineShift(rotation, font.size, ctx.dot, !(fontArg.value.toUpperCase() in BITMAP_FONTS));
       const [x, y] = [origin.x + shift.x, origin.y + shift.y];
       return {
         kind: 'text', ref, source: sourceOf(cmd), x, y, raw: { x: String(point.x), y: String(point.y) },

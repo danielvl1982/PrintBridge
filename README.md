@@ -245,8 +245,8 @@ increment beyond 10 digits (ZPL `^SN` allows 12) is clamped with one warning; th
 the TPCL format ID and connection setting of a Data Matrix are not converted. The detail of each ZPL feature is in *ZPL support*.
 
 **Text origin:** TPCL, TSPL and ZPL do not place a text the same way (TPCL gives the origin of the text, ZPL `^FO` the top-left of the field and `^FT` the baseline, TSPL `TEXT` the top-left
-of the character cell). The viewer draws every text from its baseline, so it reads a TSPL `TEXT` y as the top edge plus the ascent (80% of the character height, whole dots) and writes it back
-without it: a ZPL `^FO30,25` becomes `TEXT 30,25`. The 80% is an approximation that has not been checked on a printer: check it with a test print.
+of the character cell). The viewer draws every text from its baseline, so it reads a TSPL `TEXT` y as the top edge plus the ascent (75% of the height for the scalable fonts, as the ZPL font 0 in Volume Two; 80% for the bitmap fonts; whole dots) and writes it back
+without it: a ZPL `^FO30,25` becomes `TEXT 30,25`. The 75% / 80% shares are approximations that have not been checked on a TSC printer: check it with a test print.
 
 ## TPCL support (Toshiba TEC)
 
