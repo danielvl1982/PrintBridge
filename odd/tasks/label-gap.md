@@ -18,7 +18,7 @@ let the user edit the one of the language of the label in the Formato row, and c
       pitch > height); emitters write each language's form from either value; the converters stop warning about the pitch / gap between TPCL
       and TSPL; ZPL still warns. (An earlier attempt to derive the pitch in the TSPL parser broke six cross-conversion tests: fix the tests
       with the new, correct expectation.)
-- [ ] G2 Formato row: the field and its label follow the language (Paso / Separación (GAP) / hidden for ZPL and for no language), editing
+- [x] G2 Formato row: the field and its label follow the language (Paso / Separación (GAP) / hidden for ZPL and for no language), editing
       rewrites D / GAP through the size path that already writes width and height; the size combo (pitch = height + 3) sets both consistently.
 - [ ] G3 Tests, README (Formato row, conversion table / the warnings text), CONTRIBUTING if it mentions it, Chrome probe.
 
@@ -27,4 +27,5 @@ let the user edit the one of the language of the label in the Formato row, and c
 TPCL gives `D` with pitch = height + 3 and no warning; a TPCL label shows "Paso" and converts to a TSPL `GAP` of pitch - height.
 
 ## Progress
-- G1 done (route: delegated writer, inline): parsers derive pitch/gap, emitters write either form, TPCL<->TSPL conversion silent about it; RED observed on tests/label-gap.test.js (7 failing) then GREEN; 3555 tests green. Commit: see below.
+- G1 done (route: delegated writer, inline): parsers derive pitch/gap, emitters write either form, TPCL<->TSPL conversion silent about it; RED observed on tests/label-gap.test.js (7 failing) then GREEN; 3555 tests green. Commit: 8d7a7b2.
+- G2 done (inline): the pitch input is a language field (setLanguage in js/ui.js, called from refresh in js/app.js): TPCL Paso, TSPL Separación (GAP), hidden for ZPL / no language; height and width edits keep the gap; RED observed on 5 new size-panel tests, then GREEN; 3560 tests green. Commit: see G3 notes.

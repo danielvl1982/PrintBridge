@@ -28,6 +28,7 @@ body { margin: 0; font-family: "Segoe UI", system-ui, sans-serif; font-size: 14p
 .brand-bridge { color: var(--brand-accent); }
 .toolbar .logo { width: 28px; height: 28px; margin-right: -6px; }
 .toolbar label, .view-row label, .size-row label, .panel-actions label, .panel-foot label { display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.size-row label[hidden] { display: none; }
 .toolbar select, .toolbar input, .view-row select, .view-row input, .size-row select, .size-row input, .panel-actions select, .panel-foot select { font: inherit; padding: 2px 4px; }
 .toolbar input[type=number], .view-row input[type=number], .size-row input[type=number] { width: 72px; }
 .toolbar input[type=range] { width: 110px; padding: 0; }

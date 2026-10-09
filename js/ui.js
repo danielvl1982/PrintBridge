@@ -113,7 +113,9 @@
   const CUSTOM = 'custom';
 
   /**
-   * els: { select, width, height, pitch }
+   * els: { select, width, height, pitch, pitchField?, pitchText? } (pitchField: the label that wraps the pitch input, pitchText: its text).
+   * The pitch input follows the language of the label (setLanguage): TPCL shows the pitch ("Paso"), TSPL the gap ("Separación (GAP)",
+   * pitch = height + gap) and ZPL or no language hide it, since they have nowhere to write it.
    * callbacks: { onApply(resolvedSize) } (0.1 mm)
    */
   function createSizePanel(els, catalog, { onApply }) {
@@ -122,6 +124,18 @@
     let shown = null;
     /** Field the user is typing in: showArea leaves it alone until it is left (change). */
     let editing = null;
+    /** What the pitch input holds: 'pitch' (TPCL), 'gap' (TSPL) or null (hidden: ZPL, no language). Before setLanguage it is the pitch. */
+    let mode = 'pitch';
+    const FIELD = {
+      pitch: { text: 'Paso', title: 'Distancia entre el inicio de una etiqueta y la siguiente (alto + separación). Vacío: igual al alto', min: '5' },
+      gap: { text: 'Separación (GAP)', title: 'Separación entre etiquetas (GAP de TSPL, el paso menos el alto). Vacío o 0: sin separación', min: '0' },
+    };
+    /** Value of the pitch input (mm) for an area, in the current mode: the pitch, or the gap = pitch - height. */
+    const fieldValue = area => {
+      if (!area.pitch) return '';
+      if (mode !== 'gap') return units.toMm(area.pitch);
+      return area.pitch > area.height ? Math.round(units.toMm(area.pitch - area.height) * 100) / 100 : '';
+    };
 
     /** Values of the inputs in mm: [width, height, pitch] (NaN if empty). */
     const readInputs = () => inputs.map(i => parseFloat(String(i.value).replace(',', '.')));
@@ -138,8 +152,21 @@
     /** Shows in the fields the size the label declares (or the fallback it is drawn with), except the field being edited. */
     function showArea(area) {
       shown = area;
-      const values = [units.toMm(area.width), units.toMm(area.height), area.pitch ? units.toMm(area.pitch) : ''];
+      const values = [units.toMm(area.width), units.toMm(area.height), fieldValue(area)];
       inputs.forEach((input, i) => { if (input !== editing) input.value = values[i]; });
+    }
+
+    /** Sets what the pitch input is for, by language id: 'tpcl' pitch, 'tspl' gap, anything else hides it. */
+    function setLanguage(id) {
+      mode = id === 'tpcl' ? 'pitch' : id === 'tspl' ? 'gap' : null;
+      if (els.pitchField) els.pitchField.hidden = mode === null;
+      if (mode) {
+        const field = FIELD[mode];
+        if (els.pitchText) els.pitchText.textContent = field.text;
+        if (els.pitchField) els.pitchField.title = field.title;
+        els.pitch.min = field.min;
+      }
+      if (shown) showArea(shown);
     }
 
     /** Marks the standard size equal to the declared one, or "Personalizado" (also if the label declares none). */
@@ -151,10 +178,15 @@
     /** A field was left: write the typed size to the label, or go back to the label's values if it is not valid. */
     function commit() {
       editing = null;
-      const [w, h, p] = readInputs();
-      const pitchEmpty = String(els.pitch.value).trim() === '';
-      if (w > 0 && h > 0 && (pitchEmpty || p > 0)) {
-        onApply(sizes.resolve({ name: 'Personalizado', w, h, p: pitchEmpty ? h : p }));
+      const [w, h, typed] = readInputs();
+      const fieldEmpty = String(els.pitch.value).trim() === '';
+      // The gap (pitch - height) is what the label keeps when only the width or the height changes, so the pitch follows the height
+      const pitchEdited = shown ? fieldEmpty !== (fieldValue(shown) === '') || (!fieldEmpty && typed !== fieldValue(shown)) : true;
+      let p = h;
+      if (pitchEdited) p = fieldEmpty ? h : mode === 'gap' ? h + typed : typed;
+      else if (shown && shown.pitch > shown.height) p = h + (shown.pitch - shown.height) / 10;
+      if (w > 0 && h > 0 && (fieldEmpty || typed >= (mode === 'gap' ? 0 : Number.MIN_VALUE))) {
+        onApply(sizes.resolve({ name: 'Personalizado', w, h, p }));
       } else if (shown) {
         showArea(shown);
       }
@@ -169,7 +201,7 @@
       input.addEventListener('change', commit);
     });
 
-    return Object.freeze({ init, showArea, selectFor });
+    return Object.freeze({ init, showArea, selectFor, setLanguage });
   }
 
   PB.ui = PB.ui || {};
