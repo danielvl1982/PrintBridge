@@ -32,7 +32,7 @@
  *   - ^FO / ^FT open a field (origin x,y in dots, LH not applied yet); ^FS closes it; a field still open when the next ^FO / ^FT arrives is
  *     closed there (one warning per label: the guide shows the ^FS in every field), and one still open at ^XZ or at the end of the text is
  *     closed silently (the guide: ^XZ "ends the field data").
- *   - ^FD, ^FV, ^FH, ^FR, ^FN, ^FP, ^SN, ^SF are field MODIFIERS: they are stored in the field (field.data, field.reverse, field.fn, field.serial) and never dispatched.
+ *   - ^FD, ^FV, ^FH, ^FR, ^FB, ^FN, ^FP, ^SN, ^SF are field MODIFIERS: they are stored in the field (field.data, field.reverse, field.block (the ^FB command), field.fn, field.serial) and never dispatched.
  *   - the setup commands (^PW ^LL ^LH ^LS ^LT ^PO ^CF ^FW ^CI ^BY and the recognised-but-not-drawn configuration ones) are IMMEDIATE: they run when they
  *     are read, inside an open field too, so the state the handler sees at ^FS is the state after all of them (the guide's ^CF inside a field
  *     example relies on it). A slice may declare an immediate handler too (`immediate: true`: ^LR, in js/components/area/zpl.js).
@@ -112,7 +112,7 @@
   const REVERSIBLE = new Set(['text', 'line', 'ellipse', 'area']);
 
   /** Commands that only complete a field (never its main command). */
-  const MODIFIERS = new Set(['^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^FS', '^FX', '^SN', '^SF']);
+  const MODIFIERS = new Set(['^FB', '^FD', '^FV', '^FH', '^FR', '^FN', '^FP', '^FS', '^FX', '^SN', '^SF']);
 
   /** ^FN numbers (guide: 0 to 9999) and the commands whose data carries a structure the variable placeholder would break (QR, Data Matrix). */
   const FN_MAX = 9999;
@@ -576,7 +576,7 @@
   /** Starts a field; its start offset is the one of its first command. */
   function openField(ctx) {
     const cmds = [];
-    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, fn: null, serial: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
+    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, fn: null, serial: null, block: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
     return ctx.field;
   }
 
@@ -646,6 +646,9 @@
     if (variable) {
       for (const item of added) if (item.data === variable.placeholder) item.native = { ...item.native, fn: { n: variable.n, prompt: variable.prompt, default: variable.default } };
     } else if (field.serial) applySerial(ctx, field.serial, added);
+    if (field.block && added.some(item => item.kind !== 'text')) {
+      ctx.once('zpl-fb-not-text', () => diag.info('^FB (bloque de texto) solo se aplica al texto: en códigos de barras, QR, Data Matrix o imágenes el visor lo ignora'));
+    }
     if (field.reverse && ctx.model.items.slice(before).some(item => !REVERSIBLE.has(item.kind))) {
       ctx.once('zpl-reverse-unsupported', () => diag.info('^FR / ^LR sobre códigos de barras, QR, Data Matrix o imágenes: el visor los dibuja sin invertir (no verificado en impresora)'));
     }
@@ -732,6 +735,7 @@
     if (MODIFIERS.has(id)) {
       const field = addToField(ctx, cmd);
       if (id === '^FR') field.reverse = true;
+      else if (id === '^FB') field.block = cmd;
       else if (cmd.data) {
         field.data = { cmd, kind: cmd.name, value: cmd.args[0].value, raw: cmd.args[0].raw, start: cmd.args[0].start, end: cmd.args[0].end, hex: !!cmd.hex };
         field.serial = null;

@@ -451,11 +451,11 @@
       for (const f of shape.fields) {
         const value = match ? f.read(match[f.group], item) : f.model && f.model(item);
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step } = f;
+        const { key, label, type, min, max, step, note } = f;
         // optionsFor lists a current value outside the options; it also gets the item and the matched command text (the
         // options of the barcode check digit depend on the symbology written there)
         const options = f.optionsFor ? f.optionsFor(value, item, match ? match[f.group] : undefined) : f.options;
-        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
+        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }), ...(note && { note }) });
       }
     }
     // Content: from the text when given (where its data is stored), else from the item model

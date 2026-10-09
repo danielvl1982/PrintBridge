@@ -89,6 +89,17 @@ neutral('text-reserved-characters', () => [text({ data: 'a^b~c,d;e\\f' })]);
 neutral('text-accents', () => [text({ data: 'Ñandú café' })]);
 neutral('text-all-ascii', () => [text({ data: '!#$%&\'()*+-./:<=>?@[]_`0123456789' })]);
 neutral('text-zpl-reverse', () => [text({ reverse: true })]);
+// Text blocks (TSPL BLOCK, ZPL ^FB): width, lines, alignment and line space travel between TSPL and ZPL; TPCL has no block
+const block = (o = {}) => ({ width: 300, lines: 4, align: 'left', lineSpace: 0, ...o });
+const BLOCK_DATA = 'Hello world, this is a block of text';
+neutral('text-block', () => [text({ data: BLOCK_DATA, block: block() })]);
+neutral('text-block-center', () => [text({ data: BLOCK_DATA, block: block({ align: 'center' }) })]);
+neutral('text-block-right', () => [text({ data: BLOCK_DATA, block: block({ align: 'right' }) })]);
+neutral('text-block-justify', () => [text({ data: BLOCK_DATA, block: block({ align: 'justify' }) })]);
+neutral('text-block-line-space', () => [text({ data: BLOCK_DATA, block: block({ lineSpace: 25 }) })]);
+neutral('text-block-breaks', () => [text({ data: 'one\ntwo three', block: block() })]);
+neutral('text-block-rotated', () => [text({ x: 500, data: BLOCK_DATA, rotation: 90, block: block() })]);
+neutral('text-block-mono', () => [text({ data: BLOCK_DATA, font: font(100, 'mono'), block: block({ width: 400 }) })]);
 
 // The fonts of each language, written natively: every bitmap font, magnifications, the scalable fonts and the rotations. The neutral model
 // cannot name a font and every language maps its family and size to its own, so a font is always "degraded" between languages.
@@ -303,6 +314,11 @@ function differences(a, b, dot, withFont) {
       eq('counter', a.counter && a.counter.step, b.counter && b.counter.step);
       eq('zeroSuppress', a.zeroSuppress || 0, b.zeroSuppress || 0);
       eq('reverse', !!a.reverse, !!b.reverse);
+      eq('block', !!a.block, !!b.block);
+      if (a.block && b.block) {
+        pos('block.width', a.block.width, b.block.width); eq('block.lines', a.block.lines, b.block.lines); eq('block.align', a.block.align, b.block.align);
+        pos('block.lineSpace', a.block.lineSpace || 0, b.block.lineSpace || 0);
+      }
       break;
     }
     case 'barcode': {
@@ -449,6 +465,7 @@ const ZERO_ZPL = /supresión de ceros/;
 const ELLIPSE_TPCL = /elipses y círculos no se escriben en TPCL/;
 const REVERSE = /impresión inversa/;
 const WHITE = /en blanco/;
+const TPCL_BLOCK = /TPCL no tiene bloque de texto/;
 
 const RULES = [
   // ---- text
@@ -459,6 +476,9 @@ const RULES = [
   [/^text-counter-zero-suppress$/, [T2S, Z2S], deg(['zeroSuppress'], ZERO_TSPL)],
   [/^text-counter-zero-suppress$/, [T2Z], deg(['zeroSuppress'], ZERO_ZPL)],
   [/^text-zpl-reverse$/, [Z2T, Z2S], deg(['reverse'], REVERSE)],
+  [/^text-block-breaks$/, [S2T, Z2T], deg(['block', 'data'], TPCL_BLOCK)],
+  [/^text-block/, [S2T, Z2T], deg(['block'], TPCL_BLOCK)],
+  [/^text-block-justify$/, [Z2S], deg(['block.align'], /bloques de texto justificados/)],
   // ---- fonts: always the nearest built-in font of the target, reported; the sizes and the geometry stay
   [/^fonts-/, PAIRS, deg([], FONTS, ['font', 'font.size', 'font.width'])],
   // ---- barcodes

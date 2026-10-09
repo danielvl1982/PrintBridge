@@ -301,6 +301,16 @@
     return [field('boldH', 'Negrita horizontal', 'h'), field('boldV', 'Negrita vertical', 'v')];
   }
 
+  /**
+   * The Tipo select of a text: TPCL has no text block (not in any of its manuals), so the only value is the line. It is listed (the panel shows it
+   * disabled, with the note) so that the form is the same in the three languages, and it never writes anything.
+   */
+  const KIND_FIELD = Object.freeze({
+    key: 'kind', label: 'Tipo', type: 'select', group: 1, options: Object.freeze([{ value: 'line', label: 'Línea de texto' }]),
+    note: 'TPCL no tiene bloque de texto: un texto es siempre una línea',
+    read: () => 'line', model: () => 'line', write: () => null,
+  });
+
   const ALIGN_OPTIONS = Object.freeze([
     { value: 'left', label: 'Izquierda' }, { value: 'center', label: 'Centro' }, { value: 'right', label: 'Derecha' }, { value: 'equal', label: 'Espaciado igual' },
   ]);
@@ -451,7 +461,9 @@
       const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
       const rot = rotationCode(ctx, item.rotation);
-      const data = safeData(ctx, item.data);
+      // TPCL has no text block (none of its manuals): a block is written as one line, its breaks as spaces, with one warning
+      if (item.block) ctx.once('tpcl-text-block', () => diag.warning('Hay bloques de texto (BLOCK de TSPL, ^FB de ZPL): TPCL no tiene bloque de texto, se escriben como una línea de texto sin ajuste de línea'));
+      const data = safeData(ctx, item.block ? String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, ' ') : item.data);
       const choice = bitmapChoice({ ...font, size, scaleX });
       const attribute = attributeText(item.attribute, ctx);
       if (item.reverse) ctx.once('tpcl-text-reverse', () => diag.warning('Hay textos con impresión inversa (^FR de ZPL): TPCL no la tiene en el texto (su atributo de fondo negro es otra cosa), se escriben normales'));
@@ -571,6 +583,7 @@
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
           pattern: new RegExp(String.raw`^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + TAIL_SLOTS, 'd'),
           fields: [
+            KIND_FIELD,
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
             rotationField(5),
@@ -585,6 +598,7 @@
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
           pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + TAIL_SLOTS, 'd'),
           fields: [
+            KIND_FIELD,
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
             rotationField(5),

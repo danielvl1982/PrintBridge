@@ -197,9 +197,9 @@ test('emit: #NAME# / <#NAME#> placeholders of other languages are written as lit
 test('describeItem: an ^FN field has no content or counter fields (its test value is edited in "Valores de prueba"); its other fields stay', () => {
   const src = wrap(FIELD('^FN1^FDACME'));
   const fields = zpl.describeItem(zpl.parse(src, { dpi: DPI }).items[0], src).fields.map(f => f.key);
-  assert.deepEqual(fields, ['font', 'height', 'width', 'rotation', 'reverse']);
+  assert.deepEqual(fields, ['kind', 'font', 'height', 'width', 'rotation', 'reverse']);
   const bare = wrap('^FO10,10^A0N,30,30^FN1^FS');
-  assert.deepEqual(zpl.describeItem(zpl.parse(bare, { dpi: DPI }).items[0], bare).fields.map(f => f.key), ['font', 'height', 'width', 'rotation', 'reverse']);
+  assert.deepEqual(zpl.describeItem(zpl.parse(bare, { dpi: DPI }).items[0], bare).fields.map(f => f.key), ['kind', 'font', 'height', 'width', 'rotation', 'reverse']);
 });
 
 test('updateItem: the ^FN is untouched when another property of the field changes, and the counter / content edits refuse', () => {

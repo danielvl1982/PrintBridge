@@ -140,7 +140,7 @@ test('TEXT invalid multipliers warn and use 1', () => {
   assert.equal(model.diagnostics.filter(d => d.level === 'warning').length, 2);
 });
 
-test('BLOCK without optional fields is one text item with a single info diagnostic', () => {
+test('BLOCK is one text item with a block and no diagnostic (see tests/text-block.test.js)', () => {
   const model = parse('BLOCK 10,20,400,200,"2",0,1,1,"Hello world"\r\nBLOCK 10,60,400,200,"2",0,1,1,"Again"');
   assert.equal(model.items.length, 2);
   const [item] = model.items;
@@ -150,10 +150,8 @@ test('BLOCK without optional fields is one text item with a single info diagnost
   near(item.font.size, 20 * DOT);
   assert.equal(item.native.width, 400);
   assert.equal(item.native.height, 200);
-  const infos = model.diagnostics.filter(d => /BLOCK se dibuja como texto simple/.test(d.text));
-  assert.equal(infos.length, 1);
-  assert.equal(infos[0].level, 'info');
-  assert.match(infos[0].text, /\(sin ajuste de línea\)/);
+  assert.equal(item.block.lines, 10);
+  assert.deepEqual(model.diagnostics, []);
 });
 
 test('BLOCK with optional space, align and fit fields; content keeps its commas', () => {
@@ -163,12 +161,13 @@ test('BLOCK with optional space, align and fit fields; content keeps its commas'
   assert.equal(item.rotation, 90);
   near(item.font.size, 10 * PB.units.UNITS_PER_POINT);
   assert.deepEqual([item.native.space, item.native.align, item.native.fit], [5, 2, 1]);
-  assert.ok(model.diagnostics.some(d => /alineación no soportada/.test(d.text)));
+  assert.equal(item.block.align, 'center');
+  assert.deepEqual(model.diagnostics, []);
 });
 
-test('BLOCK optional fields are positional (space, align, fit); \\[R] and \\[L] become spaces', () => {
+test('BLOCK optional fields are positional (space, align, fit); \\[R] and \\[L] become line breaks', () => {
   const model = parse('BLOCK 0,0,300,100,"1",0,1,1,3,1,"one\\[R]two\\[L]three"');
-  assert.equal(model.items[0].data, 'one two three');
+  assert.equal(model.items[0].data, 'one\ntwo\nthree');
   assert.deepEqual([model.items[0].native.space, model.items[0].native.align], [3, 1]);
   assert.equal(model.diagnostics.filter(d => /alineación/.test(d.text)).length, 0);
 });

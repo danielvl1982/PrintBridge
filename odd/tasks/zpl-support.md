@@ -100,7 +100,7 @@ Open points for the user (nothing here was decided or changed by Z9):
 2. **Not verified on a printer:** every ZPL output and every conversion; the list of what the manuals do not document is the last list of the README ZPL section. Volume Two (see "Volume Two follow-up" below) settled the font matrices, the baseline of `^FO` text, the compression scheme of the graphic data and the B64 format; still open: the `^BY` default ratio, the origin and quiet zone of 2D symbols, the geometry of the shapes, what `^GF` does with the compression, counters on 2D codes, the `^FN` prompt.
 3. **600 dpi:** closed by the user: the Resolución selector stays at 203 and 300 because there is no 600 dpi printer to test with.
 4. **Pitch / gap conversion** between TPCL and TSPL: resolved (finding 2).
-5. **`^SF`** (mask serialization) is read as plain `^FD` with a warning, and **`^FB`** (text block) is drawn as one line: both are out of scope unless wanted.
+5. **`^SF`** (mask serialization) is read as plain `^FD` with a warning, and **`^FB`** (text block) was drawn as one line: `^FB` is now read, drawn wrapped and written (branch `feat/text-block`, odd/tasks/text-block.md); `^SF` stays out of scope unless wanted.
 6. **Browser checks pending** (never run for the last tasks): the reverse blend, the barcodes / QR / Data Matrix rotations and `^FT`, shapes, the image insertion with rotation, the counters and variables panels, and the Convertir a… panel (three targets, `.zpl` download, Formato combo with a ZPL label, the "Origen:" lines).
 
 ## Volume Two follow-up

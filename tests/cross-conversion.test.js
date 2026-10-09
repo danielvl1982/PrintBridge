@@ -301,3 +301,27 @@ test('every cross conversion of the examples reports no error diagnostics and le
     assert.equal(levels(result.diagnostics, 'error').length, 0);
   }
 });
+
+test('a TSPL BLOCK keeps its width, lines, alignment and line space going to TPCL as one line with one warning', () => {
+  const source = ['SIZE 100 mm,60 mm', 'GAP 3 mm,0 mm', 'DIRECTION 1', 'CLS', 'BLOCK 40,30,300,100,"3",0,1,1,4,2,"first line\\[R]second line"', 'PRINT 1,1'].join('\r\n');
+  const { result, converted } = cross(source, 'tpcl', 203);
+  assert.equal(converted.items.length, 1);
+  assert.equal(converted.items[0].block, undefined);
+  assert.equal(converted.items[0].data, 'first line second line');
+  assert.deepEqual(levels(result.diagnostics, 'warning').map(d => d.text), [levels(result.diagnostics, 'warning')[0].text]);
+  assert.match(levels(result.diagnostics, 'warning')[0].text, /TPCL no tiene bloque de texto/);
+});
+
+test('a ZPL ^FB block goes to TSPL as BLOCK and back to ZPL as ^FB with the same parameters (both resolutions)', () => {
+  for (const dpi of [203, 300]) {
+    const source = '^XA\r\n^PW800\r\n^LL480\r\n^FO50,100^A0N,30,30^FB400,3,4,R^FDone\\&two three four five^FS\r\n^XZ\r\n';
+    const toTspl = cross(source, 'tspl', dpi);
+    const block = toTspl.converted.items[0].block;
+    assert.equal(block.align, 'right');
+    assert.equal(block.lines, 3);
+    assert.equal(toTspl.converted.items[0].data, 'one\ntwo three four five');
+    assert.deepEqual(levels(toTspl.result.diagnostics, 'warning', 'error'), levels(toTspl.result.diagnostics, 'warning', 'error').filter(d => !/BLOCK/.test(d.text)));
+    const back = cross(toTspl.result.text, 'zpl', dpi);
+    assert.match(back.result.text, /\^FB400,3,4,R\^FDone\\&two three four five\^FS/, `${dpi} dpi`);
+  }
+});

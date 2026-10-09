@@ -17,6 +17,13 @@
  *       of the baseline going down; inverted: down from the baseline, to the left; bottom-up: to the left, going up).
  *   ^FR: the colour of the output is the reverse of its background; ^LRY does the same for every later field (until ^LRN, see js/languages/zpl.js:
  *       the parser sets field.reverse for both and native.labelReverse for the second). ^FH: hex escapes in the data. ^FP: direction and gaps (vertical formatting).
+ *   ^FBa,b,c,d,e (page 150): a = width of the block in dots (0 or missing: the text does not print), b = maximum lines 1..9999 (default 1; "text
+ *       exceeding the maximum number of lines overwrites the last line": the viewer clips it), c = extra line space in dots (-9999..9999, default
+ *       0), d = L C R J (default L; "last line is left-justified if J is used"), e = hanging indent of the second and later lines (kept in
+ *       native, not drawn). "\&" in the data is a line break, "\\" a backslash (^CI13), "\*" a soft hyphen: only "\&" is read (it becomes "\n").
+ *       A word longer than a line is hyphenated by the printer (the viewer cuts it without a hyphen). ^FO: the block grows from top to bottom;
+ *       ^FT: "the baseline origin of the last possible line", so the first baseline is (lines - 1) pitches back (the pitch is the character height
+ *       plus c: an approximation, the guide gives no line height). ^SN with ^FB does not print. The model keeps it as item.block (see js/core/model.js).
  * ---- Volume Two (2005, local copy in docs/zpl): fonts ---------------------------------------------------------------------------
  *   Printed pages 61 (Table 10: intercharacter gap and baseline of A..H, "the baseline for font E is 23 dots down from the top of the matrix")
  *   and 64-65 (the matrices by printhead: 8 dots/mm = 203 dpi, 12 dots/mm = 300 dpi). BITMAP_FONTS holds them (see there). Fonts GS (SYMBOL),
@@ -33,7 +40,7 @@
  *   x, y = the baseline origin (what the renderer draws from): ^FT as written, ^FO converted with the baseline offset of the orientation.
  *   font.size = the character height in dots; font.scaleX stretches it to the width. native: { font, fontArg, orientationArg, height, width,
  *   hMult, wMult, origin: 'FO' | 'FT' | 'default', cell }. reverse: true for ^FR (ZPL specific, never the TPCL attribute W).
- * Emit (the inverse): ^FT with the baseline origin, or ^FO when the item came from a ^FO field; a mono model font whose size and width are
+ * Emit (the inverse): [^FB before the data for an item with a block,] ^FT with the baseline origin, or ^FO when the item came from a ^FO field; a mono model font whose size and width are
  * whole multiples of a bitmapped matrix becomes that font, anything else the scalable font 0, with one info when the family, weight or style
  * cannot be represented. Text attributes, alignment, spacing, bold and counters of other languages are reported and written without them.
  */
@@ -137,6 +144,25 @@
     return { bitmap: false, height: hh, width: ww, advance: ww * SCALABLE_ADVANCE, hMult: null, wMult: null };
   }
 
+  /** ^FB justification letters and the neutral block alignment. */
+  const BLOCK_ALIGN = Object.freeze({ L: 'left', C: 'center', R: 'right', J: 'justify' });
+  /** Largest ^FB width, line count, line space and indent of the guide (9999). */
+  const MAX_FB = 9999;
+  /** The ^FB line break escape of the data. */
+  const BREAK = /\\&/g;
+
+  /**
+   * Offset in dots from the ^FT origin (the baseline of the last possible line of a block) to the baseline of the first line, for a rotation in
+   * degrees clockwise: (lines - 1) pitches against the direction the lines advance (down in the text's own frame: (0, 1) at 0, (-1, 0) at 90...).
+   */
+  function lastLineOffset(rotation, lines, pitch) {
+    const back = (lines - 1) * pitch;
+    if (rotation === 90) return { x: back, y: 0 };
+    if (rotation === 180) return { x: 0, y: back };
+    if (rotation === 270) return { x: -back, y: 0 };
+    return { x: 0, y: -back };
+  }
+
   /** Dots from the top of the character box to the baseline (ascent) of a font of that character height; the rest is the descent. */
   const ascentOf = (name, height) => Math.round(height * (BASELINE[name] || BASELINE_DEFAULT));
 
@@ -194,6 +220,7 @@
     const {
       sourceOf, int, ROTATIONS, rotationOf, orientationOf, exactDots, roundDots, dataCommands, fo, ft,
       numberField, stringSelectField, contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, reverseField,
+      paramField, argEdit, flagEdits,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -229,6 +256,34 @@
       }
       if (item.spacing) ctx.once('zpl-text-spacing', () => diag.info('Hay textos con espaciado entre caracteres, que ^A de ZPL no escribe: se escriben sin él'));
       if (item.bold) ctx.once('zpl-text-bold', () => diag.info('Hay textos en negrita (sobreimpresión), que ^A de ZPL no escribe: se escriben sin ella'));
+    }
+
+    /**
+     * The ^FB parameters of an item with a block, in dots clamped to the guide's ranges: width (at least 1), lines (the block's, or what the
+     * wrapped text needs, at least 1), extra line space, justification letter and the hanging indent the item came with (native.fb).
+     */
+    function blockFields(ctx, item, cell) {
+      const b = item.block;
+      const lines = Number.isInteger(b.lines) && b.lines > 0 ? b.lines : Math.max(1, PB.slices.text.wrapBlock(item.data, b, item.font).lines.length);
+      const fb = item.native && item.native.fb;
+      return {
+        width: clamp(roundDots(exactDots(ctx, b.width)), 1, MAX_FB),
+        lines: clamp(lines, 1, MAX_FB),
+        space: clamp(roundDots(exactDots(ctx, b.lineSpace || 0)), -MAX_FB, MAX_FB),
+        letter: Object.keys(BLOCK_ALIGN).find(k => BLOCK_ALIGN[k] === b.align) || 'L',
+        indent: fb && Number.isInteger(fb.indent) ? clamp(fb.indent, 0, MAX_FB) : 0,
+      };
+    }
+
+    /**
+     * The data command of a block: the breaks are "\&" (the data is encoded for ^FH as usual). ^SN does not print inside a ^FB (guide), so a counter
+     * is written as its start value with one info.
+     */
+    function blockData(ctx, item) {
+      const counter = item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0;
+      if (counter) ctx.once('zpl-fb-counter', () => diag.info('Hay contadores en bloques de texto: ^SN no imprime dentro de ^FB, se escribe el valor inicial como texto'));
+      const data = String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, '\\&');
+      return dataCommands(ctx, counter ? { ...item, counter: undefined } : item, data);
     }
 
     /**
@@ -269,18 +324,47 @@
       const degrees = rotationDegrees(ctx, item.rotation);
       const baseline = { x: roundDots(exactDots(ctx, item.x || 0)), y: roundDots(exactDots(ctx, item.y || 0)) };
       const fromFo = item.native && (item.native.origin === 'FO' || item.native.origin === 'default');
+      const fb = item.block ? blockFields(ctx, item, cell) : null;
       let origin;
       if (fromFo) {
-        const off = baselineOffset(degrees, cell.height, lengthOf(item.data, cell.advance), name);
+        const off = baselineOffset(degrees, cell.height, fb ? fb.width : lengthOf(item.data, cell.advance), name);
         origin = `^FO${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
+      } else if (fb) {
+        // ^FT is the baseline of the last possible line: (lines - 1) pitches along the lines after the first baseline
+        const off = lastLineOffset(degrees, fb.lines, cell.height + fb.space);
+        origin = `^FT${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
       } else {
         origin = ft(ctx, item.x || 0, item.y || 0);
       }
-      return `${origin}^A${name}${orientationOf(degrees)},${cell.height},${cell.width}${item.reverse ? '^FR' : ''}${dataCommands(ctx, item)}^FS`;
+      const block = fb ? `^FB${fb.width},${fb.lines},${fb.space},${fb.letter}${fb.indent ? `,${fb.indent}` : ''}` : '';
+      return `${origin}^A${name}${orientationOf(degrees)},${cell.height},${cell.width}${block}${item.reverse ? '^FR' : ''}${fb ? blockData(ctx, item) : dataCommands(ctx, item)}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------
     // Parse
+
+    /**
+     * ^FBa,b,c,d,e of a field (Volume One, page 150): width in dots (default 0: the printer prints nothing, so the viewer keeps a line and says so),
+     * maximum lines 1..9999 (default 1), extra line space -9999..9999 dots (default 0), justification L C R J (default L) and hanging indent
+     * 0..9999 dots (default 0, kept in native only: not drawn). null when the block has no usable width. Values are clamped to the guide's ranges.
+     */
+    function readFB(ctx, field) {
+      const cmd = field.block;
+      const arg = i => (cmd.args[i] && cmd.args[i].raw !== '' ? cmd.args[i] : null);
+      const width = arg(0) ? int(arg(0)) : 0;
+      if (!(width > 0)) {
+        ctx.once('zpl-fb-width', () => diag.info('^FB sin ancho válido (0 o no numérico): la impresora no imprime el texto, el visor lo dibuja como una línea de texto'));
+        return null;
+      }
+      const whole = (i, def, min, max) => { const v = arg(i) ? int(arg(i)) : null; return v === null ? def : clamp(v, min, max); };
+      const letter = arg(3) ? arg(3).raw.toUpperCase() : 'L';
+      if (!(letter in BLOCK_ALIGN)) ctx.once('zpl-fb-align', () => diag.info('^FB: justificación no válida (L, C, R o J), se dibuja a la izquierda'));
+      if (field.serial) ctx.once('zpl-fb-sn', () => diag.info('^FB con ^SN: la guía dice que el campo no se imprime; el visor lo dibuja con el valor inicial'));
+      return {
+        width: Math.min(width, MAX_FB), lines: whole(1, 1, 1, MAX_FB), space: whole(2, 0, -MAX_FB, MAX_FB), indent: whole(4, 0, 0, MAX_FB),
+        letter: letter in BLOCK_ALIGN ? letter : 'L', align: BLOCK_ALIGN[letter] || 'left',
+      };
+    }
 
     /** Text item of a field: `spec` = { ref, name, h, w, rotation, fontArg, orientationArg } (h, w as written, null when not a number). */
     function textItem(ctx, field, spec) {
@@ -293,18 +377,26 @@
         ctx.once('zpl-fp', () => diag.info('^FP (dirección vertical, inversa o con espacio entre caracteres) no se dibuja: el texto se muestra de izquierda a derecha'));
       }
       const o = ctx.origin(field);
-      const data = field.data.value;
-      const off = o.kind === 'FT' ? { x: 0, y: 0 } : baselineOffset(spec.rotation, cell.height, lengthOf(data, cell.advance), spec.name);
+      const fb = field.block ? readFB(ctx, field) : null;
+      // In a block "\&" is a line break; the model keeps "\n"
+      const data = fb ? field.data.value.replace(BREAK, '\n') : field.data.value;
+      // The text of a block has its first line at the origin: ^FO (top-left of the block) as for a line, with the width of the block as the length;
+      // ^FT is the baseline of the LAST possible line (guide, ^FB comments), so the first one is (lines - 1) pitches back, against the line direction
+      let off;
+      if (o.kind === 'FT') off = fb ? lastLineOffset(spec.rotation, fb.lines, cell.height + fb.space) : { x: 0, y: 0 };
+      else off = baselineOffset(spec.rotation, cell.height, fb ? fb.width : lengthOf(data, cell.advance), spec.name);
       return {
         kind: 'text', ref: spec.ref, source: sourceOf(field),
         x: o.x + off.x * ctx.dot, y: o.y + off.y * ctx.dot,
         font: fontOf(spec.name, cell, ctx.dot),
         rotation: spec.rotation,
         data,
+        ...(fb && { block: { width: fb.width * ctx.dot, lines: fb.lines, align: fb.align, lineSpace: fb.space * ctx.dot } }),
         ...(field.reverse && { reverse: true }),
         native: {
           font: spec.name, fontArg: spec.fontArg, orientationArg: spec.orientationArg, height: spec.h, width: spec.w,
           hMult: cell.hMult, wMult: cell.wMult, origin: o.kind, ...(field.labelReverse && { labelReverse: true }),
+          ...(fb && { fb: { width: fb.width, lines: fb.lines, space: fb.space, align: fb.letter, indent: fb.indent } }),
         },
       };
     }
@@ -344,8 +436,105 @@
     /** ^FR: the presence of the command, or the ^LRY state of the label (native.labelReverse): see reverseField in js/languages/zpl-edit.js. */
     const reverse = reverseField('reverse', 'Impresión inversa (^FR)');
     const contentOf = contentField('content', 'Contenido', item => item.data);
+    /** In a block the data holds its line breaks as "\&": the label says so. */
+    const blockContentOf = contentField('content', 'Contenido (\\& = salto de línea)', item => item.data.replace(/\n/g, '\\&'));
     /** Incremento and Ceros iniciales: the data command is ^FD or ^SN (see serialFields in js/languages/zpl-edit.js). */
     const counterFields = serialFields();
+
+    // ---- Tipo (line / block) and the block fields (^FB)
+
+    const KIND_OPTIONS = Object.freeze([{ value: 'line', label: 'Línea de texto' }, { value: 'block', label: 'Bloque de texto' }]);
+    const ALIGN_OPTIONS = Object.freeze([{ value: 'L', label: 'Izquierda' }, { value: 'C', label: 'Centro' }, { value: 'R', label: 'Derecha' }, { value: 'J', label: 'Justificado' }]);
+    /** A block made from a line is this many characters wide. */
+    const DEFAULT_BLOCK_CHARS = 20;
+    const INTEGER = /^[+-]?\d+$/;
+
+    /**
+     * Moves the ^FT origin of a field when it gains (sign 1) or loses (sign -1) its block, so that the first line stays where it was: ^FT is the baseline of
+     * the LAST line of a block (lastLineOffset gives the way back to the first one). `lines` and `space` (dots) are those of the block.
+     */
+    function moveFt(field, item, lines, space, sign, edits) {
+      const origin = field.find('FT');
+      const [ax, ay] = origin ? [origin.args[0], origin.args[1]] : [];
+      if (!ax || !ay || !INTEGER.test(ax.raw) || !INTEGER.test(ay.raw)) return;
+      const dot = units.dotSize(item.dpi || PB.config.resolutions[0]);
+      const off = lastLineOffset(item.rotation, lines, Math.max(1, Math.round(item.font.size / dot)) + space);
+      const [x, y] = [Math.max(0, Number(ax.raw) - sign * off.x), Math.max(0, Number(ay.raw) - sign * off.y)];
+      if (String(x) !== ax.raw) edits.push(argEdit(origin, 0, String(x)));
+      if (String(y) !== ay.raw) edits.push(argEdit(origin, 1, String(y)));
+    }
+
+    /**
+     * Line -> block: ^FB width, lines, 0, L is added after ^A (or after the origin when the field has only data); the width is DEFAULT_BLOCK_CHARS
+     * characters of the font and the lines are what the wrapped text needs, so the text keeps showing whole. Block -> line: ^FB goes (with its
+     * line if it sat alone) and the "\&" breaks of the data become spaces. An ^FT field keeps its first line where it was (moveFt).
+     */
+    function kindEdits(text, found, item, value, opts) {
+      const { field } = found;
+      const fb = field.find('FB');
+      const edits = [];
+      const dpi = (opts && opts.dpi) || PB.config.resolutions[0];
+      const dot = units.dotSize(dpi);
+      if (value === 'block' && !fb) {
+        const { advanceOf, wrapBlock } = PB.slices.text;
+        const width = clamp(Math.round(DEFAULT_BLOCK_CHARS * (item.font.size / dot) * advanceOf(item.font) * item.font.scaleX), 1, MAX_FB);
+        const lines = clamp(Math.max(1, wrapBlock(item.data, { width: width * dot, align: 'left' }, item.font).lines.length), 1, MAX_FB);
+        const anchor = field.find('A') || field.find(['FO', 'FT']);
+        const at = anchor ? anchor.end : field.cmds[0].start;
+        edits.push({ start: at, end: at, value: `^FB${width},${lines},0,L` });
+        moveFt(field, { ...item, dpi }, lines, 0, 1, edits);
+      } else if (value === 'line' && fb) {
+        flagEdits(text, field, { cmd: 'FB' }, false, edits);
+        for (const data of field.findAll(['FD', 'FV'])) {
+          const arg = data.args[0];
+          if (arg && /\\&/.test(arg.raw)) edits.push({ start: arg.start, end: arg.end, value: arg.raw.replace(/\\&/g, ' ') });
+        }
+        const native = item.native && item.native.fb;
+        const lines = native ? native.lines : item.block && item.block.lines ? item.block.lines : 1;
+        moveFt(field, { ...item, dpi }, lines, native ? native.space : 0, -1, edits);
+      }
+      return edits.length ? edits : null;
+    }
+
+    /** The Tipo select over the whole field (the field has ^FB or not): custom, see js/languages/zpl-edit.js. A counter (^SN) stays a line: it does not print in a block. */
+    const kindField = {
+      key: 'kind', label: 'Tipo', type: 'select', custom: true, options: KIND_OPTIONS,
+      model: item => (item.counter ? undefined : item.block ? 'block' : 'line'),
+      read(text, found) {
+        const data = found.field.find(['FD', 'FV', 'SN']);
+        return data && data.name === 'SN' ? undefined : found.field.has('FB') ? 'block' : 'line';
+      },
+      edits: (text, found, item, value, opts) => (value === 'block' || value === 'line' ? kindEdits(text, found, item, value, opts) : null),
+    };
+
+    /** One ^FB number: raw '' is the guide's default `def`; written clamped to min..max. */
+    const fbNumber = (key, label, index, def, min, max) => paramField({
+      key, label, type: 'number', cmd: 'FB', arg: index, min, max, step: 1,
+      read: raw => (raw === '' ? def : INTEGER.test(raw) ? Number(raw) : undefined),
+      write: v => (typeof v === 'number' && Number.isFinite(v) ? String(clamp(Math.round(v), min, max)) : null),
+      model: item => (item.native && item.native.fb ? item.native.fb[{ blockWidth: 'width', blockLines: 'lines', blockSpace: 'space' }[key]] : undefined),
+    });
+    const blockPanelFields = [
+      fbNumber('blockWidth', 'Ancho del bloque (puntos)', 0, 0, 1, MAX_FB),
+      fbNumber('blockLines', 'Líneas máx.', 1, 1, 1, MAX_FB),
+      fbNumber('blockSpace', 'Interlineado (puntos)', 2, 0, -MAX_FB, MAX_FB),
+      paramField({
+        key: 'blockAlign', label: 'Alineación', type: 'select', cmd: 'FB', arg: 3, options: ALIGN_OPTIONS,
+        read: raw => (raw === '' ? 'L' : ALIGN_OPTIONS.some(o => o.value === raw.toUpperCase()) ? raw.toUpperCase() : undefined),
+        write: v => (ALIGN_OPTIONS.some(o => o.value === v) ? v : null),
+        model: item => (item.native && item.native.fb ? item.native.fb.align : undefined),
+      }),
+    ];
+
+    /** A text field's shape: with ^A or only data, with ^FB or not (the block has its own fields and the content label of its breaks). */
+    const shapeOf = (withA, block) => ({
+      applies: (item, field) => item.kind === 'text' && (field ? field.has('A') === withA && field.has('FB') === block : item.ref === (withA ? 'A' : 'FD') && Boolean(item.block) === block),
+      fields: [
+        kindField, ...(block ? blockPanelFields : []),
+        ...(withA ? [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField] : []),
+        block ? blockContentOf : contentOf, ...counterFields, reverse,
+      ],
+    });
 
     return {
       // emit(item, ctx) -> the field of a text item
@@ -354,17 +543,8 @@
       build,
       // Move: the field origin (^FO / ^FT), which is what the default coordinates are
       coordinates: [{ applies: item => item.kind === 'text' }],
-      // Properties: a field with ^A (font, sizes, orientation), or a field with only data (default font)
-      editable: [
-        {
-          applies: (item, field) => item.kind === 'text' && (field ? field.has('A') : item.ref === 'A'),
-          fields: [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField, contentOf, ...counterFields, reverse],
-        },
-        {
-          applies: (item, field) => item.kind === 'text' && (field ? !field.has('A') : item.ref === 'FD'),
-          fields: [contentOf, ...counterFields, reverse],
-        },
-      ],
+      // Properties: the Tipo select first (line or block), the block fields (^FB), then a field with ^A (font, sizes, orientation), or with only data (default font)
+      editable: [shapeOf(true, true), shapeOf(true, false), shapeOf(false, true), shapeOf(false, false)],
       handlers: [
         {
           // ^Afo,h,w ... ^FD data ^FS: a text field
