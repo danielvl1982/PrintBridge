@@ -39,6 +39,16 @@
  *               black; absent = normal). ZPL specific: it is NOT the TPCL attribute 'reverse' (a black box behind the text), the two never convert.
  *               TSPL: x, y is the baseline origin (TEXT gives the top-left of the character cell; the slice adds / removes 80% of the height, see js/components/text/tspl.js).
  *               ZPL: x, y is the baseline origin (^FT as written; ^FO converted, see js/components/text/zpl.js); font.size = character height in dots.
+ *               block? = { width, lines?, align, lineSpace, } (a TEXT BLOCK: TSPL BLOCK, ZPL ^FB; absent = a line of text, the TPCL PC / PV text always is):
+ *               the data is word wrapped in `width` (0.1 mm, the block starts at x, y: the baseline origin of its first line, and the lines advance
+ *               "down" in the text's own rotated frame); lines? = the maximum number of lines (a positive integer; the rest is clipped; absent = no
+ *               limit); align = 'left' | 'center' | 'right' | 'justify' (TSPL has no justify, it writes left); lineSpace = extra distance between the
+ *               lines in 0.1 mm, added to the character height (font.size), signed (ZPL ^FB c, TSPL BLOCK space). A line break in the data of a
+ *               block is "\n" (ZPL "\&", TSPL "\[R]" / "\[L]"); a text with no block never holds one. native: TSPL { width, height, space, align, fit }
+ *               (dots, as written; the block's `lines` is floor(height / (character height + space))), ZPL fb: { width, lines, space, align (L C R J),
+ *               indent (hanging indent of the second and later lines, dots: kept, not drawn) } as written. The renderer (js/components/text/render.js,
+ *               wrapBlock) wraps with ONE advance per character (font.size * em * font.scaleX, em = 0.6 mono, 0.55 sans, 0.5 serif), so its breaks may
+ *               differ a little from the printer's. TPCL has no text block: a block is written as one line with a warning.
  *               zeroSuppress? = 1..20 (TPCL PC/PV "Zpp", XB "qq": the number of characters kept after replacing the leading zeros by
  *               spaces; absent = none or 00; ZPL ^SN z = N is 1: all the leading zeros, the last digit stays). The preview applies it to the drawn
  *               text only (PB.slices.text.suppressZeros), never to data.

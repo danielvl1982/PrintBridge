@@ -137,6 +137,25 @@
     return { bitmap: false, height: hh, width: ww, advance: ww * SCALABLE_ADVANCE, hMult: null, wMult: null };
   }
 
+  /** ^FB justification letters and the neutral block alignment. */
+  const BLOCK_ALIGN = Object.freeze({ L: 'left', C: 'center', R: 'right', J: 'justify' });
+  /** Largest ^FB width, line count, line space and indent of the guide (9999). */
+  const MAX_FB = 9999;
+  /** The ^FB line break escape of the data. */
+  const BREAK = /\\&/g;
+
+  /**
+   * Offset in dots from the ^FT origin (the baseline of the last possible line of a block) to the baseline of the first line, for a rotation in
+   * degrees clockwise: (lines - 1) pitches against the direction the lines advance (down in the text's own frame: (0, 1) at 0, (-1, 0) at 90...).
+   */
+  function lastLineOffset(rotation, lines, pitch) {
+    const back = (lines - 1) * pitch;
+    if (rotation === 90) return { x: back, y: 0 };
+    if (rotation === 180) return { x: 0, y: back };
+    if (rotation === 270) return { x: -back, y: 0 };
+    return { x: 0, y: -back };
+  }
+
   /** Dots from the top of the character box to the baseline (ascent) of a font of that character height; the rest is the descent. */
   const ascentOf = (name, height) => Math.round(height * (BASELINE[name] || BASELINE_DEFAULT));
 
@@ -282,6 +301,29 @@
     // -------------------------------------------------------------------------------------------------------------
     // Parse
 
+    /**
+     * ^FBa,b,c,d,e of a field (Volume One, page 150): width in dots (default 0: the printer prints nothing, so the viewer keeps a line and says so),
+     * maximum lines 1..9999 (default 1), extra line space -9999..9999 dots (default 0), justification L C R J (default L) and hanging indent
+     * 0..9999 dots (default 0, kept in native only: not drawn). null when the block has no usable width. Values are clamped to the guide's ranges.
+     */
+    function readFB(ctx, field) {
+      const cmd = field.block;
+      const arg = i => (cmd.args[i] && cmd.args[i].raw !== '' ? cmd.args[i] : null);
+      const width = arg(0) ? int(arg(0)) : 0;
+      if (!(width > 0)) {
+        ctx.once('zpl-fb-width', () => diag.info('^FB sin ancho válido (0 o no numérico): la impresora no imprime el texto, el visor lo dibuja como una línea de texto'));
+        return null;
+      }
+      const whole = (i, def, min, max) => { const v = arg(i) ? int(arg(i)) : null; return v === null ? def : clamp(v, min, max); };
+      const letter = arg(3) ? arg(3).raw.toUpperCase() : 'L';
+      if (!(letter in BLOCK_ALIGN)) ctx.once('zpl-fb-align', () => diag.info('^FB: justificación no válida (L, C, R o J), se dibuja a la izquierda'));
+      if (field.serial) ctx.once('zpl-fb-sn', () => diag.info('^FB con ^SN: la guía dice que el campo no se imprime; el visor lo dibuja con el valor inicial'));
+      return {
+        width: Math.min(width, MAX_FB), lines: whole(1, 1, 1, MAX_FB), space: whole(2, 0, -MAX_FB, MAX_FB), indent: whole(4, 0, 0, MAX_FB),
+        letter: letter in BLOCK_ALIGN ? letter : 'L', align: BLOCK_ALIGN[letter] || 'left',
+      };
+    }
+
     /** Text item of a field: `spec` = { ref, name, h, w, rotation, fontArg, orientationArg } (h, w as written, null when not a number). */
     function textItem(ctx, field, spec) {
       const cell = cellOf(spec.name, spec.h, spec.w, ctx.font, ctx.dpi);
@@ -293,18 +335,26 @@
         ctx.once('zpl-fp', () => diag.info('^FP (dirección vertical, inversa o con espacio entre caracteres) no se dibuja: el texto se muestra de izquierda a derecha'));
       }
       const o = ctx.origin(field);
-      const data = field.data.value;
-      const off = o.kind === 'FT' ? { x: 0, y: 0 } : baselineOffset(spec.rotation, cell.height, lengthOf(data, cell.advance), spec.name);
+      const fb = field.block ? readFB(ctx, field) : null;
+      // In a block "\&" is a line break; the model keeps "\n"
+      const data = fb ? field.data.value.replace(BREAK, '\n') : field.data.value;
+      // The text of a block has its first line at the origin: ^FO (top-left of the block) as for a line, with the width of the block as the length;
+      // ^FT is the baseline of the LAST possible line (guide, ^FB comments), so the first one is (lines - 1) pitches back, against the line direction
+      let off;
+      if (o.kind === 'FT') off = fb ? lastLineOffset(spec.rotation, fb.lines, cell.height + fb.space) : { x: 0, y: 0 };
+      else off = baselineOffset(spec.rotation, cell.height, fb ? fb.width : lengthOf(data, cell.advance), spec.name);
       return {
         kind: 'text', ref: spec.ref, source: sourceOf(field),
         x: o.x + off.x * ctx.dot, y: o.y + off.y * ctx.dot,
         font: fontOf(spec.name, cell, ctx.dot),
         rotation: spec.rotation,
         data,
+        ...(fb && { block: { width: fb.width * ctx.dot, lines: fb.lines, align: fb.align, lineSpace: fb.space * ctx.dot } }),
         ...(field.reverse && { reverse: true }),
         native: {
           font: spec.name, fontArg: spec.fontArg, orientationArg: spec.orientationArg, height: spec.h, width: spec.w,
           hMult: cell.hMult, wMult: cell.wMult, origin: o.kind, ...(field.labelReverse && { labelReverse: true }),
+          ...(fb && { fb: { width: fb.width, lines: fb.lines, space: fb.space, align: fb.letter, indent: fb.indent } }),
         },
       };
     }

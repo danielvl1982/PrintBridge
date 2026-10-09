@@ -27,6 +27,8 @@
     const content = textEl.textContent;
     if (!content.trim()) return null;
     const full = boxInGroup(textEl, textEl.getBBox());
+    // A block (one <tspan> per line): the lines have their own starts, so its ink box is the whole box
+    if (textEl.querySelector('tspan')) return { full, ink: full };
     const lead = content.length - content.trimStart().length;
     const end = content.trimEnd().length;
     const size = Number(textEl.getAttribute('font-size'));

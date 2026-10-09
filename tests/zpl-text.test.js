@@ -141,10 +141,11 @@ test('several fields keep their order and each one its own source span', () => {
   assert.deepEqual(model.diagnostics, []);
 });
 
-test('a ^FB block is not supported: the text is drawn as one line and the command is reported', () => {
+test('a ^FB block is read as a text block: no unsupported-command warning (see tests/text-block.test.js)', () => {
   const model = parse('^XA^FO10,10^A0N,30,30^FB300,2,0,L^FDhello^FS^XZ');
   assert.equal(model.items[0].data, 'hello');
-  assert.ok(model.diagnostics.some(d => d.level === 'warning' && /\^FB/.test(d.text)));
+  assert.equal(model.items[0].block.lines, 2);
+  assert.deepEqual(model.diagnostics, []);
 });
 
 // ---------------------------------------------------------------------------------------------------------------

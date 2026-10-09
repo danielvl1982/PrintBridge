@@ -2,14 +2,16 @@
  * Text slice, TSPL language (TSC TTP): the TEXT and BLOCK commands.
  *   TEXT x,y,"font",rotation,x-mul,y-mul,[alignment,]"content"
  *   BLOCK x,y,width,height,"font",rotation,x-mul,y-mul,[space,][align,][fit,]"content"
- * Both become the neutral `text` item (see js/core/model.js) so the SVG renderer of this slice needs no change:
+ * Both become the neutral `text` item (see js/core/model.js); BLOCK adds item.block (width, lines, align, lineSpace), which the renderer of this
+ * slice wraps (the TSC TSPL2 manual documents BLOCK; the local B-442/443 one does not: the syntax is the one this file reads and is NOT
+ * VERIFIED ON A PRINTER). The align argument is 0 / 1 left, 2 center, 3 right (no justification); the optional arguments are positional
+ * (space, align, fit); the height of the block holds floor(height / (character height + space)) lines, which is the block's `lines`.
  *   - bitmap fonts "1".."8" have a fixed dot cell (width x height, TSPL manual): font.size = cell height * y-mul dots, in
  *     0.1 mm, and font.scaleX stretches the simulated mono glyphs so the character advance matches the cell width;
  *   - font "0", ROMAN.TTF and every other (unknown) font are scalable: the multipliers are POINT sizes (y-mul = height).
  * The factory receives the helpers of js/languages/tspl.js (SLICE_HELPERS), which loads after this file:
  *   factory(helpers) -> { handlers, emit, build, coordinates, editable }. Registered by js/components/text/index.js as `languages: { tpcl, tspl }`.
- * Limits (reported as info diagnostics): the model has no alignment nor word wrap, so alignment 2/3 draws left and BLOCK
- * is drawn as one line of text; a counter "@n" content shows the start value assigned with @n="..." (SET COUNTER gives the step, the
+ * Limits (reported as info diagnostics): the TEXT alignment 2/3 draws left (the model has no alignment for a line of text); a counter "@n" content shows the start value assigned with @n="..." (SET COUNTER gives the step, the
  * printer increments it per label); an unassigned counter, a mix ("x"+@1) and a BLOCK content keep the literal text.
  * Origin: TEXT x,y is the top-left corner of the character cell (TSC manual) while the model draws from the baseline, so the reader adds the
  * ascent (ASCENT / SCALABLE_ASCENT of the height, whole dots, on the side the letters stand to) and emit takes it off.
@@ -47,8 +49,10 @@
   /** Counter/variable content: "@1", "x"+@1+"y". */
   const COUNTER = /(?:^|\+)\s*@\d+/;
 
-  /** Line-break escapes of BLOCK content (\[R], \[L]); the model draws one line, so they become a space. */
-  const BLOCK_BREAK = /\\\[[RL]\]/g;
+  /** Line-break escapes of BLOCK content: \[R] (CR) and \[L] (LF), one break each, \[R]\[L] (CR LF) together one. The model keeps "\n". */
+  const BLOCK_BREAK = /\\\[R\]\\\[L\]|\\\[[RL]\]/g;
+  /** What the BLOCK align argument says (TSC manual: 0 default = left, 1 left, 2 center, 3 right) as the neutral block alignment. */
+  const BLOCK_ALIGN = Object.freeze({ 0: 'left', 1: 'left', 2: 'center', 3: 'right' });
 
   /** How far (in multiplier units) a model font may be from an exact bitmap font + integer multipliers, and the TSPL maximum. */
   const MULTIPLIER_TOLERANCE = 0.05;
@@ -229,6 +233,29 @@
       if (align === 2 || align === 3) ctx.report(diag.info(`${ref}: alineación no soportada, se dibuja a la izquierda`));
     }
 
+    /**
+     * The neutral block of a BLOCK command (see js/core/model.js): width in 0.1 mm, lines = how many lines of the font fit the height
+     * (floor(height / (character height + space)), at least 1; absent without a valid height), align and the extra line space.
+     * null when the width is not a positive number (the printer draws nothing: the viewer keeps a one-line text, with an info).
+     */
+    function blockOf(ctx, cmd, font, space, align) {
+      const [width, height] = [num(cmd.args[2]), num(cmd.args[3])];
+      if (width === null || width <= 0) {
+        ctx.report(diag.info('BLOCK: ancho no válido, se dibuja como una línea de texto'));
+        return null;
+      }
+      const spaceDots = Number.isFinite(space) ? space : 0;
+      const pitch = Math.max(1, Math.round(font.size / ctx.dot)) + spaceDots;
+      const kind = align === undefined ? 'left' : BLOCK_ALIGN[align];
+      if (!kind) ctx.report(diag.info(`BLOCK: alineación ${align} no válida, se dibuja a la izquierda`));
+      return {
+        width: width * ctx.dot,
+        ...(height !== null && height > 0 && pitch > 0 && { lines: Math.max(1, Math.floor(height / pitch + 1e-6)) }),
+        align: kind || 'left',
+        lineSpace: spaceDots * ctx.dot,
+      };
+    }
+
     /** Builds the text item shared by TEXT and BLOCK; `fontArgs` = [font, rotation, xmul, ymul] argument objects. */
     function textItem(ctx, ref, cmd, point, fontArgs, data) {
       const [fontArg, rotArg, xArg, yArg] = fontArgs;
@@ -314,13 +341,10 @@
             if (!validPoint(p)) { ctx.report(diag.warning(`BLOCK con coordenadas no válidas: ${cmd.raw.slice(0, 40)}`)); return; }
             const content = cmd.args[cmd.args.length - 1];
             const [space, align, fit] = cmd.args.slice(8, -1).map(num);
-            noteAlignment(ctx, 'BLOCK', align);
-            if (!ctx.tsplBlockNoted) {
-              ctx.tsplBlockNoted = true;
-              ctx.report(diag.info('BLOCK se dibuja como texto simple (sin ajuste de línea)'));
-            }
-            const data = contentOf(ctx, 'BLOCK', content).replace(BLOCK_BREAK, ' ');
+            const data = contentOf(ctx, 'BLOCK', content).replace(BLOCK_BREAK, '\n');
             const item = textItem(ctx, 'BLOCK', cmd, p, cmd.args.slice(4, 8), data);
+            const block = blockOf(ctx, cmd, item.font, space, align);
+            if (block) item.block = block;
             item.native.width = num(cmd.args[2]);
             item.native.height = num(cmd.args[3]);
             if (space !== undefined) item.native.space = space;
