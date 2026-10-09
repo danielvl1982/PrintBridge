@@ -37,6 +37,7 @@
  *               written). Barcodes carry it too; QR does not.)
  *               reverse? = true (ZPL ^FR field reverse print: the viewer draws the text white blended with `difference`, so it reads inverted over
  *               black; absent = normal). ZPL specific: it is NOT the TPCL attribute 'reverse' (a black box behind the text), the two never convert.
+ *               TSPL: x, y is the baseline origin (TEXT gives the top-left of the character cell; the slice adds / removes 80% of the height, see js/components/text/tspl.js).
  *               ZPL: x, y is the baseline origin (^FT as written; ^FO converted, see js/components/text/zpl.js); font.size = character height in dots.
  *               zeroSuppress? = 1..20 (TPCL PC/PV "Zpp", XB "qq": the number of characters kept after replacing the leading zeros by
  *               spaces; absent = none or 00; ZPL ^SN z = N is 1: all the leading zeros, the last digit stays). The preview applies it to the drawn

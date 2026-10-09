@@ -42,8 +42,14 @@ function assertSameLabel(original, converted, dpi) {
     const at = `item ${n} (${x.kind})`;
     switch (x.kind) {
       case 'text':
-        near(x.x, y.x, dot, `${at} x`);
-        near(x.y, y.y, dot, `${at} y`);
+        // The baseline of a TSPL text follows its character cell, so a substituted font (another size) moves it along the ascent
+        {
+          const sizeGap = Math.abs(x.font.size - y.font.size);
+          const ascent = sizeGap > 1e-6 ? 0.8 * sizeGap + dot : 0; // plus the dot the ascent is rounded to
+          const along = x.rotation % 180 === 0;
+          near(x.x, y.x, dot + (along ? 0 : ascent), `${at} x`);
+          near(x.y, y.y, dot + (along ? ascent : 0), `${at} y`);
+        }
         assert.equal(y.data, x.data, `${at} data`);
         assert.equal(y.rotation, x.rotation, `${at} rotation`);
         near(x.font.size, y.font.size, HALF_POINT, `${at} font size`);

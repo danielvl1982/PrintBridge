@@ -103,7 +103,7 @@ for (const code of ['11', '22', '33']) nativeCase(`fonts-tpcl-rotation-${code}`,
 nativeCase('fonts-tpcl-outline', { tpcl: () => '{PV00;0100,0100,0100,0100,B,00,B|}\n{RV00;Outline|}\n{PV01;0100,0300,0240,0120,B,00,B|}\n{RV01;Wide|}' });
 
 const tsplRows = (fonts, mul, rotation = 0) => dpi => fonts
-  .map((name, i) => `TEXT ${dotsOf(60 + 480 * (i % 2), dpi)},${dotsOf(30 + 40 * Math.floor(i / 2), dpi)},"${name}",${rotation},${mul},${mul},"Font ${name}"`).join('\r\n');
+  .map((name, i) => `TEXT ${dotsOf(60 + 480 * (i % 2), dpi)},${dotsOf((rotation === 180 ? 70 : 30) + 40 * Math.floor(i / 2), dpi)},"${name}",${rotation},${mul},${mul},"Font ${name}"`).join('\r\n');
 nativeCase('fonts-tspl', { tspl: tsplRows(['1', '2', '3', '4', '5', '6', '7', '8'], 1) });
 nativeCase('fonts-tspl-magnified', { tspl: tsplRows(['1', '3', '5'], 2) });
 for (const rotation of [90, 180, 270]) nativeCase(`fonts-tspl-rotation-${rotation}`, { tspl: tsplRows(['2', '4'], 1, rotation) });
@@ -283,7 +283,14 @@ function differences(a, b, dot, withFont) {
   const pos = (key, x, y) => check(key, near(x, y, tol));
   switch (a.kind) {
     case 'text': {
-      pos('x', a.x, b.x); pos('y', a.y, b.y);
+      // The baseline of a TSPL text follows its character cell, so a substituted font (another size) moves it along the ascent
+      {
+        const sizeGap = Math.abs(a.font.size - b.font.size);
+        const ascent = sizeGap > 1e-6 ? 0.8 * sizeGap + dot : 0; // plus the dot the ascent is rounded to
+        const along = a.rotation % 180 === 0;
+        check('x', near(a.x, b.x, tol + (along ? 0 : ascent)));
+        check('y', near(a.y, b.y, tol + (along ? ascent : 0)));
+      }
       eq('rotation', a.rotation, b.rotation); eq('data', a.data, b.data);
       const [fa, fb] = [a.font, b.font];
       check('font.size', near(fa.size, fb.size, fontTolerance(fa.size, tol)));
@@ -727,27 +734,36 @@ test('TPCL counter steps beyond the 10 digits of the manual are clamped with one
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------
-// Text origin (OPEN FINDING, documented here as the current behaviour; nothing in this file changes it)
+// Text origin
 // The three languages place a text differently: TPCL writes the origin of the text, ZPL ^FO is the top-left of the field and ^FT the
-// baseline, and TSPL TEXT is documented as top-left although the viewer draws it as a baseline. The neutral model keeps one meaning
-// (the baseline origin) and every conversion goes through it, so the comparison above is exact; whether the printed result lines up
-// is a question for a real printer and is left to the user.
+// baseline, and TSPL TEXT is the top-left of the character cell (TSC manual). The neutral model keeps one meaning (the baseline origin),
+// so the TSPL reader adds the ascent (80% of the character height, not verified on a printer) and the TSPL writer takes it off again.
 
-test('text origin: TSPL TEXT y is carried through the neutral model unchanged and written as the ZPL ^FT baseline', () => {
+test('text origin: a TSPL TEXT y is a top edge: the ZPL ^FT baseline is the ascent below it and the way back lands on the same y', () => {
   const tspl = 'SIZE 100 mm,60 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nTEXT 40,100,"0",0,12,12,"Origin"\r\nPRINT 1,1\r\n';
   const result = PB.convert.run(tspl, 'zpl', { dpi: 203 });
-  assert.match(result.text, /\^FT40,100\^A0N,/);
+  const baseline = Number(/\^FT40,(\d+)\^A0N,/.exec(result.text)[1]);
+  assert.ok(baseline > 100 + 20, `the ^FT baseline (${baseline}) is below the TSPL top edge`);
   const back = PB.convert.run(result.text, 'tspl', { dpi: 203 });
   assert.match(back.text, /TEXT 40,100,"0",0,/);
 });
 
-test('text origin: a ZPL ^FO text is written back as ^FO and read as the same baseline in TSPL', () => {
+test('text origin: a ZPL ^FO text keeps its top edge in TSPL', () => {
   const zpl = '^XA\r\n^PW799\r\n^LL480\r\n^FO40,100^A0N,40,40^FDOrigin^FS\r\n^XZ\r\n';
   const model = parser('zpl').parse(zpl, { dpi: 203 });
   assert.ok(model.items[0].y > 100 * dotOf(203), 'the neutral baseline is below the ^FO top edge');
   const tspl = PB.convert.run(zpl, 'tspl', { dpi: 203 });
-  const y = Number(/TEXT 40,(\d+),/.exec(tspl.text)[1]);
-  assert.ok(y > 100, `the TSPL y (${y}) is the ZPL baseline, not the ^FO top`);
+  assert.match(tspl.text, /TEXT 40,100,/);
+});
+
+test('text origin: a rotated TSPL text has its baseline on the side the letters stand to', () => {
+  for (const [rotation, side] of [[0, 'y+'], [90, 'x-'], [180, 'y-'], [270, 'x+']]) {
+    const tspl = `SIZE 100 mm,60 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nTEXT 400,300,"3",${rotation},1,1,"A"\r\nPRINT 1,1\r\n`;
+    const item = parser('tspl').parse(tspl, { dpi: 203 }).items[0];
+    const [dx, dy] = [item.x - 400 * dotOf(203), item.y - 300 * dotOf(203)];
+    const moved = { 'y+': dy > 0 && Math.abs(dx) < 1e-6, 'y-': dy < 0 && Math.abs(dx) < 1e-6, 'x+': dx > 0 && Math.abs(dy) < 1e-6, 'x-': dx < 0 && Math.abs(dy) < 1e-6 };
+    assert.ok(moved[side], `rotation ${rotation}: baseline moves ${side} (dx ${dx}, dy ${dy})`);
+  }
 });
 
 // ---------------------------------------------------------------------------------------------------------------------------

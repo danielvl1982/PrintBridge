@@ -28,7 +28,12 @@ const mono = (cellW, cellH, xmul, ymul, dpi = 203) => ({
   size: cellH * ymul * dotOf(dpi), scaleX: (cellW * xmul) / (cellH * ymul * 0.6), family: 'mono', weight: 400, style: 'normal',
 });
 const sans = (points, scaleX = 1, extra = {}) => ({ size: points * UPP, scaleX, family: 'sans', weight: 400, style: 'normal', ...extra });
-const text = (props = {}) => ({ kind: 'text', x: 40 * dotOf(203), y: 30 * dotOf(203), rotation: 0, data: 'HOLA', font: mono(24, 32, 1, 1), ...props });
+// The model keeps the baseline of a text and TEXT the top of its character cell: 80% of the height (whole dots) above the baseline
+const ascent = (font, dpi = 203) => Math.round(font.size / dotOf(dpi) * 0.8) * dotOf(dpi);
+const text = (props = {}) => {
+  const font = props.font || mono(24, 32, 1, 1);
+  return { kind: 'text', x: 40 * dotOf(203), y: 30 * dotOf(203) + ascent(font), rotation: 0, data: 'HOLA', ...props, font };
+};
 const line = (props = {}) => ({ kind: 'line', x1: 100, y1: 60, x2: 500, y2: 60, rect: false, width: 25, ...props });
 const box = (props = {}) => line({ rect: true, x1: 20, y1: 10, x2: 780, y2: 470, width: 25, ...props });
 
@@ -93,7 +98,8 @@ test('built-in fonts: the font with the best fit wins, ties go to the lowest mul
 });
 
 test('built-in fonts at 300 dpi', () => {
-  const t = text({ x: 40 * dotOf(300), y: 30 * dotOf(300), font: mono(24, 32, 2, 2, 300) });
+  const font = mono(24, 32, 2, 2, 300);
+  const t = text({ x: 40 * dotOf(300), y: 30 * dotOf(300) + ascent(font, 300), font });
   assert.equal(body([t], 300)[0], 'TEXT 40,30,"4",0,2,2,"HOLA"');
 });
 
@@ -138,8 +144,10 @@ test('a rotation that is not a quarter turn is adjusted with a Spanish warning o
 });
 
 test('text coordinates become dots at the resolution', () => {
-  assert.equal(body([text({ x: 600, y: 75 })], 203)[0].split(',').slice(0, 2).join(','), 'TEXT 480,60');
-  assert.equal(body([text({ x: 600, y: 75 })], 300)[0].split(',').slice(0, 2).join(','), 'TEXT 709,89');
+  // the baseline y is the top y plus the ascent of the font (whole dots)
+  const at = dpi => body([text({ x: 600, y: 75 + ascent(mono(24, 32, 1, 1), dpi) })], dpi)[0].split(',').slice(0, 2).join(',');
+  assert.equal(at(203), 'TEXT 480,60');
+  assert.equal(at(300), 'TEXT 709,89');
 });
 
 test('quotes in the content use the \\["] escape and are read back', () => {

@@ -71,7 +71,7 @@ test('TEXT rotation 0/90/180/270 is the model rotation; an invalid one warns and
 test('TEXT position converts dots to 0.1 mm with the dpi', () => {
   const a = one('TEXT 100,50,"1",0,1,1,"A"', { dpi: 203 });
   near(a.x, 100 * 254 / 203);
-  near(a.y, 50 * 254 / 203);
+  near(a.y, (50 + 10) * 254 / 203); // the baseline: the ascent (10 of the 12 dots of the cell) below the TEXT y
   const b = one('TEXT 100,50,"1",0,1,1,"A"', { dpi: 300 });
   near(b.x, 100 * 254 / 300);
   near(b.font.size, 12 * 254 / 300);
@@ -81,7 +81,7 @@ test('TEXT position converts dots to 0.1 mm with the dpi', () => {
 test('TEXT applies REFERENCE and SHIFT', () => {
   const item = one('REFERENCE 20,30\r\nSHIFT 0,5\r\nTEXT 10,10,"1",0,1,1,"A"');
   near(item.x, 30 * DOT);
-  near(item.y, 45 * DOT);
+  near(item.y, (45 + 10) * DOT);
 });
 
 test('TEXT optional alignment is detected by field count', () => {

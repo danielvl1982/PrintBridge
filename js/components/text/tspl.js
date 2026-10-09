@@ -11,6 +11,8 @@
  * Limits (reported as info diagnostics): the model has no alignment nor word wrap, so alignment 2/3 draws left and BLOCK
  * is drawn as one line of text; a counter "@n" content shows the start value assigned with @n="..." (SET COUNTER gives the step, the
  * printer increments it per label); an unassigned counter, a mix ("x"+@1) and a BLOCK content keep the literal text.
+ * Origin: TEXT x,y is the top-left corner of the character cell (TSC manual) while the model draws from the baseline, so the reader adds the
+ * ascent (ASCENT of the height, whole dots, on the side the letters stand to) and emit takes it off.
  * Emit (the inverse): `emit(item, ctx)` writes a TEXT command. A mono font whose size and width are whole multiples of a
  * built-in bitmap font becomes that font "1".."8"; anything else becomes the scalable font "0" with POINT sizes (the
  * exact inverse of fontOf), with one info that the TSPL fonts differ from the source font when family, weight or style
@@ -53,6 +55,21 @@
   const MAX_MULTIPLIER = 10;
   /** Largest point size of a scalable font offered in the properties panel. */
   const MAX_POINTS = 200;
+
+  /** Share of the character height above the baseline (ascent), as in the ZPL slice. Not verified on a printer. */
+  const ASCENT = 0.8;
+
+  /**
+   * Offset (0.1 mm) from the TEXT reference point (the top-left corner of the character cell, TSC manual) to the baseline origin the
+   * neutral model draws from, for a rotation in degrees: the ascent lies on the side the letters stand to.
+   */
+  function baselineShift(rotation, size, dot) {
+    const a = Math.round(size / dot * ASCENT) * dot; // whole dots, so a read / write round trip does not drift
+    if (rotation === 90) return { x: -a, y: 0 };
+    if (rotation === 180) return { x: 0, y: -a };
+    if (rotation === 270) return { x: a, y: 0 };
+    return { x: 0, y: a };
+  }
 
   /** Bitmap font of a freshly inserted TEXT (16 x 24 dots cell). */
   const TEMPLATE_FONT = '3';
@@ -143,11 +160,14 @@
       if (item.spacing) ctx.once('tspl-text-spacing', () => diag.info('Hay textos con espaciado entre caracteres, que TEXT de TSPL no escribe: se escriben sin él'));
       if (item.reverse) ctx.once('tspl-text-reverse', () => diag.warning('Hay textos con impresión inversa (^FR de ZPL): TSPL no la tiene en el texto, se escriben normales'));
       if (item.bold) ctx.once('tspl-text-bold', () => diag.info('Hay textos en negrita (sobreimpresión), que TEXT de TSPL no escribe: se escriben sin ella'));
-      const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
+      const degrees = rotationDegrees(ctx, item.rotation);
+      // The model keeps the baseline origin; TEXT writes the top-left corner of the character cell
+      const shift = baselineShift(degrees, size, units.dotSize(ctx.dpi));
+      const [x, y] = [roundDots(exactDots(ctx, (item.x || 0) - shift.x)), roundDots(exactDots(ctx, (item.y || 0) - shift.y))];
       const data = safeData(ctx, item.data);
       // A counter writes SET COUNTER and the start value before the command, which then prints "@n"
       const counter = counterSetup(ctx, item, data);
-      const line = `TEXT ${x},${y},"${name}",${rotationDegrees(ctx, item.rotation)},${xmul},${ymul},${counter ? counter.ref : quoted(data)}`;
+      const line = `TEXT ${x},${y},"${name}",${degrees},${xmul},${ymul},${counter ? counter.ref : quoted(data)}`;
       return counter ? [...counter.lines, line] : line;
     }
 
@@ -209,11 +229,14 @@
       const [fontArg, rotArg, xArg, yArg] = fontArgs;
       const xmul = multiplier(ctx, ref, xArg, 'multiplicador X');
       const ymul = multiplier(ctx, ref, yArg, 'multiplicador Y');
-      const { x, y } = ctx.pos(point.x, point.y);
+      const font = fontOf(ctx, ref, fontArg.value, xmul, ymul);
+      const rotation = rotationOf(ctx, ref, rotArg);
+      const origin = ctx.pos(point.x, point.y);
+      const shift = baselineShift(rotation, font.size, ctx.dot);
+      const [x, y] = [origin.x + shift.x, origin.y + shift.y];
       return {
         kind: 'text', ref, source: sourceOf(cmd), x, y, raw: { x: String(point.x), y: String(point.y) },
-        font: fontOf(ctx, ref, fontArg.value, xmul, ymul),
-        rotation: rotationOf(ctx, ref, rotArg),
+        font, rotation,
         data,
         native: { font: fontArg.value, xmul, ymul },
       };

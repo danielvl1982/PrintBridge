@@ -22,6 +22,8 @@ function build(text, kind, point = { x: 123, y: 456 }, { dpi = 203, viewRotation
 /** Top-left corner of the newest item, in 0.1 mm (a BAR keeps its midline, so the half thickness is taken off). */
 function cornerOf(item) {
   if (item.kind === 'line') return { x: Math.min(item.x1, item.x2), y: item.rect ? Math.min(item.y1, item.y2) : item.y1 - item.width / 2 };
+  // A TEXT is placed by the top of its character cell; the model keeps the baseline, 80% of the height below it (rotation 0)
+  if (item.kind === 'text') return { x: item.x, y: item.y - item.font.size * 0.8 };
   return { x: item.x, y: item.y };
 }
 const newest = model => model.items[model.items.length - 1];
