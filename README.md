@@ -41,6 +41,8 @@ from scratch with the TPCL template label.
 | `js/drawing.js` | Label drawing and overlap detection |
 | `js/ui.js` | Screen panels |
 | `js/convert-panel.js` | The "Convertir a…" panel (target, output, fidelity warnings, Copiar, Descargar) |
+| `js/print-panel.js` | The "Impresión" panel (agent status, printer, copies, Imprimir, agent address) that talks to the local print agent |
+| `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `uninstall.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
 | `tests/` | Automated tests (`node --test` from the project root), including the TPCL / TSPL / ZPL conversion matrix (`tests/conversion-matrix.test.js`) |
@@ -256,6 +258,21 @@ the TPCL format ID and connection setting of a Data Matrix are not converted. Th
 **Text origin:** TPCL, TSPL and ZPL do not place a text the same way (TPCL gives the origin of the text, ZPL `^FO` the top-left of the field and `^FT` the baseline, TSPL `TEXT` the top-left
 of the character cell). The viewer draws every text from its baseline, so it reads a TSPL `TEXT` y as the top edge plus the ascent (75% of the height for the scalable fonts, as the ZPL font 0 in Volume Two; 80% for the bitmap fonts; whole dots) and writes it back
 without it: a ZPL `^FO30,25` becomes `TEXT 30,25`. The 75% / 80% shares are approximations that have not been checked on a TSC printer: check it with a test print.
+
+## Printing from the app
+
+The browser cannot write RAW data to a USB label printer, so the **Imprimir** button talks to a small local program, the **print agent** (`agent/printbridge-agent.js`).
+It needs Windows and [Node.js](https://nodejs.org) LTS, has no dependencies and only listens on `127.0.0.1`.
+
+1. Install the printers in Windows as usual (the driver can be a generic one: the data is sent RAW, exactly as in the editor).
+2. Run `agent\start.bat` to try it, or `powershell -ExecutionPolicy Bypass -File agent\install.ps1` so it starts by itself at every logon (`uninstall.ps1` removes it).
+3. In the app, open the **Impresión** panel: it shows "Agente conectado", the printers of the PC (the Windows default one is preselected, and the last one you chose is remembered), the **Copias** and **Imprimir**.
+   **Agente** is the address of the agent (default `http://127.0.0.1:9631`) and **Reintentar** checks it again.
+
+**Imprimir** sends the label in the **Código de etiqueta** box in its own language, with the bytes that saving it as a file would write (TSPL `BITMAP` data included). The variables (`#NAME#`) that have an assigned value in the **Variables** panel (or a default of the label itself, as `^FN` data in ZPL) are replaced by it; a variable that still shows only its own name, i.e. without a value, is sent as written.
+Several copies are sent as one print job. If the agent is not running the panel says so and **Descargar** (panel **Convertir a…**) stays as the alternative.
+Chrome asks once for permission to access the local network: allow it. **Nothing has been verified on a real printer yet**: try one label first.
+Requirements, configuration, allowed origins, security notes and troubleshooting: [agent/README.md](agent/README.md).
 
 ## TPCL support (Toshiba TEC)
 

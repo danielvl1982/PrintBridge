@@ -1,0 +1,10 @@
+{
+  "port": 9631,
+  "allowedOrigins": [
+    "https://danielvl1982.github.io",
+    "http://localhost",
+    "http://127.0.0.1"
+  ],
+  "allowFileOrigin": false,
+  "maxBytes": 5242880
+}

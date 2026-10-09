@@ -26,6 +26,14 @@
       for (const [name, value] of Object.entries((model && model.variableDefaults) || {})) if (values[name] == null) values[name] = value;
     },
 
+    /**
+     * The values that were really assigned: the Variables panel fills a new variable with its own name as a placeholder, which is not a value
+     * (an empty value the user typed is one). Used to print: a variable without an assigned value is sent as written.
+     */
+    assigned(values) {
+      return Object.fromEntries(Object.entries(values || {}).filter(([name, value]) => value != null && value !== name));
+    },
+
     /** Replaces the variables with their value; the ones without a value are left as they are. */
     substitute(text, values) {
       return text == null ? '' : text.replace(PATTERN, (match, name) => values[name] ?? match);

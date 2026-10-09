@@ -159,3 +159,17 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .is-collapsed .panel-actions { display: none; }
 .is-collapsed .panel-head, .is-collapsed h2 { margin-bottom: 0; }
 .props-bar.is-collapsed, .is-collapsed.panel { min-height: 0; }
+
+/* Impresión panel (js/print-panel.js): agent status, printer, copies, settings row */
+.print label { display: inline-flex; align-items: center; gap: 6px; }
+.print select, .print input { font: inherit; padding: 2px 4px; min-width: 0; }
+.print input[type="number"] { width: 4.5em; }
+.print input[type="text"] { width: 15em; max-width: 100%; }
+.print-status { font-weight: 600; }
+.print-status::before { content: "\25CF "; }
+.print-status.is-ok { color: #1a7f37; }
+.print-status.is-down { color: var(--err); }
+.print-status.is-checking { color: var(--muted); }
+.print-message, .print-help { margin: 6px 0; }
+.print-message { color: var(--muted); }
+.print-help { color: var(--warn); }

@@ -23,3 +23,6 @@ desktop.ini
 # Vendor manuals (copyrighted: keep them local, never commit)
 docs/*.pdf
 docs/**/*.pdf
+
+# Local agent settings (copy of agent/config.example.json)
+agent/config.json

@@ -19,6 +19,7 @@ Open `index.html` in a browser to try the app. There is nothing to install.
 
 - `README.md`: what the app does, what each file contains and, per language, what is drawn, edited and written.
 - `odd/tasks/`: one plan per feature with its task list and the evidence for each step (`multi-printer-language-support.md` is the foundation, `zpl-support.md` the ZPL language and the three-way conversion). Check the one that applies before starting something new, and update it when you finish a task.
+- `agent/`: the Windows print agent (`printbridge-agent.js`, Node, **no dependencies**, CommonJS) that the Impresión panel (`js/print-panel.js`) talks to. Its HTTP logic takes the spooler as an injected `{ listPrinters, printRaw }` object, so `tests/print-agent*.test.js` run it on any OS against a fake spooler on an ephemeral port; only the PowerShell/winspool code and the `install.ps1` / `uninstall.ps1` / `start.bat` scripts need Windows and a real printer. See `agent/README.md`.
 - `js/core/`: the neutral label model (documented in `js/core/model.js`) and the language registry. A printer language (TPCL, TSPL and ZPL) lives in
   `js/languages/` and registers itself with the registry. The drawing code only knows the neutral model.
 - `js/components/`: vertical slices, one folder per label component (`text`, `barcode`, `qr`, `datamatrix`, `line`, `box`, `ellipse`, `area`, `image`). Each slice owns its constants, drawing and validation and, per language,
@@ -51,6 +52,8 @@ Open `index.html` in a browser to try the app. There is nothing to install.
   from the registry, so no UI change is needed for a new language.
 
 ## Tests
+
+`node --test` also runs the print agent tests (`tests/print-agent.test.js` for the protocol, limits, origins and preflight; `tests/print-agent-config.test.js` for `config.json` and the embedded PowerShell) and the panel tests (`tests/print-panel.test.js`, on a fake DOM and a fake `fetch`). The agent needs no `npm install`; to try it by hand run `node agent/printbridge-agent.js --config <file>` with a spare port and use `curl` (do not post a job to a real printer by accident).
 
 `node --test` runs everything under `tests/` (about 80 files, a few seconds). A file is named after what it covers: `tests/<area>.test.js` (`zpl-text.test.js`, `tspl-emit-barcode-qr-image.test.js`...). The tests load the browser scripts in Node through `tests/helpers/load.js`,
 so parsers, encoders, emitters, editors and the SVG renderer are all testable without a browser. Write the test first and see it fail.
