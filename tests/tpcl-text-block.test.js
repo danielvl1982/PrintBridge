@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { loadApp } = require('./helpers/load');
 
-// TPCL text block (text/tpcl.js): the PC option "P5aaaabbbcc" (automatic line feed) = aaaa width of the string area (0050..1040, 0.1 mm), bbb line feed
+// TPCL text block (text/tpcl.js): the PC option "P5aaaabbbcc" (automatic line feed) = aaaa width of the string area (0050..1057, 0.1 mm), bbb line feed
 // spacing (010..500; UNVERIFIED unit, taken as 0.1 mm) and cc number of lines (01..99). It is read into the neutral item.block (the same one TSPL BLOCK and
 // ZPL ^FB use), drawn with the shared word wrap, written back by emit and edited from the panel through the Tipo select (line <-> block) and three fields.
 // PV (outline font) has no such option; the rotations 01 / 12 / 23 / 30 (which the viewer does not support) make the printer ignore it.
@@ -95,7 +95,7 @@ test('emit: no lines in the block writes what the wrapped text needs; width, spa
   assert.match(needed.text, /,P50150020\d\d\|/);
   const clamped = emit([textItem({ block: { width: 5, lines: 300, align: 'left', lineSpace: 0 } }), textItem({ block: { width: 2000, lines: 2, align: 'left', lineSpace: 900 } })]);
   assert.match(clamped.text, /,P5005001099\|/);
-  assert.match(clamped.text, /,P5104050002\|/);
+  assert.match(clamped.text, /,P5105750002\|/);
   assert.equal(levels(clamped.diagnostics, 'warning').filter(t => /fuera de los rangos de TPCL/.test(t)).length, 1);
 });
 
@@ -158,7 +158,7 @@ test('describeItem: a PC line offers both Tipo values, no block fields; a block 
   assert.equal(field(text, 'kind').value, 'block');
   assert.deepEqual(['blockWidth', 'blockLines', 'blockSpace'].map(k => field(text, k).value), [300, 3, 20]);
   assert.deepEqual(['blockWidth', 'blockLines', 'blockSpace'].map(k => field(text, k).label), ['Ancho del área (0,1 mm)', 'Líneas', 'Interlineado (0,1 mm)']);
-  assert.deepEqual([field(text, 'blockWidth').min, field(text, 'blockWidth').max, field(text, 'blockSpace').min, field(text, 'blockSpace').max, field(text, 'blockLines').max], [50, 1040, 10, 500, 99]);
+  assert.deepEqual([field(text, 'blockWidth').min, field(text, 'blockWidth').max, field(text, 'blockSpace').min, field(text, 'blockSpace').max, field(text, 'blockLines').max], [50, 1057, 10, 500, 99]);
   assert.ok(!keys(text).includes('align') && !keys(text).includes('alignWidth'));
 });
 
@@ -186,7 +186,7 @@ test('Tipo = block writes one default P5 in the alignment slot (it replaces P2..
   assert.equal(item.align, undefined);
   assert.equal(item.block.align, 'left');
   assert.equal(item.block.lineSpace, 10);
-  assert.ok(item.block.width >= 50 && item.block.width <= 1040);
+  assert.ok(item.block.width >= 50 && item.block.width <= 1057);
   assert.ok(item.block.lines >= 1);
   // The default is 20 characters of the font wide
   const { advanceOf } = PB.slices.text;
@@ -214,7 +214,7 @@ test('width, lines and line spacing edit the P5 token in place (each clamped to 
   assert.equal(set(text, { blockLines: 5 }), PC(',J0102,P5030002005'));
   assert.equal(set(text, { blockSpace: 35 }), PC(',J0102,P5030003503'));
   assert.equal(set(text, { blockWidth: 10, blockLines: 500, blockSpace: 1 }), PC(',J0102,P5005001099'));
-  assert.equal(set(text, { blockWidth: 5000, blockSpace: 900 }), PC(',J0102,P5104050003'));
+  assert.equal(set(text, { blockWidth: 5000, blockSpace: 900 }), PC(',J0102,P5105750003'));
   assert.equal(set(text, { blockWidth: 'x' }), text);
   assert.equal(set(PC(''), { blockWidth: 450 }), PC(''));
 });

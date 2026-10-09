@@ -147,7 +147,7 @@
   const ALIGN_CODES = Object.freeze({ left: '1', center: '2', right: '3', equal: '4' });
   const ALIGN_KINDS = Object.freeze(Object.fromEntries(Object.entries(ALIGN_CODES).map(([kind, code]) => [code, kind])));
   const ALIGN_MIN_WIDTH = 50;
-  const ALIGN_MAX_WIDTH = 1040;
+  const ALIGN_MAX_WIDTH = 1057;
   /** Area width written when an item switches to equal space without one (0.1 mm). */
   const ALIGN_DEFAULT_WIDTH = 500;
 
@@ -178,7 +178,7 @@
   }
 
   /**
-   * Automatic line feed "P5aaaabbbcc" (PC only; PV has no such alignment): a text block. aaaa = width of the string area (0050..1040, 0.1 mm),
+   * Automatic line feed "P5aaaabbbcc" (PC only; PV has no such alignment): a text block. aaaa = width of the string area (0050..1057, 0.1 mm),
    * bbb = line feed spacing (010..500), cc = number of lines (01..99). It takes the place of the other alignment, so a block never has one.
    * The manual's figure draws "line feed spacing" as the gap between two lines, so it is the model's block.lineSpace (extra distance added to the
    * character height). UNVERIFIED unit: the 2001 Spanish edition (B-452-TS12) says 0.1 mm, the 2004 / 2012 English editions (B-SV4, B-452-R)
@@ -597,7 +597,7 @@
       const b = item.block;
       const lines = Number.isInteger(b.lines) && b.lines > 0 ? b.lines : Math.max(1, PB.slices.text.wrapBlock(item.data, b, item.font).lines.length);
       const wanted = { width: Math.round(b.width), space: Math.round(b.lineSpace || 0), lines };
-      if (blockOutOfRange(wanted)) ctx.once('tpcl-block-range', () => diag.warning('Hay bloques de texto fuera de los rangos de TPCL (ancho 0050..1040, interlineado 010..500, líneas 01..99): se ajustan al límite'));
+      if (blockOutOfRange(wanted)) ctx.once('tpcl-block-range', () => diag.warning('Hay bloques de texto fuera de los rangos de TPCL (ancho 0050..1057, interlineado 010..500, líneas 01..99): se ajustan al límite'));
       if (b.align && b.align !== 'left') ctx.once('tpcl-block-align', () => diag.info('Hay bloques de texto centrados, a la derecha o justificados: el salto de línea automático de TPCL (P5) no tiene alineación, se escriben a la izquierda'));
       ctx.once('tpcl-block-unit', () => diag.info('Hay bloques de texto (P5): el interlineado se escribe en unidades de 0,1 mm (manual en español); los manuales en inglés dicen 1 mm: compruébelo en su impresora'));
       return blockToken(wanted.width, wanted.space, wanted.lines);
@@ -649,7 +649,7 @@
         return {};
       }
       const [width, space, lines] = [+m[1], +m[2], +m[3]];
-      if (blockOutOfRange({ width, space, lines })) ctx.report(diag.warning(`${ref}: P5 fuera de rango (ancho 0050..1040, interlineado 010..500, líneas 01..99): la impresora puede no aceptarlo`));
+      if (blockOutOfRange({ width, space, lines })) ctx.report(diag.warning(`${ref}: P5 fuera de rango (ancho 0050..1057, interlineado 010..500, líneas 01..99): la impresora puede no aceptarlo`));
       return { block: { width, ...(lines > 0 && { lines }), align: 'left', lineSpace: space }, native: { block: { width, space, lines } } };
     }
 
