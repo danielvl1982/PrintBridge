@@ -1,15 +1,18 @@
 # PrintBridge print agent
 
 A small program that runs on the Windows PC the label printers are connected to. It lets the PrintBridge web app send a label to a
-printer with one click (the **Imprimir** button of the **Impresión** panel). A web page cannot write RAW data to a USB label printer
+printer with one click (the **Print** button of the print panel). A web page cannot write RAW data to a USB label printer
 by itself, so the page talks to this agent, and the agent hands the bytes to the Windows print spooler.
 
 It is one file (`printbridge-agent.js`), has **no npm dependencies**, listens only on `127.0.0.1` and sends the bytes exactly as they
 arrive (TPCL, TSPL and ZPL, including the binary `BITMAP` data of TSPL images).
 
 > Status: the HTTP protocol, the origin checks and the app panel are covered by automated tests with a fake spooler, and the printer
-> listing was run on a real Windows machine. **Sending a job to a real label printer, and the Scheduled Task installer, have not been
-> verified yet**: test with one label on each of your printers (TEC, TSC, Zebra) before relying on it.
+> listing and `install.ps1` (download, start, Scheduled Task, uninstall) were run on a real Windows machine. **Sending a job to a real
+> label printer has not been verified yet**: test with one label on each of your printers (TEC, TSC, Zebra) before relying on it.
+
+The app itself is in Spanish, so this guide names its controls as they appear on screen: the print panel is **Impresión**, its button **Imprimir**,
+the address field **Agente** and the retry button **Reintentar**.
 
 ## Requirements
 
@@ -17,23 +20,58 @@ arrive (TPCL, TSPL and ZPL, including the binary `BITMAP` data of TSPL images).
 - [Node.js](https://nodejs.org) LTS (version 18 or newer) on the `PATH`.
 - The printers installed in Windows (USB printers are fine), see [Printers](#printers).
 
-## Install (starts by itself at every logon)
+## Install
 
-From a PowerShell window, in the project folder:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File agent\install.ps1
-```
-
-`install.ps1` checks that Node is on the `PATH`, registers a Scheduled Task called **PrintBridge Agent** for the current user (no administrator
-rights needed; it runs at logon, hidden, and is restarted if it stops), starts it now and prints the address. Running it again replaces
-the previous registration. Remove everything with:
+One command downloads the agent into `%LOCALAPPDATA%\PrintBridge` and starts it in the background. Open a PowerShell window (no administrator rights needed) and run:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File agent\uninstall.ps1
+irm https://raw.githubusercontent.com/danielvl1982/PrintBridge/main/agent/install.ps1 | iex
 ```
 
-`uninstall.ps1` stops the agent and removes the task.
+The script checks that Node.js 18 or newer is on the `PATH`, downloads `printbridge-agent.js` and `config.example.json`, starts the agent hidden and
+checks that it answers at `http://127.0.0.1:9631/health`. Run it again at any time to update: it stops the running agent, downloads the latest files and starts it again.
+Your `config.json` is never touched. It only talks to `raw.githubusercontent.com`, over HTTPS. Read the script first if you prefer: [`install.ps1`](install.ps1).
+
+This starts the agent **for the current session**: after a restart or a new logon you have to run the command again, or enable the autostart below.
+
+### Start it at every logon (background service)
+
+A piped script cannot take parameters, so wrap it in a script block and add `-Autostart`:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/danielvl1982/PrintBridge/main/agent/install.ps1))) -Autostart
+```
+
+This also registers a Scheduled Task called **PrintBridge Agent** for the current user: it runs at every logon, hidden, and is restarted (up to 3 times, one minute apart) if it stops.
+It is a per-user task, so it needs no administrator rights and it does not run before anybody logs on. A true Windows service that starts at boot would need
+administrator rights and a service wrapper (the agent would also have to run as a user that can see the printers); it is not provided.
+
+### Options
+
+Options go after the script block, as `-Autostart` does above.
+
+| Option | Effect |
+|---|---|
+| `-Autostart` | Also register the Scheduled Task, so the agent starts at every logon. |
+| `-Foreground` | Run the agent in the current window instead of the background (Ctrl+C stops it). Use it to see the log lines when something fails. |
+| `-Uninstall` | Stop the agent, remove the Scheduled Task and delete the downloaded files. `config.json` is kept. |
+| `-InstallDir <path>` | Where the agent is downloaded (default `%LOCALAPPDATA%\PrintBridge`). |
+| `-BaseUrl <url>` | Where the files are downloaded from (default: the `agent` folder of the `main` branch on GitHub). Use it for a fork or to pin a tag. |
+| `-TaskName <name>` | Name of the Scheduled Task (default `PrintBridge Agent`). |
+
+To remove everything:
+
+```powershell
+& ([scriptblock]::Create((irm https://raw.githubusercontent.com/danielvl1982/PrintBridge/main/agent/install.ps1))) -Uninstall
+```
+
+### From a checkout of the repository
+
+When `install.ps1` runs from a copy of the repository, it uses the files next to it (nothing is downloaded, `-InstallDir` is ignored) and accepts the same options:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File agent\install.ps1 -Autostart
+```
 
 ## Manual start
 
@@ -47,7 +85,7 @@ the agent starts, so restart it after editing. A missing key keeps its default; 
 
 | Key | Default | Meaning |
 |---|---|---|
-| `port` | `9631` | TCP port on `127.0.0.1`. If you change it, change **Agente** in the Impresión panel too. |
+| `port` | `9631` | TCP port on `127.0.0.1`. If you change it, change the **Agente** field of the print panel too. |
 | `allowedOrigins` | `["https://danielvl1982.github.io", "http://localhost", "http://127.0.0.1"]` | Web origins (scheme + host + port) allowed to call the agent. `http://localhost` and `http://127.0.0.1` without a port accept any port; every other entry must match exactly. |
 | `allowFileOrigin` | `false` | Also accept pages opened from a file (`file://`, whose origin is `null`). See the risk below. |
 | `maxBytes` | `5242880` (5 MB) | Largest request body accepted; bigger ones get `too_large`. |
@@ -66,7 +104,7 @@ local files and some sandboxed pages also have the `null` origin, so with the fl
 
 Chrome asks, the first time a public page (the deployed app) talks to a program on your own PC, whether to allow access to local network
 devices. Choose **Allow**. The agent answers the preflight request with `Access-Control-Allow-Private-Network: true`, which Chrome needs.
-If you chose Block by mistake, open the padlock next to the address, **Site settings**, and allow **Local network access**, then press **Reintentar** in the panel.
+If you chose Block by mistake, open the padlock next to the address, **Site settings**, and allow **Local network access**, then press **Reintentar** (retry) in the panel.
 
 ## Printers
 
@@ -77,11 +115,11 @@ shared from another PC, add it as a network printer on this one first.
 Because the data is sent **RAW** (the bytes go straight to the printer without any driver processing), the driver does not need to
 understand TPCL, TSPL or ZPL. A **Generic / Text Only** driver on the printer's port works fine and is a good choice if the manufacturer
 driver misbehaves (for example one that adds page breaks, or tries to render the data as a page). Printers that are offline show
-"(sin conexión)" in the panel.
+"(sin conexión)", that is "(offline)", in the panel.
 
 ## API
 
-All answers are JSON, except the 204 of the preflight. Errors look like `{ "ok": false, "error": "<code>", "message": "<Spanish text>" }`.
+All answers are JSON, except the 204 of the preflight. Errors look like `{ "ok": false, "error": "<code>", "message": "<text>" }`. The message is a short text in Spanish, ready to show in the app; branch on `error`, not on the text.
 
 | Request | Answer |
 |---|---|
@@ -122,11 +160,11 @@ Use `%20` for spaces in the printer name. `--data-binary` keeps the bytes untouc
 
 ## Troubleshooting
 
-- **The panel says "Agente no disponible"**: the agent is not running (start it with `start.bat`, or check the task with `Get-ScheduledTask "PrintBridge Agent"`),
+- **The panel says "Agente no disponible" (agent not available)**: the agent is not running (run the install command again, start it with `start.bat`, or check the task with `Get-ScheduledTask "PrintBridge Agent"`),
   the port or the address in **Agente** is wrong (default `http://127.0.0.1:9631`), or the browser blocked the access: look for the Chrome local network prompt above.
   Open `http://127.0.0.1:9631/health` in the browser: if it answers `{"ok":true,...}` the agent is fine and the problem is the origin or the permission.
   The browser shows a refused origin and a stopped agent in the same way, so check the agent console too.
-- **origin_refused / "no permite esta página"**: the page's origin is not in `allowedOrigins` (for example the app is served from another address, or opened as a file). Add the origin
+- **origin_refused / "El agente no permite esta página" (the agent does not allow this page)**: the page's origin is not in `allowedOrigins` (for example the app is served from another address, or opened as a file). Add the origin
   to `config.json` (or `allowFileOrigin`) and restart the agent.
 - **printer_not_found**: the name must be exactly as Windows lists it (`GET /printers`). Reload the list with **Reintentar** after installing a printer.
 - **"port ... is already in use"**: another copy of the agent (or another program) holds the port. Stop it, or change `port`.
@@ -134,6 +172,8 @@ Use `%20` for spaces in the printer name. `--data-binary` keeps the bytes untouc
   "Use printer offline". Try the **Generic / Text Only** driver on the same port. Check that the label language matches the printer (TPCL on a TEC, TSPL on a TSC, ZPL on a Zebra), the label size and the media.
 - **Garbage printed instead of the label**: the driver is processing the data instead of sending it RAW; switch to the Generic / Text Only driver.
 - **Node not found**: install the LTS version from nodejs.org and open a new terminal so the `PATH` is refreshed.
+- **The install command fails to download**: check the network and the proxy of the PC; the script needs HTTPS access to `raw.githubusercontent.com`. Run it with `-Foreground` to see the agent's own messages.
+- **"running scripts is disabled"**: this happens only when running a `.ps1` file from a checkout; use `powershell -ExecutionPolicy Bypass -File agent\install.ps1` as shown above. The `irm ... | iex` command is not affected.
 
 ## Security notes
 

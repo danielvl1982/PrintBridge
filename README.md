@@ -42,7 +42,7 @@ from scratch with the TPCL template label.
 | `js/ui.js` | Screen panels |
 | `js/convert-panel.js` | The "Convertir a…" panel (target, output, fidelity warnings, Copiar, Descargar) |
 | `js/print-panel.js` | The "Impresión" panel (agent status, printer, copies, Imprimir, agent address) that talks to the local print agent |
-| `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `uninstall.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
+| `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
 | `tests/` | Automated tests (`node --test` from the project root), including the TPCL / TSPL / ZPL conversion matrix (`tests/conversion-matrix.test.js`) |
@@ -265,7 +265,11 @@ The browser cannot write RAW data to a USB label printer, so the **Imprimir** bu
 It needs Windows and [Node.js](https://nodejs.org) LTS, has no dependencies and only listens on `127.0.0.1`.
 
 1. Install the printers in Windows as usual (the driver can be a generic one: the data is sent RAW, exactly as in the editor).
-2. Run `agent\start.bat` to try it, or `powershell -ExecutionPolicy Bypass -File agent\install.ps1` so it starts by itself at every logon (`uninstall.ps1` removes it).
+2. In a PowerShell window run this one command: it downloads the agent into `%LOCALAPPDATA%\PrintBridge` and starts it in the background (run it again to update).
+   ```powershell
+   irm https://raw.githubusercontent.com/danielvl1982/PrintBridge/main/agent/install.ps1 | iex
+   ```
+   To start it at every logon too, add `-Autostart`; to remove it, add `-Uninstall` (see the [agent README](agent/README.md#install)). `agent\start.bat` runs it by hand in a console.
 3. In the app, open the **Impresión** panel: it shows "Agente conectado", the printers of the PC (the Windows default one is preselected, and the last one you chose is remembered), the **Copias** and **Imprimir**.
    **Agente** is the address of the agent (default `http://127.0.0.1:9631`) and **Reintentar** checks it again.
 

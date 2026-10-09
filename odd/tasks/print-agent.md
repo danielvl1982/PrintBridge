@@ -22,7 +22,7 @@ The browser cannot talk to a USB printer in RAW mode by itself, so a small local
 - Deployed site: https://danielvl1982.github.io/PrintBridge/ (GitHub Pages, main branch, HTTPS): its origin `https://danielvl1982.github.io` is allowed by default, plus `http://localhost` / `http://127.0.0.1` (any port). `file://` (origin `null`) is refused by default and enabled by a config flag (`allowFileOrigin`), documented with its risk.
 - Agent stays Node (no dependencies; Node LTS is a documented prerequisite), default port 9631, configurable in `agent/config.json` (copy of `config.example.json`).
 - Copies: the agent sends the data N times inside ONE spooler job (labels with counters increment per label, as when the printer prints them one after another); the app does not touch the label quantity commands.
-- Autostart: `agent/install.ps1` registers a Scheduled Task at logon for the current user (hidden window, no admin); `agent/uninstall.ps1` removes it; `agent/start.bat` runs it by hand.
+- Autostart: `agent/install.ps1` registers a Scheduled Task at logon for the current user (hidden window, no admin); `install.ps1 -Uninstall` removes it (the separate `uninstall.ps1` was folded in); `agent/start.bat` runs it by hand.
 - The agent URL is stored in the browser (localStorage, default `http://127.0.0.1:9631`) and can be changed in the Impresión panel.
 
 ## Tasks
@@ -78,3 +78,10 @@ agent and panel tests passed on their first run, so no RED was observed (new fil
 - **Panel** is expanded by default (not collapsed like Variables) and sits under Convertir; it checks the agent when the page loads. The help link points to the agent README on GitHub (`danielvl1982/PrintBridge`, main).
 - `agent/config.json` is git-ignored (a local copy of the example); `--config <file>` was added to the agent to run it on another port without touching it.
 - The browser cannot tell a stopped agent from a refused origin (the CORS failure looks like a network error), so the panel's down message names both and the Chrome permission.
+
+## Follow-up: one-command installer (feat/agent-installer)
+
+- `agent/install.ps1` now downloads the agent (`irm .../agent/install.ps1 | iex`) into `%LOCALAPPDATA%\PrintBridge` and starts it hidden; `-Autostart` registers the logon Scheduled Task (the "daemon"), `-Foreground`, `-Uninstall`, `-InstallDir`, `-BaseUrl`, `-TaskName`. `uninstall.ps1` removed.
+- Verified on Windows PowerShell 5.1: download from a local HTTP server, replace on a second run, `-Autostart` with a test task name, `-Uninstall`. `exit` is never used (it would close the window of an `irm | iex` user); the script is ASCII-only (5.1 reads BOM-less files as ANSI).
+- Docs in English; the Spanish names of the UI controls are glossed once in `agent/README.md`. The agent API `message` texts stay Spanish because the Spanish UI shows them as is.
+- Pending: the raw URL only works once this branch is merged and pushed to `main`; a true boot-time Windows service (needs admin and a wrapper) is not provided.
