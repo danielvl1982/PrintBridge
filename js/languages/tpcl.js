@@ -685,6 +685,28 @@
     return out;
   }
 
+  /**
+   * SG command for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral bitmap, 1 = black), ready for
+   * insertCommand. A position outside 0..999.9 mm (X has 4 digits in 0.1 mm) or a size the printer cannot hold (width 1..9999, height 1..99999,
+   * 512 KB of dot data) is refused with an error: the app shows it as the reason the image was not inserted.
+   */
+  function imageCommand({ xMm, yMm, w, h, data }) {
+    const { SG_LIMITS: limits } = PB.images;
+    const tenths = mm => PB.units.fromMm(mm);
+    for (const [name, mm] of [['X', xMm], ['Y', yMm]]) {
+      const value = tenths(mm);
+      if (Number.isFinite(value) && (value < 0 || value > MAX_COORD)) {
+        throw new Error(`la posición ${name} debe estar entre 0 y 999,9 mm (TPCL la escribe con 4 dígitos en 0,1 mm)`);
+      }
+    }
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    if (w > limits.maxWidth || h > limits.maxHeight) {
+      throw new Error(`${w}×${h} puntos supera el máximo de SG (ancho ${limits.maxWidth}, alto ${limits.maxHeight})`);
+    }
+    if (PB.images.sgBytes(w, h) > limits.maxBytes) throw new Error(`${w}×${h} puntos supera el búfer de imagen de la impresora (512 KB)`);
+    return PB.images.buildSG({ xMm, yMm, w, h, data: PB.images.bitmapToNibble(data, w, h) });
+  }
+
   PB.languages.register({
     id: 'tpcl',
     name: 'TPCL (Toshiba TEC)',
@@ -696,7 +718,8 @@
     fitSize,
     sizeLimits: { width: [...SIZE_LIMITS.width], height: [...SIZE_LIMITS.height], pitch: [...SIZE_LIMITS.pitch] },
     insertCommand,
-    insertImage: true, // the app writes the preview image as a TPCL SG command (images.buildSG); see js/core/languages.js
+    insertImage: true, // the app writes the preview image as a TPCL SG command (imageCommand, which checks the limits); see js/core/languages.js
+    imageCommand,
     moveItem,
     updateItem,
     describeItem,

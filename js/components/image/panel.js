@@ -17,6 +17,9 @@
     const QUARTER_TURNS = [0, 90, 180, 270];
     const showThreshold = () => { els.thresholdValue.textContent = `${els.threshold.value} %`; };
 
+    // The position is written in 0.1 mm with 4 digits (TPCL SG X: 0000..9999): only 0..999.9 mm is offered
+    [els.x, els.y].forEach(i => { i.min = '0'; i.max = '999.9'; });
+
     els.fileInput.addEventListener('change', () => {
       const file = els.fileInput.files[0];
       if (file) onFile(file);

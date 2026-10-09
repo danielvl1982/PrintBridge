@@ -28,7 +28,7 @@ TPCL (manuals: docs/tpcl)
 - [x] V1 TPCL label setup and shapes: `{D`, `{AX`, `{C`, `{XS`, `{LC` lines, boxes, `{XR` areas, ellipses
 - [x] V2 TPCL text: PC / PV (sizes, spacing, rotation, attribute, bold, counter, zero suppression, alignment, P5 block), RC / RV data
 - [x] V3 TPCL barcodes (`{XB` types, widths, ratios, heights, check digits, data lengths and character sets), QR, Data Matrix
-- [ ] V4 TPCL images (`{SG`)
+- [x] V4 TPCL images (`{SG`)
 TSPL (manual: docs/tspl)
 - [ ] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
 - [ ] V6 TSPL text: `TEXT`, `BLOCK`, fonts, multipliers, rotation, `SET COUNTER` / `@` variables
@@ -136,7 +136,30 @@ Expectation changes in existing tests: Code 128 now writes check digit option `1
 QR cell limit 52 (was 99) in tests/tpcl-emit-barcode-qr-image.test.js and tests/update-item.test.js; ITF fixtures in the emit tests carry digits (letters now warn); the update-item Code 128 fixture has the manual's digit counts
 and its short QR fixture is allowed its "faltan parámetros" warning.
 
+### V4 TPCL images (`{SG`)
+Manuals: SV4 6.3.21 (text line 6330+), R 6.3.22 (7965+), TS12 6.23 (6235+ of its text); x72 has no graphic command text. Line numbers are those of `pdftotext -layout`.
+Related command: only `{SG`; the app uses no other image command (no graphic number, saving or recall exists in `{SG`; `{XO` / `{XQ` save whole command files, not modelled).
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| X aaaa | exactly 4 digits, 0.1 mm (SV4 6340, R 7975, TS12 6243); R adds the `D` dots suffix | position input without limits (a value over 999.9 mm gave a 5-digit X) / 0..999.9 mm | emitted images already clamped to 0..9999 (V1 coordText) / unchanged; the overlay insert wrote 5 digits or clamped negatives silently / refused with an error naming 0..999,9 mm | none / warning when not 4 digits |
+| Y bbbb | 4 or 5 digits (SV4, R; TS12 says 4) | as X / as X | as X | none / warning when not 4 or 5 digits |
+| Width cccc | exactly 4 digits, dots (all three; ignored for BMP / PCX modes) | no limit in the panel (the conversion refused > 9999 dots) / unchanged (width in mm; the insert states the limit) | refused > 9999 with the generic "bitmap no válido" text / refused with a warning naming the limits | 3 digits silently, 0 and > 9999 warned / also warning for the digit count (0001..9999) |
+| Height dddd | 4 or 5 digits, dots (SV4 6346, R 7990; TS12 says 4); the widest, 99999, is used | as width | limit 9999 for both / 1..99999 | refused above 9999 / refused above 99999, 3 digits warned |
+| Image buffer | "the graphic width for only the smaller value of either the designated value or the max. buffer size (512 KB) is drawn" (SV4 6542, R 8192, TS12 "Página 153"); read as 512 KB (524288 bytes) of dot data, ((w+7)>>3) x h | no limit / the insert refuses with an error | written whatever the size / refused with one warning | drawn whole / warning, drawn with the rows that fit (`native` keeps the command as written) |
+| Data mode e | 0 nibble overwrite, 1 hex, 2 BMP, 3 TOPIX, 4 nibble OR, 5 hex OR, 6 PCX (SG;) and 7 TOPIX XOR (R, SV4 lists 0..6); A only for `{SG0;` | n/a | always 0 (valid) | 0 and 4 drawn, others "no soportado" / the same, plus 8..9 or 2 digits warn with 0..7 |
+| Data | 30H..3FH, ((w+7)>>3) x h x 2 characters for nibble modes | n/a | built from the bitmap (valid) | length mismatch warned / also characters outside 30H..3FH warned (drawn white) |
+| Graphic number, rotation, magnification | not parameters of `{SG` (no graphic numbers, the image is drawn into the buffer at once; the only way to rotate is to rotate the bitmap, which the overlay does) | - | - | - |
+| Data count ffff (`{SG0;`, mode A) | 4 digits, 0..4294967295 (R 8031+) | - | never written | `{SG0;` is not read (Open) |
+
+Other changes: shared limits live in `PB.images.SG_LIMITS` / `sgBytes` / `rowBytes` (js/components/image/codec.js); TPCL gains `imageCommand` (js/languages/tpcl.js), so the overlay insert is
+checked before writing (position, size, buffer) and an out-of-range image is refused with the usual "No se pudo insertar la imagen" error instead of an invalid `{SG`.
+Expectation changes in existing tests: tests/sg.test.js (a 5-digit width now also reports its format, so two warnings).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V4 The 512 KB image buffer is read as the limit of the dot data of one graphic, not of the whole label image (the manual's sentence is about the width drawn); the printer's exact behaviour (cut width or error) is not given.
+- V4 `{SG0;` (printer driver compression, mode A with a data count), hex mode (1, 5), BMP / PCX (2, 6) and TOPIX (3, 7) are not read (warned as not supported by the viewer); the `D` dots suffix is only in R.
+- V4 TS12 says 4 digits for Y and height, SV4 / R 4 or 5: the wider form is accepted. The conversion in app.js still refuses a picture over 9999 dots on either side before the language check (js/app.js is outside this task's surface).
 - V3 The shipped example `template-tpcl` (js/config.js, outside this task's surface) writes check digit option `0` for Code 128, which is outside 1..5: the parse tolerates `0` for types 9 / A only so the example stays warning-free; change the example to `1` and drop the exception in V14.
 - V3 Data Matrix even sizes between 10 and 144 that ECC200 does not define (for example 28x28) are accepted without warning: the manual calls them valid, the viewer draws the smallest square that fits.
 - V3 QR manual mode (`g` = M) needs the data to carry a mode prefix; not checked. Model default (omitted `Mi` = Model 1) is not modelled: the emitter always writes `M2`.
@@ -165,3 +188,4 @@ and its short QR fixture is allowed its "faltan parámetros" warning.
 - V1 (route: delegated writer, one writer, direct; RED first: 22 of the 32 new tests failed on the old code): TPCL label setup and shapes (tests/tpcl-label-setup.test.js, tests/tpcl-shapes-validation.test.js). Verification: `node --test` 4015 tests, 4014 pass, 0 fail, 1 skipped (was 3983 / 3982 before; +32 new). Commit: see `git log` (fix: validate TPCL label setup and shape values against the manuals).
 - V2 (route: delegated writer, one writer, direct; RED first: 31 of the 34 new tests failed on the old code): TPCL text (tests/tpcl-text-validation.test.js, 34 tests). Verification: `node --test` 4049 tests, 4048 pass, 0 fail, 1 skipped (was 4015 / 4014 before; +34 new). Commit: see `git log` (fix: validate TPCL text values against the manuals).
 - V3 (route: delegated writer, one writer, direct; RED first: 34 of the 35 new tests failed on the old code): TPCL barcodes, QR and Data Matrix (tests/tpcl-barcode-validation.test.js, 35 tests). Verification: `node --test` 4084 tests, 4083 pass, 0 fail, 1 skipped (was 4049 / 4048 before; +35 new). Commit: see `git log` (fix: validate TPCL barcode, QR and Data Matrix values against the manuals).
+- V4 (route: delegated writer, one writer, direct; RED first: 15 of the 16 new tests failed on the old code): TPCL images (tests/tpcl-image-validation.test.js, 16 tests). Verification: `node --test` 4100 tests, 4099 pass, 0 fail, 1 skipped (was 4084 / 4083 before; +16 new). Commit: see `git log` (fix: validate TPCL image values against the manuals).
