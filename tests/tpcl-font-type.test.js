@@ -111,7 +111,7 @@ test('PC -> PV: a text without a data command or with a multi-line command is re
 test('PV -> PC: the nearest bitmap font (sans bold) with magnifications; the position, rotation, attribute, spacing and data stay', () => {
   const text = wrap('{PV01;0100,0200,0042,0042,B,+005,11,W0507|}', '{RV01;Lote #LOT#|}');
   const out = set(text, { fontType: 'bitmap' });
-  assert.equal(out, wrap('{PC01;0100,0200,1,1,J,+05,11,W0507|}', '{RC01;Lote #LOT#|}'));
+  assert.equal(out, wrap('{PC01;0100,0200,10,10,J,+05,11,W0507|}', '{RC01;Lote #LOT#|}'));
   const [item] = itemsOf(out);
   assert.equal(item.ref, 'PC01');
   assert.deepEqual([item.x, item.y, item.rotation, item.data], [100, 200, 90, 'Lote #LOT#']);
@@ -130,19 +130,19 @@ test('PV -> PC: a size that is not a whole magnification of a font gets the clos
 
 test('PV -> PC: the spacing is clamped to the 2 digits of PC; counter, zero suppression, alignment and the RV data (renamed RC) stay; the number is kept when free', () => {
   const text = wrap('{PV03;0100,0200,0042,0042,B,+120,00,B,M0,+0000000002,Z02,P3|}', '{RV03;12|}');
-  assert.equal(set(text, { fontType: 'bitmap' }), wrap('{PC03;0100,0200,1,1,J,+99,00,B,M0,+0000000002,Z02,P3|}', '{RC03;12|}'));
+  assert.equal(set(text, { fontType: 'bitmap' }), wrap('{PC03;0100,0200,10,10,J,+99,00,B,M0,+0000000002,Z02,P3|}', '{RC03;12|}'));
 });
 
 test('PV -> PC: the number is moved to a free PC / RC one when it is taken', () => {
   const text = wrap('{PV01;0100,0200,0042,0042,B,00,B|}', '{RV01;a|}', '{PC01;0100,0300,10,10,J,00,B|}', '{RC01;b|}');
   const out = set(text, { fontType: 'bitmap' });
-  assert.equal(out, wrap('{PC02;0100,0200,1,1,J,00,B|}', '{RC02;a|}', '{PC01;0100,0300,10,10,J,00,B|}', '{RC01;b|}'));
+  assert.equal(out, wrap('{PC02;0100,0200,10,10,J,00,B|}', '{RC02;a|}', '{PC01;0100,0300,10,10,J,00,B|}', '{RC01;b|}'));
 });
 
 // ---- Round trip, no-ops and refusals
 
 test('PC -> PV -> PC and PV -> PC -> PV keep the size within one magnification step and everything else', () => {
-  const start = wrap('{PC01;0100,0200,1,1,J,22,F0304,+0000000001,P2|}', '{RC01;0001|}');
+  const start = wrap('{PC01;0100,0200,10,10,J,22,F0304,+0000000001,P2|}', '{RC01;0001|}');
   const vector = set(start, { fontType: 'vector' });
   const back = set(vector, { fontType: 'bitmap' });
   assert.equal(back, start.replace(',P2|}', ',P2|}'));

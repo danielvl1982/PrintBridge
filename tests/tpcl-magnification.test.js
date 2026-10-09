@@ -22,14 +22,14 @@ test('isValidMagnification: single digits 1..9, 05..09 and the two digits ending
   for (const bad of ['0', '00', '01', '02', '03', '04', '11', '12', '13', '14', '16', '19', '21', '99', '96', '100', '123', '', 'A1', undefined, 5]) assert.equal(isValidMagnification(bad), false, String(bad));
 });
 
-test('magnificationToken: whole numbers in one digit, the rest in two digits, never an invalid token', () => {
-  assert.deepEqual([5, 6, 9, 10, 15, 20, 90, 95].map(magnificationToken), ['05', '06', '09', '1', '15', '2', '9', '95']);
+test('magnificationToken: always two digits (10 is 1.0, 20 is 2.0), never an invalid token', () => {
+  assert.deepEqual([5, 6, 9, 10, 15, 20, 90, 95].map(magnificationToken), ['05', '06', '09', '10', '15', '20', '90', '95']);
   for (let tenths = -5; tenths <= 140; tenths += 1) assert.equal(isValidMagnification(magnificationToken(tenths)), true, String(tenths));
   assert.equal(magnificationToken(14), '15');
-  assert.equal(magnificationToken(12), '1');
+  assert.equal(magnificationToken(12), '10');
   assert.equal(magnificationToken(3), '05');
   assert.equal(magnificationToken(400), '95');
-  assert.equal(magnificationToken(NaN), '1');
+  assert.equal(magnificationToken(NaN), '10');
 });
 
 test('reading a valid token keeps the magnification (single digit = whole, two digits = tenths)', () => {

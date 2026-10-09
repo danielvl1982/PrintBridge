@@ -104,10 +104,10 @@ test('updateItem: PC magnifications and rotation', () => {
   assert.equal(after.rotation, 90);
 });
 
-test('updateItem: PC magnification snaps to the nearest valid one (05..09, then 1..9.5 in steps of 0.5), whole numbers in one digit', () => {
+test('updateItem: PC magnification snaps to the nearest valid one (05..09, then 1..9.5 in steps of 0.5), always two digits', () => {
   assert.equal(edit(PC, { hMag: 0, vMag: 500 }).out, '{PC001;0100,0200,05,95,A,00,B|}');
-  assert.equal(edit(PC, { hMag: 12, vMag: 3 }).out, '{PC001;0100,0200,1,05,A,00,B|}');
-  assert.equal(edit(PC, { hMag: 14, vMag: 19 }).out, '{PC001;0100,0200,15,2,A,00,B|}');
+  assert.equal(edit(PC, { hMag: 12, vMag: 3 }).out, '{PC001;0100,0200,10,05,A,00,B|}');
+  assert.equal(edit(PC, { hMag: 14, vMag: 19 }).out, '{PC001;0100,0200,15,20,A,00,B|}');
 });
 
 test('updateItem: PC keeps the literal text after =', () => {

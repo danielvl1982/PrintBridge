@@ -156,7 +156,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     - **Ampliación horizontal / vertical (TPCL `PC` texts):** a select of the magnifications the printer accepts: **0,5×** to **0,9×** and **1×** to **9,5×** in steps of 0,5. The `PC` command takes
       one digit `1`..`9` (whole), or two digits: `05`..`09` (0,5..0,9) and, from 1 up, `10`, `15`, `20` ... `95` (second digit 0 or 5); anything else (`01`..`04`, `11`..`14`, `16`..`19`,
       `21` ...) is not valid and **the printer prints nothing for that field** (checked in the manuals B-SV4 2004, B-452-R 2012 and B-452-TS12 ES 2001, `PC` parameters d and e; not in
-      the printer, except that `09,09` prints and `14,19` does not). Whole numbers are written in one digit (`2`), the rest in two (`05`, `15`). A token already in the code that is not valid
+      the printer, except that `09,09` prints and `14,19` does not). The viewer always writes two digits (`10` is 1,0, `20` is 2,0, `05`, `15`), as the TEC reference labels do; a single digit is still accepted when reading and means a whole number. A token already in the code that is not valid
       is drawn with the nearest valid magnification, reported with a warning (one per text) and shown in the select as an extra option **… (no válido)**, so it is visible and can be
       corrected; nothing rewrites it until you pick a value. Everything the viewer writes (the panel, **Tipo de fuente**, the conversion from TSPL / ZPL) only uses valid magnifications.
       Converting a text from TSPL / ZPL looks for the font and valid magnifications that reproduce its size exactly (nearest to 1,0 first); when none does (for example 28 pt = H at 2,8,

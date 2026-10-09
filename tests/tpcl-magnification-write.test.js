@@ -17,8 +17,8 @@ const font = (size, family = 'sans', weight = 700, style = 'normal', scaleX = 1)
 const text = font_ => ({ kind: 'text', x: 100, y: 200, rotation: 0, data: 'HOLA', font: font_ });
 const warnings = diagnostics => diagnostics.filter(d => d.level === 'warning').map(d => d.text);
 
-test('a font that is a valid magnification of a PC font is written as that PC (whole numbers in one digit, 0.5 and x.5 in two)', () => {
-  const cases = [[1, 1, '1', '1'], [2, 2, '2', '2'], [1.5, 2.5, '15', '25'], [0.5, 0.9, '05', '09'], [9, 9.5, '9', '95']];
+test('a font that is a valid magnification of a PC font is written as that PC (always two digits: 10 is 1.0, 20 is 2.0, 05 is 0.5)', () => {
+  const cases = [[1, 1, '10', '10'], [2, 2, '20', '20'], [1.5, 2.5, '15', '25'], [0.5, 0.9, '05', '09'], [9, 9.5, '90', '95']];
   for (const [h, v, th, tv] of cases) {
     const out = emit([text(font(12 * UPP * v, 'sans', 700, 'normal', h / v))]);
     assert.match(out.text, new RegExp(String.raw`\{PC00;0100,0200,${th},${tv},J,`), `${h} x ${v}`);
@@ -50,11 +50,11 @@ test('no size, width, family or style makes the emitter write an invalid magnifi
 
 test('exact valid magnifications of every font and magnification pair are found (the best fit is still the one nearest to 1.0)', () => {
   // J (sans bold 12 pt) at 1 x 1 and the same size as K (14 pt) is not 1: 12 pt x 7/6 is no valid magnification, so only J 1 x 1 matches
-  assert.match(emit([text(font(12 * UPP))]).text, /\{PC00;0100,0200,1,1,J,/);
+  assert.match(emit([text(font(12 * UPP))]).text, /\{PC00;0100,0200,10,10,J,/);
   // two PC fonts draw 24 pt: J (12 pt) at 2 and M (18 pt) at no valid one; the 2 x 2 of J wins
-  assert.match(emit([text(font(24 * UPP))]).text, /\{PC00;0100,0200,2,2,J,/);
+  assert.match(emit([text(font(24 * UPP))]).text, /\{PC00;0100,0200,20,20,J,/);
   // J at 3 and K (14 pt) at no valid one for 36 pt: 36 / 18 = 2 (M at 2) and J at 3: the one with the vertical magnification nearest to 1 is M 2
-  assert.match(emit([text(font(36 * UPP))]).text, /\{PC00;0100,0200,2,2,M,/);
+  assert.match(emit([text(font(36 * UPP))]).text, /\{PC00;0100,0200,20,20,M,/);
 });
 
 test('emitting a text that falls back to PV warns about the outline font as before and never writes a PC magnification', () => {
@@ -82,9 +82,9 @@ test('PV -> PC through the panel: the magnifications are always valid, whatever 
 test('the properties panel writes the valid magnification nearest to the value, with the same token form as the emitter', () => {
   const src = '{PC001;0100,0200,05,06,J,00,B=HOLA|}';
   const set = changes => tpcl.updateItem(src, tpcl.parse(src).items[0], changes, { dpi: 203 });
-  assert.equal(set({ hMag: 10, vMag: 20 }), '{PC001;0100,0200,1,2,J,00,B=HOLA|}');
+  assert.equal(set({ hMag: 10, vMag: 20 }), '{PC001;0100,0200,10,20,J,00,B=HOLA|}');
   assert.equal(set({ hMag: 15, vMag: 95 }), '{PC001;0100,0200,15,95,J,00,B=HOLA|}');
-  assert.equal(set({ hMag: 14, vMag: 19 }), '{PC001;0100,0200,15,2,J,00,B=HOLA|}');
+  assert.equal(set({ hMag: 14, vMag: 19 }), '{PC001;0100,0200,15,20,J,00,B=HOLA|}');
   assert.equal(set({ hMag: 1, vMag: 400 }), '{PC001;0100,0200,05,95,J,00,B=HOLA|}');
   assert.equal(set({ hMag: 'x' }), src);
   assert.equal(set({ hMag: NaN }), src);

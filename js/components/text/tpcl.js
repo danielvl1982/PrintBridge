@@ -40,16 +40,16 @@
     return best;
   }
 
-  /** The only way a magnification is written: the token of the valid magnification nearest to `tenths` (whole numbers in one digit, the rest in two). */
+  /** The only way a magnification is written: the token of the valid magnification nearest to `tenths` (always two digits, as the TEC reference labels: 10 is 1.0, 20 is 2.0, 05 is 0.5; a single digit is still valid when READ and means a whole number). */
   function magnificationToken(tenths) {
     const n = snapMagnification(tenths);
-    return n % 10 === 0 ? String(n / 10) : String(n).padStart(2, '0');
+    return String(n).padStart(2, '0');
   }
 
   /** Magnification drawn for a token as written: the nearest valid one ("08" -> 0.8 ; "14" -> 1.5 ; "1" -> 1). */
   const magnification = s => snapMagnification(tenthsOf(s)) / 10;
 
-  const VALID_MAGNIFICATIONS_TEXT = 'de 1 a 9 (una cifra), de 0,5 a 0,9 (05..09) y de 1 a 9,5 de 0,5 en 0,5 (10, 15, 20 ... 95)';
+  const VALID_MAGNIFICATIONS_TEXT = '05..09 (0,5 a 0,9) y de 1 a 9,5 de 0,5 en 0,5 (10, 15, 20 ... 95; 10 es 1,0); una sola cifra 1..9 también se lee como entera';
 
   /**
    * TEC bitmap fonts of the PC command: size in points, family, weight and style they are simulated with.

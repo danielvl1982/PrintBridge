@@ -48,8 +48,8 @@ test('picking the invalid option again changes nothing; picking a valid one rewr
   const text = pc('14', '19');
   assert.equal(set(text, { hMag: '14' }), text);
   assert.equal(set(text, { hMag: 15 }), pc('15', '19'));
-  assert.equal(set(text, { hMag: 30, vMag: 5 }), pc('3', '05'));
-  assert.equal(set(pc('09', '09'), { vMag: 10 }), pc('09', '1'));
+  assert.equal(set(text, { hMag: 30, vMag: 5 }), pc('30', '05'));
+  assert.equal(set(pc('09', '09'), { vMag: 10 }), pc('09', '10'));
   assert.equal(set(pc('09', '09'), { hMag: 95 }), pc('95', '09'));
 });
 
