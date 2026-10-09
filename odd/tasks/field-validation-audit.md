@@ -31,7 +31,7 @@ TPCL (manuals: docs/tpcl)
 - [x] V4 TPCL images (`{SG`)
 TSPL (manual: docs/tspl)
 - [x] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
-- [ ] V6 TSPL text: `TEXT`, `BLOCK`, fonts, multipliers, rotation, `SET COUNTER` / `@` variables
+- [x] V6 TSPL text: `TEXT`, `BLOCK`, fonts, multipliers, rotation, `SET COUNTER` / `@` variables
 - [ ] V7 TSPL barcodes, `QRCODE`, `DMATRIX`
 - [ ] V8 TSPL images (`BITMAP`)
 ZPL (manuals: docs/zpl vol 1 and 2)
@@ -185,7 +185,27 @@ Other changes: `PB.languages` TSPL gains `sizeLimits: { gap }` and `fitSize` (th
 `PRINT` and `CLS` are separate handlers, and `OFFSET`, `DENSITY`, `SPEED`, `FEED` moved from the ignored list to checking handlers (still nothing drawn).
 Expectation changes in existing tests: tests/tspl.test.js BLINE fixture is 3 mm (2 mm is below the manual's 2.54 mm minimum).
 
+### V6 TSPL text (`TEXT`, `BLOCK`, `SET COUNTER`, `@n`)
+Manual: B-442/443 (docs/tspl); `TEXT` at text lines 1190-1245, `SET COUNTER` at 3116-3150. `BLOCK` is not in the local manual at all (v3.0 only), nor are fonts 0, 6, 7, 8 and ROMAN.TTF.
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `TEXT` x, y | dots, no range (1200) | not limited here (move field) / unchanged | whole dots (already) | unchanged |
+| font | 1..5 = 8x12, 12x20, 16x24, 24x32, 32x48 dots, plus Chinese / Japanese / Korean `.BF2` fonts (1203+); 0, 6..8, ROMAN.TTF are v3.0 | select 1..8, 0, ROMAN.TTF (already) / unchanged | only 1..8 or 0 (already) | unknown font: info only / info now lists the known ids (1 a 8, 0, ROMAN.TTF) |
+| rotation | 0, 90, 180, 270 (1224+) | select (already right) | nearest quarter turn + warning (already) | warned without the values / warning states "0, 90, 180 o 270" |
+| x / y multiplier, bitmap font | whole 1~8 (1229+); 1..10 kept (v3.0, widest, see Open) | number 1..10 (already) | choice only for whole 1..10 (already) | 11, 2.6 silently drawn as typed / drawn as the nearest whole 1..10, warning with the range; native and panel keep what was written |
+| x / y multiplier, scalable font | not in the local manual (point sizes of v3.0) | 1..200 (convenience) | whole points >= 1 (already) | 0 or negative: "se usa 1" / same, the warning now says what is valid |
+| content | `"` is written `\["]`, CR `\[R]`, LF `\[L]` (1236+); no length given | content field | quotes escaped (already, test added), CR / LF become spaces + warning (already) | unchanged |
+| `SET COUNTER @n` n | 0..49, 50 counters for text and barcode (3116+) | no field | counters beyond @49 written as plain text + warning (already) | `@50` and above gave a generic "no válido" / warning with "@0 a @49", nothing declared; the same warning for `@n="..."` and for a TEXT / BLOCK content that uses `@n` (once per number) |
+| `SET COUNTER` step | -999999999 .. 999999999 (3116+) | "Incremento" field with those limits (already) | clamped + warning (already) | generic "no válido" / warning with the range (declares nothing, as before: the printer rejects it); a malformed command warns with the form `SET COUNTER @n paso` |
+
+Other changes: `PB.languages` TSPL helpers gain `counterNumberWarning` (shared with the barcode slice in V7); `multiplier()` of the TSPL text slice returns the value to draw and the one written.
+Expectation changes in existing tests: none (one new file, tests/tspl-text-validation.test.js).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V6 The local manual says TEXT multipliers are 1~8; the code keeps 1..10 (TSC v3.0 range, which is not local). A bitmap multiplier of 9 or 10 is therefore not warned although the B-442/443 prints at most 8x.
+- V6 Fonts 0, 6, 7, 8 and ROMAN.TTF, BLOCK (all arguments, alignment, fit, space), the TEXT alignment argument and the scalable font size limits are v3.0 only: validated as "positive number" only; the 200 pt panel limit is a convenience. The `.BF2` Asian fonts of the local manual are drawn with a sans font (info).
+- V6 CR / LF in TEXT content are written as spaces; the manual's `\[R]` / `\[L]` escapes are read literally by TEXT (only BLOCK turns them into breaks). Content length: no limit in the manual.
 - V5 SIZE has no range in the local manual (v3.0 and the model tables give limits per printer); no maximum is applied, the panel offers min 5 mm only. Same for every shape measure: the 9999 dot limit of the properties panel is an existing convenience, not a manual value.
 - V5 DIRECTION mirror (m), REFERENCE (negative values), SHIFT, ELLIPSE, CIRCLE and the BOX radius are v3.0 only: not validated beyond "is a number".
 - V5 SPEED lists 1.5 / 2.0 / 3.0 per model in the local manual; other models of the family accept other values, so only a non positive or non numeric speed is reported.
@@ -225,3 +245,4 @@ Expectation changes in existing tests: tests/tspl.test.js BLINE fixture is 3 mm 
 - V3 (route: delegated writer, one writer, direct; RED first: 34 of the 35 new tests failed on the old code): TPCL barcodes, QR and Data Matrix (tests/tpcl-barcode-validation.test.js, 35 tests). Verification: `node --test` 4084 tests, 4083 pass, 0 fail, 1 skipped (was 4049 / 4048 before; +35 new). Commit: see `git log` (fix: validate TPCL barcode, QR and Data Matrix values against the manuals).
 - V4 (route: delegated writer, one writer, direct; RED first: 15 of the 16 new tests failed on the old code): TPCL images (tests/tpcl-image-validation.test.js, 16 tests). Verification: `node --test` 4100 tests, 4099 pass, 0 fail, 1 skipped (was 4084 / 4083 before; +16 new). Commit: see `git log` (fix: validate TPCL image values against the manuals).
 - V5 (route: delegated writer, one writer, direct; RED first: 20 of the 23 new tests failed on the old code): TSPL label setup and shapes (tests/tspl-label-validation.test.js, 23 tests). Verification: `node --test` 4123 tests, 4122 pass, 0 fail, 1 skipped (was 4100 / 4099 before; +23 new). Commit: see `git log` (fix: validate TSPL label setup and shape values against the manual).
+- V6 (route: delegated writer, one writer, direct; RED first: 11 of the 17 new tests failed on the old code): TSPL text (tests/tspl-text-validation.test.js, 17 tests). Verification: `node --test` 4140 tests, 4139 pass, 0 fail, 1 skipped (was 4123 / 4122 before; +17 new). Commit: see `git log` (fix: validate TSPL text values against the manual).

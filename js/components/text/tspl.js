@@ -210,18 +210,30 @@
       return `BLOCK ${[x, y, width, lines * pitch, `"${name}"`, degrees, xmul, ymul, ...optional, quoted(data)].join(',')}`;
     }
 
-    /** Multiplier or point size: a positive number, 1 (with a warning) otherwise. */
-    function multiplier(ctx, ref, arg, label) {
+    /**
+     * Multiplier or point size: a positive number, 1 (with a warning) otherwise. A bitmap font takes whole multipliers 1..MAX_MULTIPLIER
+     * (manual: TEXT 1~8, the wider 1..10 of v3.0 is kept): anything else is drawn as the nearest one and reported with the range.
+     * Returns { drawn, written }: the value to draw and the one in the command (native keeps it, so the panel shows what was typed).
+     */
+    function multiplier(ctx, ref, arg, label, bitmap) {
       const v = num(arg);
-      if (v !== null && v > 0) return v;
-      ctx.report(diag.warning(`${ref}: ${label} "${arg ? arg.value : ''}" no válido, se usa 1`));
-      return 1;
+      const raw = arg ? arg.value : '';
+      if (v === null || v <= 0) {
+        ctx.report(diag.warning(`${ref}: ${label} "${raw}" no válido (entero de 1 a ${MAX_MULTIPLIER} en una fuente de mapa de bits, positivo en una escalable), se usa 1`));
+        return { drawn: 1, written: 1 };
+      }
+      if (bitmap && (!Number.isInteger(v) || v > MAX_MULTIPLIER)) {
+        const drawn = Math.min(MAX_MULTIPLIER, Math.max(1, Math.round(v)));
+        ctx.report(diag.warning(`${ref}: ${label} "${raw}" fuera de 1 a ${MAX_MULTIPLIER} (entero, fuente de mapa de bits), se dibuja con ${drawn}`));
+        return { drawn, written: v };
+      }
+      return { drawn: v, written: v };
     }
 
     function rotationOf(ctx, ref, arg) {
       const v = num(arg);
       if (v !== null && ROTATIONS.includes(v)) return v;
-      ctx.report(diag.warning(`${ref}: rotación "${arg ? arg.value : ''}" no válida, se dibuja sin rotar`));
+      ctx.report(diag.warning(`${ref}: rotación "${arg ? arg.value : ''}" no válida (0, 90, 180 o 270), se dibuja sin rotar`));
       return 0;
     }
 
@@ -241,7 +253,7 @@
         ctx.tsplFontsNoted = ctx.tsplFontsNoted || new Set();
         if (!ctx.tsplFontsNoted.has(key)) {
           ctx.tsplFontsNoted.add(key);
-          ctx.report(diag.info(`${ref}: fuente "${name}" no disponible en el visor, se dibuja con una fuente sans`));
+          ctx.report(diag.info(`${ref}: fuente "${name}" no disponible en el visor (conoce 1 a 8, 0 y ROMAN.TTF), se dibuja con una fuente sans`));
         }
       }
       return { size: ymul * units.UNITS_PER_POINT, scaleX: xmul / ymul, family: 'sans', weight: 400, style: 'normal' };
@@ -257,6 +269,11 @@
         return arg.raw;
       }
       return arg.value;
+    }
+
+    /** "@n" references in a content argument: a counter above @49 does not exist in the printer (reported once per number). */
+    function checkCounterRefs(ctx, ref, arg) {
+      for (const m of arg.raw.matchAll(/(?:^|\+)\s*@(\d+)/g)) helpers.counterNumberWarning(ctx, ref, Number(m[1]));
     }
 
     function noteAlignment(ctx, ref, align) {
@@ -289,9 +306,10 @@
     /** Builds the text item shared by TEXT and BLOCK; `fontArgs` = [font, rotation, xmul, ymul] argument objects. */
     function textItem(ctx, ref, cmd, point, fontArgs, data) {
       const [fontArg, rotArg, xArg, yArg] = fontArgs;
-      const xmul = multiplier(ctx, ref, xArg, 'multiplicador X');
-      const ymul = multiplier(ctx, ref, yArg, 'multiplicador Y');
-      const font = fontOf(ctx, ref, fontArg.value, xmul, ymul);
+      const bitmap = fontArg.value.toUpperCase() in BITMAP_FONTS;
+      const xm = multiplier(ctx, ref, xArg, 'multiplicador X', bitmap);
+      const ym = multiplier(ctx, ref, yArg, 'multiplicador Y', bitmap);
+      const font = fontOf(ctx, ref, fontArg.value, xm.drawn, ym.drawn);
       const rotation = rotationOf(ctx, ref, rotArg);
       const origin = ctx.pos(point.x, point.y);
       const shift = baselineShift(rotation, font.size, ctx.dot, !(fontArg.value.toUpperCase() in BITMAP_FONTS));
@@ -300,7 +318,7 @@
         kind: 'text', ref, source: sourceOf(cmd), x, y, raw: { x: String(point.x), y: String(point.y) },
         font, rotation,
         data,
-        native: { font: fontArg.value, xmul, ymul },
+        native: { font: fontArg.value, xmul: xm.written, ymul: ym.written },
       };
     }
 
@@ -452,6 +470,7 @@
             const hasAlign = cmd.args.length >= 8;
             if (hasAlign) noteAlignment(ctx, 'TEXT', num(cmd.args[6]));
             const content = cmd.args[hasAlign ? 7 : 6];
+            checkCounterRefs(ctx, 'TEXT', content);
             // A counter with an assigned start value shows it (the printer increments it per label); else the literal text
             const shown = ctx.counterContent(content);
             const item = textItem(ctx, 'TEXT', cmd, p, cmd.args.slice(2, 6), shown ? shown.data : contentOf(ctx, 'TEXT', content));
@@ -471,6 +490,7 @@
             const p = point(cmd, 0);
             if (!validPoint(p)) { ctx.report(diag.warning(`BLOCK con coordenadas no válidas: ${cmd.raw.slice(0, 40)}`)); return; }
             const content = cmd.args[cmd.args.length - 1];
+            checkCounterRefs(ctx, 'BLOCK', content);
             const [space, align, fit] = cmd.args.slice(8, -1).map(num);
             const data = contentOf(ctx, 'BLOCK', content).replace(BLOCK_BREAK, '\n');
             const item = textItem(ctx, 'BLOCK', cmd, p, cmd.args.slice(4, 8), data);

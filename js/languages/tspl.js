@@ -235,6 +235,18 @@
     return { ref: `@${n}`, lines: [`SET COUNTER @${n} ${step}`, `@${n}=${quoted(data)}`] };
   }
 
+  /**
+   * Parse side: warns once per number when a counter does not exist in the printer (the manual has @0..@49 for text and barcode).
+   * `where` names the command. The value is still read as written.
+   */
+  function counterNumberWarning(ctx, where, n) {
+    if (n < COUNTER_SLOTS) return;
+    ctx.counterNumbersNoted = ctx.counterNumbersNoted || new Set();
+    if (ctx.counterNumbersNoted.has(n)) return;
+    ctx.counterNumbersNoted.add(n);
+    ctx.report(diag.warning(`${where}: el contador @${n} no existe, la impresora solo tiene @0 a @${COUNTER_SLOTS - 1}`));
+  }
+
   // ---------------------------------------------------------------------------------------------------------------
   // Helpers of the palette `build` hooks
 
@@ -260,7 +272,7 @@
   /** Helpers the slices' TSPL hooks share with this file. Passed once to each slice's `languages.tspl` factory. */
   const SLICE_HELPERS = Object.freeze({
     sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
-    quoted, roundDots, exactDots, toDots, safeData, counterSetup,
+    quoted, roundDots, exactDots, toDots, safeData, counterSetup, counterNumberWarning,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField, stringSelectField: PB.tsplEdit.stringSelectField, textField: PB.tsplEdit.textField,
   });
@@ -420,9 +432,15 @@
       pattern: /^SET\s+COUNTER\b/i,
       handle(m, cmd, ctx) {
         const parsed = SET_COUNTER.exec(cmd.raw);
-        const [n, step] = parsed ? [Number(parsed[1]), Number(parsed[2])] : [NaN, NaN];
-        if (!parsed || n >= COUNTER_SLOTS || Math.abs(step) > COUNTER_STEP_MAX) {
-          ctx.report(diag.warning(`SET COUNTER no válido: ${cmd.raw.slice(0, 40)}`));
+        if (!parsed) {
+          ctx.report(diag.warning(`SET COUNTER no válido (SET COUNTER @n paso, con paso entero): ${cmd.raw.slice(0, 40)}`));
+          return;
+        }
+        const [n, step] = [Number(parsed[1]), Number(parsed[2])];
+        // The printer rejects the command when the counter does not exist or the step is out of range: nothing is declared
+        if (n >= COUNTER_SLOTS) { counterNumberWarning(ctx, 'SET COUNTER', n); return; }
+        if (Math.abs(step) > COUNTER_STEP_MAX) {
+          ctx.report(diag.warning(`SET COUNTER @${n}: incremento ${step} fuera de -${COUNTER_STEP_MAX} a ${COUNTER_STEP_MAX}, la impresora lo rechaza y el contador no se declara`));
           return;
         }
         // where the step sits in the text, for the panel (cmd.raw starts at cmd.start)
@@ -434,6 +452,7 @@
       pattern: COUNTER_ASSIGNMENT,
       handle(m, cmd, ctx) {
         const value = assignedValue(m[2]);
+        counterNumberWarning(ctx, `@${m[1]}=`, Number(m[1]));
         if (value !== null) ctx.values.set(Number(m[1]), value);
       },
     },
