@@ -29,7 +29,7 @@ const mono = (cellW, cellH, xmul, ymul, dpi = 203) => ({
 });
 const sans = (points, scaleX = 1, extra = {}) => ({ size: points * UPP, scaleX, family: 'sans', weight: 400, style: 'normal', ...extra });
 // The model keeps the baseline of a text and TEXT the top of its character cell: 80% of the height (whole dots) above the baseline
-const ascent = (font, dpi = 203) => Math.round(font.size / dotOf(dpi) * 0.8) * dotOf(dpi);
+const ascent = (font, dpi = 203) => Math.round(Math.round(font.size / dotOf(dpi)) * (font.family === 'mono' ? 0.8 : 0.75)) * dotOf(dpi);
 const text = (props = {}) => {
   const font = props.font || mono(24, 32, 1, 1);
   return { kind: 'text', x: 40 * dotOf(203), y: 30 * dotOf(203) + ascent(font), rotation: 0, data: 'HOLA', ...props, font };
@@ -145,7 +145,7 @@ test('a rotation that is not a quarter turn is adjusted with a Spanish warning o
 
 test('text coordinates become dots at the resolution', () => {
   // the baseline y is the top y plus the ascent of the font (whole dots)
-  const at = dpi => body([text({ x: 600, y: 75 + ascent(mono(24, 32, 1, 1), dpi) })], dpi)[0].split(',').slice(0, 2).join(',');
+  const at = dpi => body([text({ x: 600, y: 75 + ascent(mono(24, 32, 1, 1, dpi), dpi), font: mono(24, 32, 1, 1, dpi) })], dpi)[0].split(',').slice(0, 2).join(',');
   assert.equal(at(203), 'TEXT 480,60');
   assert.equal(at(300), 'TEXT 709,89');
 });

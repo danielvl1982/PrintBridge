@@ -752,6 +752,8 @@ test('text origin: a TSPL TEXT y is a top edge: the ZPL ^FT baseline is the asce
   assert.match(back.text, /TEXT 40,100,"0",0,/);
 });
 
+// Font 0 baseline: ZPL uses 3/4 of the height (Volume Two, Table 10) and the TSPL scalable font takes the same share, so the top edge of a
+// ZPL font 0 text survives a ZPL -> TSPL conversion exactly.
 test('text origin: a ZPL ^FO text keeps its top edge in TSPL', () => {
   const zpl = '^XA\r\n^PW799\r\n^LL480\r\n^FO40,100^A0N,40,40^FDOrigin^FS\r\n^XZ\r\n';
   const model = parser('zpl').parse(zpl, { dpi: 203 });

@@ -879,3 +879,13 @@ test('README documents the ZPL barcodes: the commands, ^BY, the selector and wha
     assert.ok(readme.includes(needle), needle);
   }
 });
+
+// Volume Two, printed pages 95-97 (Mod 10 and Mod 43 check digits): the worked examples of the guide.
+test('Volume Two page 96: the Mod 10 example 01234567890 has the check digit 5 (the viewer anchors the weights 3, 1 at the right digit, which agrees for an odd number of digits; an even number is not settled by the guide)', () => {
+  assert.equal(PB.itf.encode('01234567890', { check: 'auto' }).text, '012345678905');
+});
+
+test('Volume Two page 97: the Mod 43 example 12345ABCDE/ sums 115, 115 mod 43 = 29, the check character is T', () => {
+  assert.equal(PB.code39.checkCharacter('12345ABCDE/'), 'T');
+  assert.equal(PB.code39.encode('12345ABCDE/', { check: 'mod43' }).characters, 12);
+});

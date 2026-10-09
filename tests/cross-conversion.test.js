@@ -242,6 +242,23 @@ test('coordinates beyond the TPCL 4 digits are clamped with one Spanish warning 
 
 // --- Double conversions ---
 
+/**
+ * Same TSPL text, except that the y of a TEXT line may differ by one dot: it is the top of the cell, the baseline minus the ascent of a font
+ * whose size went through the TPCL rounding.
+ */
+function assertSameTspl(actual, expected, label) {
+  const [a, b] = [actual.split('\r\n'), expected.split('\r\n')];
+  assert.equal(a.length, b.length, label);
+  const textLine = /^(TEXT \d+,)(\d+)(,.*)$/;
+  a.forEach((line, i) => {
+    const [m, n] = [textLine.exec(line), textLine.exec(b[i])];
+    if (m && n) {
+      assert.equal(m[1] + m[3], n[1] + n[3], `${label} line ${i}`);
+      assert.ok(Math.abs(Number(m[2]) - Number(n[2])) <= 1, `${label} line ${i}: y ${m[2]} vs ${n[2]}`);
+    } else assert.equal(line, b[i], `${label} line ${i}`);
+  });
+}
+
 /** One cross conversion step on a text: { text, diagnostics, model } with the model parsed from the output. */
 function step(text, targetId, dpi) {
   const r = PB.convert.run(text, targetId, { dpi });
@@ -254,7 +271,7 @@ for (const dpi of [203, 300]) {
       const first = step(example.source, 'tspl', dpi);
       const second = step(first.text, 'tpcl', dpi);
       const third = step(second.text, 'tspl', dpi);
-      assert.equal(third.text, first.text, example.id);
+      assertSameTspl(third.text, first.text, example.id);
       assertSameLabel(first.model, third.model, dpi);
       assert.deepEqual(levels(third.diagnostics, 'warning', 'error'), []);
       // after the first conversion the fonts are already TSPL ones: the font and size infos do not come back

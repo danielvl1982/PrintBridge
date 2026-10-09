@@ -17,14 +17,18 @@
  *       of the baseline going down; inverted: down from the baseline, to the left; bottom-up: to the left, going up).
  *   ^FR: the colour of the output is the reverse of its background; ^LRY does the same for every later field (until ^LRN, see js/languages/zpl.js:
  *       the parser sets field.reverse for both and native.labelReverse for the second). ^FH: hex escapes in the data. ^FP: direction and gaps (vertical formatting).
+ * ---- Volume Two (2005, local copy in docs/zpl): fonts ---------------------------------------------------------------------------
+ *   Printed pages 61 (Table 10: intercharacter gap and baseline of A..H, "the baseline for font E is 23 dots down from the top of the matrix")
+ *   and 64-65 (the matrices by printhead: 8 dots/mm = 203 dpi, 12 dots/mm = 300 dpi). BITMAP_FONTS holds them (see there). Fonts GS (SYMBOL),
+ *   1..9 and downloaded ones have no matrix here: they are drawn as a scalable sans font of the asked size, with one info. Font 0 is the
+ *   scalable one: the viewer draws it sans bold (width = height means the normal proportions, a missing width follows the height) and the
+ *   bitmapped ones mono (they are fixed pitch). The baseline of a ^FO field is the one of Table 10 for A..H and 3 x height / 4 for font 0
+ *   (BASELINE); the length of a text rotated 180 or 270 degrees with ^FO (half the width per character for font 0, the advance of the cell
+ *   for the bitmapped ones) is an approximation: ^FT is exact.
  * ---- What it does NOT document (so what follows is the viewer's simulation, NOT VERIFIED ON A PRINTER) -----------------------------
- *   The font matrices (Volume Two, Appendix E) are not in Volume One: BITMAP_FONTS holds the commonly published ones (cell height x width in dots
- *   and the inter-character gap): A 9x5, B 11x7, C and D 18x10, E 28x15 (OCR-B), F 26x13, G 60x40, H 21x13 (OCR-A). The guide only lists the
- *   fonts B, D, E, F, G, H, 0, GS and P..V by name. Fonts P..V, GS, 1..9 and downloaded ones have no matrix here: they are drawn as a scalable
- *   sans font of the asked size, with one info. Font 0 is the scalable one: the viewer draws it sans bold (width = height means the normal
- *   proportions, a missing width follows the height) and the bitmapped ones mono (they are fixed pitch). The baseline of a ^FO field (80% of the
- *   character height below the top; the rest is the descent) and the length of a text rotated 180 or 270 degrees with ^FO (half the width per
- *   character for font 0, the advance of the cell for the bitmapped ones) are approximations: ^FT is exact.
+ *   The gap and baseline of P..V (none in the manual: gap 0, baseline 3/4 of the height), whether the baseline scales with the magnification
+ *   (assumed: yes) and with the 300 dpi matrices of E and H (the same share of the height), the look of the glyphs (the viewer draws every
+ *   bitmapped font with one mono face), and the real width of the scalable font 0 (proportional: the advance is an approximation).
  * ---- Neutral item ----------------------------------------------------------------------------------------------------------------
  *   x, y = the baseline origin (what the renderer draws from): ^FT as written, ^FO converted with the baseline offset of the orientation.
  *   font.size = the character height in dots; font.scaleX stretches it to the width. native: { font, fontArg, orientationArg, height, width,
@@ -43,25 +47,55 @@
 
   /** Approximate advance of a mono glyph in em (what the CSS mono family draws), used to fit the cell advance. */
   const MONO_ADVANCE = 0.6;
-  /** Baseline of a field in the viewer: this share of the character height is above it (ascent), the rest below (descent). Not verified. */
-  const ASCENT = 0.8;
   /** Advance of a character of the scalable font, as a share of its width (to size the text rotated 180 / 270 with ^FO). Not verified. */
   const SCALABLE_ADVANCE = 0.5;
 
   /**
-   * Bitmapped fonts: [cell height, cell width, inter-character gap] in dots at 1x. NOT in the local guide (Volume Two): see the header.
-   * C and D share the matrix; the viewer draws every bitmapped font mono (fixed pitch), regular.
+   * Bitmapped fonts of the 8 dots/mm (203 dpi) printhead: [cell height, cell width, inter-character gap] in dots at 1x (Volume Two, printed
+   * pages 61 and 64). A..H: the matrix column, with the gap of Table 10 (page 61), which the chars/inch column confirms (pitch = 203 / chars
+   * per inch: A 6.1, B 8.9, C/D 12.0, E 19.9, F 16.0, G 48.3, H 18.8 dots). The matrix column prints font B as "11 x 17" (a typo): Table 10 and
+   * the inch columns say 11 x 7 (0.054 x 0.044 in = 11 x 9 dots with the gap), so 11 x 7 is used. P..V (letters, U-L-D): the matrix column;
+   * the manual gives no chars/inch for them (N/A) and their inch width equals the cell width, so the gap is 0 (not verified). C and D share
+   * the matrix. GS (24 x 24 SYMBOL) is not here: it is a symbol font, and the manual shows only two of its glyphs (page 60, Figure 9).
+   * The viewer draws every bitmapped font mono (fixed pitch), regular.
    */
-  const BITMAP_FONTS = Object.freeze({
+  const FONTS_203 = Object.freeze({
     A: [9, 5, 1], B: [11, 7, 2], C: [18, 10, 2], D: [18, 10, 2], E: [28, 15, 5], F: [26, 13, 3], G: [60, 40, 8], H: [21, 13, 6],
+    P: [20, 18, 0], Q: [28, 24, 0], R: [35, 31, 0], S: [40, 35, 0], T: [48, 42, 0], U: [59, 53, 0], V: [80, 71, 0],
   });
+  /**
+   * The 12 dots/mm (300 dpi) printhead (page 65): the same matrices except E = 42 x 20 and H = 34 x 22. The gaps are the ones of Table 10 where
+   * the matrix is the same (the chars/inch of the table agree within 2%: A 50.8, B 33.8, C/D 25.4, F 19.06, G 6.36). E: the printed
+   * chars/inch (23.4) is smaller than the cell, so it is not usable; the inch width 0.085 in = 25.5 dots is kept as pitch 25 (gap 5, the one of
+   * Table 10). H: 10.20 chars/inch = 29.4 dots, so pitch 29 (gap 7). A different resolution (the 24 dots/mm table of the manual, 254...) uses
+   * the 203 dpi table: 600 dpi is not offered by the viewer.
+   */
+  const FONTS_300 = Object.freeze({ ...FONTS_203, E: [42, 20, 5], H: [34, 22, 7] });
+  /** The table of a printer resolution. */
+  const fontsOf = dpi => (dpi === 300 ? FONTS_300 : FONTS_203);
+  /** Fonts that are only written when the item came from them (C is D; P..V would match too many neutral mono sizes). */
+  const SOURCE_ONLY = Object.freeze(new Set(['C', 'P', 'Q', 'R', 'S', 'T', 'U', 'V']));
   /** The scalable font. */
   const SCALABLE = '0';
   const FONT_NOTES = Object.freeze({ E: ' OCR-B', H: ' OCR-A' });
+  /**
+   * Baseline of the bitmapped fonts at 1x, in dots from the top of the matrix (Table 10, page 61: A 7, B 11, C/D 14, E 23, F 21, G 48, H 21),
+   * and of font 0 (3 x height / 4). Kept as a share of the 203 dpi height, so it follows the magnification and the 300 dpi matrices of E and
+   * H (assumed, not in the manual). P..V and the other fonts: the share of the scalable font (not in the manual).
+   */
+  const BASELINE = Object.freeze({ A: 7 / 9, B: 11 / 11, C: 14 / 18, D: 14 / 18, E: 23 / 28, F: 21 / 26, G: 48 / 60, H: 21 / 21 });
+  const BASELINE_DEFAULT = 0.75;
 
-  /** Font ids the properties panel offers: the bitmapped fonts of the table (letter, cell, mono), then the scalable one. */
+  /**
+   * Font ids the properties panel offers: the bitmapped fonts (letter, cell at 203 dpi, and where 300 dpi differs; mono), then the scalable one.
+   * The cell shown is the 203 dpi one: the panel does not know the resolution of the file.
+   */
   const FONT_OPTIONS = Object.freeze([
-    ...Object.entries(BITMAP_FONTS).map(([id, [h, w]]) => ({ value: id, label: `${id} · ${h}×${w} puntos (monoespaciada${FONT_NOTES[id] ? `,${FONT_NOTES[id]}` : ''})` })),
+    ...Object.entries(FONTS_203).map(([id, [h, w]]) => {
+      const [h3, w3] = FONTS_300[id];
+      const other = h3 !== h || w3 !== w ? `, ${h3}×${w3} a 300 dpi` : '';
+      return { value: id, label: `${id} · ${h}×${w} puntos${other} (monoespaciada${FONT_NOTES[id] ? `,${FONT_NOTES[id]}` : ''})` };
+    }),
     { value: SCALABLE, label: `${SCALABLE} · Escalable (sans negrita)` },
   ]);
 
@@ -82,13 +116,14 @@
 
   /**
    * The cell of a font for the h / w asked (dots, null = not given): { bitmap, height, width, advance, hMult, wMult } in dots. Neither given
-   * means the last ^CF values when the font is the default one, else the standard matrix / the guide's 15 x 12; only one given makes the
-   * other proportional (same magnification for the bitmapped fonts, same dots for the scalable one).
+   * means the last ^CF values when the font is the default one or the ^CF gave sizes (Volume Two, page 63: another font then "will be magnified
+   * using values for the ^CF height and width parameters"), else the standard matrix / the guide's 15 x 12; only one given makes the
+   * other proportional (same magnification for the bitmapped fonts, same dots for the scalable one). dpi picks the matrix table.
    */
-  function cellOf(name, h, w, cf) {
+  function cellOf(name, h, w, cf, dpi) {
     let [height, width] = [positive(h), positive(w)];
-    if (height === null && width === null && cf && cf.name === name) [height, width] = [positive(cf.height), positive(cf.width)];
-    const matrix = BITMAP_FONTS[name];
+    if (height === null && width === null && cf && (cf.name === name || cf.explicit)) [height, width] = [positive(cf.height), positive(cf.width)];
+    const matrix = fontsOf(dpi)[name];
     if (matrix) {
       const [cellH, cellW, gap] = matrix;
       const multiple = (v, std) => clamp(Math.round(v / std), 1, MAX_MULTIPLIER);
@@ -102,8 +137,8 @@
     return { bitmap: false, height: hh, width: ww, advance: ww * SCALABLE_ADVANCE, hMult: null, wMult: null };
   }
 
-  /** Dots from the top of the character box to the baseline (ascent) and below it (descent). */
-  const ascentOf = height => Math.round(height * ASCENT);
+  /** Dots from the top of the character box to the baseline (ascent) of a font of that character height; the rest is the descent. */
+  const ascentOf = (name, height) => Math.round(height * (BASELINE[name] || BASELINE_DEFAULT));
 
   /** Length in dots of the text along its direction (approximation, only used for ^FO with a rotation of 180 or 270 degrees). */
   const lengthOf = (data, advance) => Math.round(Array.from(String(data == null ? '' : data)).length * advance);
@@ -114,8 +149,8 @@
    * view... ie the baseline is `ascent` below the top (N), `descent` right of the left side (R), `length` right and `descent` below (I),
    * `ascent` right and `length` below (B).
    */
-  function baselineOffset(rotation, height, length) {
-    const a = ascentOf(height);
+  function baselineOffset(rotation, height, length, name) {
+    const a = ascentOf(name, height);
     const d = height - a;
     if (rotation === 90) return { x: d, y: 0 };
     if (rotation === 180) return { x: length, y: d };
@@ -133,14 +168,15 @@
   /**
    * Bitmapped font that draws a mono model font: the entry whose cell height times an integer (1..10) reproduces the size and whose cell
    * advance times an integer (1..10) reproduces the width, both within MULTIPLIER_TOLERANCE. Best fit first, then the font the item came
-   * from (so C stays C), then the lowest magnification, then the table order. C is only a candidate when it came from the source (it is D).
+   * from (so C stays C), then the lowest magnification, then the table order. SOURCE_ONLY fonts (C is D; P..V) are only candidates when they
+   * came from the source. dpi picks the matrix table.
    */
-  function bitmapChoice(font, dot, preferred) {
+  function bitmapChoice(font, dot, preferred, dpi) {
     if (font.family !== 'mono') return null;
     const heightDots = font.size / dot;
     let best = null;
-    for (const [name, [cellH, cellW, gap]] of Object.entries(BITMAP_FONTS)) {
-      if (name === 'C' && preferred !== 'C') continue;
+    for (const [name, [cellH, cellW, gap]] of Object.entries(fontsOf(dpi))) {
+      if (SOURCE_ONLY.has(name) && preferred !== name) continue;
       const y = heightDots / cellH;
       const x = (font.scaleX * heightDots * MONO_ADVANCE) / (cellW + gap);
       const [yi, xi] = [Math.round(y), Math.round(x)];
@@ -209,12 +245,12 @@
       const dot = units.dotSize(ctx.dpi);
       const sizeDots = size / dot;
       const preferred = item.native && item.native.font;
-      const choice = bitmapChoice({ ...font, size, scaleX }, dot, preferred);
+      const choice = bitmapChoice({ ...font, size, scaleX }, dot, preferred, ctx.dpi);
       let name = SCALABLE;
       let cell;
       if (choice) {
         name = choice.name;
-        const [cellH, cellW, gap] = BITMAP_FONTS[name];
+        const [cellH, cellW, gap] = fontsOf(ctx.dpi)[name];
         cell = { height: cellH * choice.hMult, width: cellW * choice.wMult, advance: (cellW + gap) * choice.wMult };
       } else {
         const height = roundDots(sizeDots);
@@ -235,7 +271,7 @@
       const fromFo = item.native && (item.native.origin === 'FO' || item.native.origin === 'default');
       let origin;
       if (fromFo) {
-        const off = baselineOffset(degrees, cell.height, lengthOf(item.data, cell.advance));
+        const off = baselineOffset(degrees, cell.height, lengthOf(item.data, cell.advance), name);
         origin = `^FO${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
       } else {
         origin = ft(ctx, item.x || 0, item.y || 0);
@@ -248,8 +284,8 @@
 
     /** Text item of a field: `spec` = { ref, name, h, w, rotation, fontArg, orientationArg } (h, w as written, null when not a number). */
     function textItem(ctx, field, spec) {
-      const cell = cellOf(spec.name, spec.h, spec.w, ctx.font);
-      if (!BITMAP_FONTS[spec.name] && spec.name !== SCALABLE) {
+      const cell = cellOf(spec.name, spec.h, spec.w, ctx.font, ctx.dpi);
+      if (!fontsOf(ctx.dpi)[spec.name] && spec.name !== SCALABLE) {
         ctx.once(`zpl-font-${spec.name}`, () => diag.info(`^A: fuente "${spec.name}" sin definición en el visor (la guía de Zebra consultada no la describe): se dibuja con una fuente sans del tamaño pedido`));
       }
       const fp = field.find('FP');
@@ -258,7 +294,7 @@
       }
       const o = ctx.origin(field);
       const data = field.data.value;
-      const off = o.kind === 'FT' ? { x: 0, y: 0 } : baselineOffset(spec.rotation, cell.height, lengthOf(data, cell.advance));
+      const off = o.kind === 'FT' ? { x: 0, y: 0 } : baselineOffset(spec.rotation, cell.height, lengthOf(data, cell.advance), spec.name);
       return {
         kind: 'text', ref: spec.ref, source: sourceOf(field),
         x: o.x + off.x * ctx.dot, y: o.y + off.y * ctx.dot,
