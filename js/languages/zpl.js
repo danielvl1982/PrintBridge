@@ -92,9 +92,9 @@
   const ORIENTATIONS = Object.freeze({ N: 0, R: 90, I: 180, B: 270 });
   const ROTATIONS = Object.freeze([0, 90, 180, 270]);
 
-  /** Names of the printer configuration commands that are recognised and not drawn (either prefix). */
+  /** Names of the printer configuration commands that are recognised and not drawn (either prefix). FA (field allocate, Volume Two page 43) only reserves memory. */
   const CONFIG_NAMES = Object.freeze([
-    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'EF', 'EG', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
+    'CM', 'CO', 'CV', 'CW', 'DB', 'DE', 'DN', 'DS', 'DT', 'DU', 'EF', 'EG', 'FA', 'HB', 'HD', 'HF', 'HG', 'HH', 'HI', 'HM', 'HS', 'HU', 'HW',
     'HY', 'HZ', 'ID', 'JA', 'JB', 'JC', 'JD', 'JE', 'JF', 'JG', 'JI', 'JJ', 'JL', 'JM', 'JN', 'JO', 'JP', 'JQ', 'JR', 'JS', 'JT', 'JU', 'JW',
     'JX', 'JZ', 'KB', 'KD', 'KL', 'KN', 'KP', 'MC', 'MD', 'MF', 'ML', 'MM', 'MN', 'MP', 'MT', 'MU', 'MW', 'NC', 'NI', 'NR', 'NS', 'NT', 'PF',
     'PM', 'PP', 'PQ', 'PR', 'PS', 'RO', 'SC', 'SD', 'SE', 'SL', 'SO', 'SP', 'SQ', 'SR', 'SS', 'ST', 'SX', 'SZ', 'TA', 'TO', 'WC', 'WD', 'XB',

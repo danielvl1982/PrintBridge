@@ -279,3 +279,24 @@ test('ZPL -> ZPL through the converter writes the ^FN fields back (a ZPL file ro
   const result = PB.convert.run(src, 'zpl', { dpi: 203 });
   assert.ok(result.text.includes('^FN1"Nombre"^FDACME^FS') && result.text.includes('^FN2^FS'), result.text);
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// Volume Two (2005): the examples of the programming exercises and of the advanced techniques (printed pages 33-37 and 41-43)
+
+test('Volume Two exercise 5 (page 33): ^SNSERIAL NUMBER 00000000111,1,Y is a text counter whose start value is the data as written; the format commands around it are not drawn', () => {
+  const model = zpl.parse('^XA^LH30,30^FO20,10^AF^FDZEBRA^FS^FO20,60^B3,,40,,^FDAA001^FS^FO20,180^AF^SNSERIAL NUMBER 00000000111,1,Y^FS^PQ10^XZ', { dpi: DPI });
+  assert.deepEqual(model.items.map(i => [i.kind, i.data]), [['text', 'ZEBRA'], ['barcode', 'AA001'], ['text', 'SERIAL NUMBER 00000000111']]);
+  assert.deepEqual([model.items[2].counter.step, model.items[2].zeroSuppress], [1, undefined]);
+  assert.deepEqual(model.diagnostics.map(d => d.level), ['info', 'info']);
+  assert.equal(emitLines(model).find(l => l.includes('^SNSERIAL NUMBER 00000000111,1,Y')) !== undefined, true);
+});
+
+test('Volume Two exercise 6 and the stored format example (pages 35-37, 43): ^DF / ^XF with ^FN and ^FA (field allocate, no effect on the drawing) read without a warning', () => {
+  const exercise6 = zpl.parse('^XA^DFFORMAT^FS^LH30,30^FO20,10^AF^FN1^FS^FO20,60^B3,,40,,^FN2^FS^XZ^XA^XFFORMAT^FS^FN1^FDZEBRA^FS^FN2^FDAAA001^FS^XZ', { dpi: DPI });
+  assert.deepEqual(exercise6.items.map(i => [i.kind, i.data]), [['text', '<#FN1#>'], ['barcode', '<#FN2#>']]);
+  assert.deepEqual(exercise6.diagnostics.filter(d => d.level !== 'info'), []);
+  const stored = zpl.parse('^XA^DFFORMAT^FS^LH30,30^BY2,3,100^FO120,100^CFD^FN1^FA9^FS^FO120,160^B3^FN2^FA6^FS^XZ', { dpi: DPI });
+  assert.deepEqual(stored.items.map(i => [i.kind, i.data, i.native && i.native.font]), [['text', '<#FN1#>', 'D'], ['barcode', '<#FN2#>', undefined]]);
+  assert.deepEqual(stored.diagnostics.filter(d => d.level !== 'info'), []);
+  assert.ok(stored.diagnostics.some(d => d.text.includes('^FA')));
+});
