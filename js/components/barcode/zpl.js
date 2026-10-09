@@ -107,7 +107,7 @@
   const NO_GAP = Object.freeze(['itf', 'msi']);
   const PRINT_GROUP = Object.freeze(['BU', 'B9', 'BA']);
   /** The symbologies whose data this slice validates at emit besides EAN / UPC (PB[symbology].encode). */
-  const LINEAR = Object.freeze(['code93', 'codabar', 'msi', 'industrial25']);
+  const LINEAR = Object.freeze(['code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25']);
 
   /** ^BY limits (the guide) and the power-up values of the module and ratio (the guide gives module 2 and height 10; the ratio 3.0 is assumed). */
   const MODULE_RANGE = Object.freeze([1, 10]);
@@ -213,7 +213,7 @@
   function zpl(helpers) {
     const {
       sourceOf, int, ROTATIONS, rotationOf, orientationOf, toDots, dataCommands, fo, ft, commands, byValues, isImmediate, argEdit,
-      contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
+      contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, limited,
     } = helpers;
 
     const dotMm = ctx => PB.units.dotSize(ctx.dpi);
@@ -247,6 +247,19 @@
       return out;
     }
 
+    /** Warns about the Y / N flags (f, g and the e of the commands whose e is one), ^BM e (A..D), ^BK e (fixed N), ^BC m and ^BM e2 outside the guide's values. */
+    function reportFlags(ctx, name, p, ref) {
+      const bad = (key, valid) => ctx.report(diag.warning(`${ref}: parámetro ${key} "${p[key].slice(0, 10)}" no válido (${valid}), se usa el valor por defecto`));
+      for (const key of ['f', 'g']) if (p[key] !== undefined && p[key] !== '' && !['Y', 'N'].includes(p[key])) bad(key, 'Y o N');
+      if (p.e !== undefined && p.e !== '') {
+        if (E_ROLE[name] === 'fixed') { if (p.e !== 'N') bad('e', 'valor fijo N'); }
+        else if (name === 'BM') { if (!'ABCD'.includes(p.e) || p.e.length > 1) bad('e', 'A, B, C o D'); }
+        else if (!['Y', 'N'].includes(p.e)) bad('e', 'Y o N');
+      }
+      if (name === 'BC' && p.m !== '' && ![...MODES, 'D'].includes(p.m)) bad('m', 'modo N, U, A o D');
+      if (name === 'BM' && p.e2 !== '' && !['Y', 'N'].includes(p.e2)) bad('e2', 'Y o N');
+    }
+
     function barcodeItem(ctx, field, cmd) {
       const name = cmd.name;
       const { symbology } = COMMANDS[name];
@@ -261,13 +274,16 @@
         else { rotation = given; orientationArg = p.o[0]; }
       }
       // Height: the parameter, else the one of ^BY
+      // (the guide: 1..32000; above is drawn at the limit, anything else falls back to ^BY; native keeps the height as written)
       let heightDots = null;
+      let heightWritten = null;
       if (p.h !== '') {
         const h = int(p.h);
-        if (h === null || h < 1 || h > MAX_HEIGHT) ctx.report(diag.warning(`${ref}: altura "${p.h}" no válida, se usa la de ^BY (${ctx.by.height})`));
-        else heightDots = h;
+        if (h === null || h < 1) ctx.report(diag.warning(`${ref}: altura "${p.h}" no válida (número entero de 1..${MAX_HEIGHT} puntos), se usa la de ^BY (${ctx.by.height})`));
+        else { heightWritten = h; heightDots = limited(ctx, cmd, 'altura', h, [1, MAX_HEIGHT]); }
       }
       const height = heightDots ?? ctx.by.height;
+      reportFlags(ctx, name, p, ref);
       const start = p.k === undefined ? undefined : START_STOP.includes(p.k) ? p.k : p.k === '' ? 'A' : null;
       const stop = p.l === undefined ? undefined : START_STOP.includes(p.l) ? p.l : p.l === '' ? 'A' : null;
       if (start === null || stop === null) ctx.report(diag.warning(`${ref}: carácter de inicio o de parada "${start === null ? p.k : p.l}" no válido (A..D), se usa A`));
@@ -292,7 +308,7 @@
       if (check !== undefined) item.check = check;
       if (isWpc(symbology)) item.addon = 0;
       item.native = {
-        type: name, module, ratio: ctx.by.ratio, height: heightDots, orientationArg, above, zplData: value,
+        type: name, module, ratio: ctx.by.ratio, height: heightWritten, orientationArg, above, zplData: value,
         ...(name === 'BC' && { ucc: e === 'Y', mode: p.m || 'N' }),
         ...(PRINT_GROUP.includes(name) && { printCheck: e === 'Y' }),
         ...(name === 'BK' && { k: start || 'A', l: stop || 'A' }),
@@ -343,7 +359,11 @@
       if (PB.variables.namesIn(data).length) return;
       let encoded = null;
       if (isWpc(item.symbology)) encoded = PB.ean.encode(item.symbology, data, { check: item.check, addon: item.addon });
-      else if (LINEAR.includes(item.symbology)) {
+      else if (item.symbology === 'code128') {
+        // Code 128 holds ASCII 0-127 (the guide's table of characters); FNC1 is a marker of the model
+        const bad = [...new Set([...data].filter(c => c !== barcodeData.FNC1 && c.charCodeAt(0) > 127))];
+        encoded = { ok: bad.length === 0, warnings: [`Code 128: no se puede codificar ${bad.map(c => `"${c}"`).join(' ')} (solo ASCII 0-127)`] };
+      } else if (LINEAR.includes(item.symbology)) {
         const out = PB[item.symbology].encode(data, { check: 'none' });
         encoded = { ok: (out.widths || out.elements).length > 0, warnings: out.warnings };
       }
@@ -443,7 +463,9 @@
       }
       const by = byValuesOf(ctx, item);
       const degrees = rotationDegrees(ctx, item.rotation);
-      const heightDots = clamp(Math.max(1, toDots(ctx, item.height)), 1, MAX_HEIGHT);
+      const heightRaw = toDots(ctx, item.height);
+      const heightDots = clamp(Math.max(1, heightRaw), 1, MAX_HEIGHT);
+      if (Number.isFinite(heightRaw) && heightDots !== heightRaw) ctx.once('zpl-barcode-height', () => diag.warning(`Hay códigos de barras con una altura fuera de 1..${MAX_HEIGHT} puntos: se escriben en el límite de ZPL`));
       // The check option is validated for every symbology that has a table, also where the command has no parameter for it (EAN / UPC, Code 93)
       const checkE = Object.hasOwn(CHECK_CODES, item.symbology) ? checkCode(ctx, item) : undefined;
       const e = { check: () => checkE, print: () => (typeof native.printCheck === 'boolean' && PRINT_GROUP.includes(native.type) ? (native.printCheck ? 'Y' : 'N') : E_DEFAULT[name]), ucc: () => (native.ucc ? 'Y' : 'N'), fixed: () => 'N' }[E_ROLE[name]];

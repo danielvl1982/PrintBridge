@@ -70,7 +70,7 @@
   function zpl(helpers) {
     const {
       sourceOf, int, ROTATIONS, rotationOf, orientationOf, toDots, fieldData, fo, ft, insertCommand, freePlaceholder, itemRotation, dropDots,
-      paramField, contentField,
+      paramField, contentField, rangeText,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -102,8 +102,13 @@
         if (given === null) ctx.report(diag.warning(`${ref}: orientación "${arg(0)}" no válida, se usa ${ctx.orientation}`));
         else { rotation = given; orientationArg = arg(0)[0].toUpperCase(); }
       }
-      let h = whole(1, 'módulo');
-      if (h > MODULE_RANGE[1]) { ctx.report(diag.warning(`${ref}: módulo "${arg(1)}" no válido (1..${MODULE_RANGE[1]}), se usa el alto de ^BY`)); h = 0; }
+      // Module (guide: 1 to the width of the label; 0 or omitted: from ^BY): a value that is not usable falls back to the ^BY height
+      let h = 0;
+      if (arg(1) !== '') {
+        const v = int(arg(1));
+        if (v === null || v < 0 || v > MODULE_RANGE[1]) ctx.report(diag.warning(`${ref}: módulo "${arg(1).slice(0, 20)}" no válido (número entero de ${rangeText(MODULE_RANGE)} puntos), se usa el alto de ^BY`));
+        else h = v;
+      }
       let quality = 0;
       if (arg(2) !== '') {
         const q = int(arg(2));
@@ -112,6 +117,18 @@
       }
       const [cols, rows] = [whole(3, 'columnas'), whole(4, 'filas')];
       const escape = arg(6) !== '' ? arg(6)[0] : DEFAULT_ESCAPE;
+      if (arg(6).length > 1) ctx.report(diag.warning(`${ref}: carácter de escape "${arg(6).slice(0, 20)}" tiene más de un carácter, se usa "${escape}"`));
+      // Qualities 0..140 (guide, V1 4114+): columns and rows 9..49, odd; above 49 the printer sets them to 0 (automatic), even gives INVALID-P, below 9 no symbol prints
+      if (quality !== 200) {
+        [['columnas', 3, cols], ['filas', 4, rows]].forEach(([label, i, v]) => {
+          if (arg(i) === '' || v === 0) return;
+          if (v < 9) ctx.report(diag.warning(`${ref}: ${label} ${v} menor de 9 (9..49, impares para calidad 0 a 140): la impresora no dibuja el símbolo`));
+          else if (v > 49) ctx.report(diag.warning(`${ref}: ${label} ${v} fuera de 9..49 (impares para calidad 0 a 140): la impresora lo pone a 0 y el tamaño es automático`));
+          else if (v % 2 === 0) ctx.report(diag.warning(`${ref}: ${label} ${v} no es impar (9..49 impares para calidad 0 a 140): la impresora da INVALID-P`));
+        });
+        // Format ID 1..6, only used by the qualities below 200
+        if (arg(5) !== '' && !(int(arg(5)) >= 1 && int(arg(5)) <= 6)) ctx.report(diag.warning(`${ref}: formato "${arg(5).slice(0, 20)}" no válido (1..6)`));
+      }
 
       let size;
       if (quality === 200 && (cols || rows)) {

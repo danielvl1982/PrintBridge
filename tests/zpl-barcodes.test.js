@@ -181,11 +181,14 @@ test('^BY: module, ratio and default height apply to the fields that follow, per
   assert.deepEqual([dflt.module, dflt.height, dflt.widths.wideBar, dflt.widths.narrowBar, dflt.widths.wideSpace, dflt.interCharGap], [2, 10, 6, 2, 6, 2]);
 });
 
-test('^BY in the middle of a field applies to it; a ^BY with an invalid value changes nothing and is reported', () => {
+test('^BY in the middle of a field applies to it; a ^BY out of range is applied at the nearest limit (V11) and a one that is not a number changes nothing; both are reported', () => {
   assert.equal(one('^FO10,10^B3N,N,50,Y,N^BY5^FDA^FS').module, 5);
   const bad = parse(BASE('^BY5^BY99^FO10,10^BCN,50,Y,N,N^FDA^FS'));
-  assert.equal(bad.items[0].module, 5);
+  assert.equal(bad.items[0].module, 10);
   assert.equal(bad.diagnostics.filter(d => /\^BY/.test(d.text)).length, 1);
+  const text = parse(BASE('^BY5^BYx^FO10,10^BCN,50,Y,N,N^FDA^FS'));
+  assert.equal(text.items[0].module, 5);
+  assert.equal(text.diagnostics.filter(d => /\^BY/.test(d.text)).length, 1);
 });
 
 test('the ratio table J of the guide: the wide bar is a whole number of dots (rounded down)', () => {

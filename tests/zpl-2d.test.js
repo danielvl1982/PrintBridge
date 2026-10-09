@@ -80,10 +80,11 @@ test('parse ^BQ: the magnification defaults by resolution (150: 1, 200: 2, 300: 
     assert.equal(item.native.cell, mag, `dpi ${dpi}`);
   }
   assert.equal(one('^FO10,10^BQ^FDMA,A^FS').native.cell, 3);
-  for (const bad of ['0', '11', 'x']) {
+  // V11: out of 1..10 is drawn at the nearest limit (0 -> 1, 11 -> 10); what is not a whole number falls back to the default
+  for (const [bad, drawn] of [['0', 1], ['11', 10], ['x', 3]]) {
     const model = parse(BASE(`^FO10,10^BQN,2,${bad}^FDMA,A^FS`));
     assert.ok(model.diagnostics.some(d => d.level === 'warning' && /\^BQ/.test(d.text) && /magnificaci/.test(d.text)), bad);
-    assert.equal(model.items[0].native.cell, 3, bad);
+    assert.equal(model.items[0].native.cell, drawn, bad);
   }
 });
 

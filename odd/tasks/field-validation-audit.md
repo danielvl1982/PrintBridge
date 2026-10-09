@@ -37,7 +37,7 @@ TSPL (manual: docs/tspl)
 ZPL (manuals: docs/zpl vol 1 and 2)
 - [x] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
 - [x] V10 ZPL text: `^A`, `^CF`, `^FB`, `^FW`, `^SN`, `^FN`, character sizes per resolution
-- [ ] V11 ZPL barcodes (`^B*`, `^BY`), `^BQ` QR, `^BX` Data Matrix
+- [x] V11 ZPL barcodes (`^B*`, `^BY`), `^BQ` QR, `^BX` Data Matrix
 - [ ] V12 ZPL images (`^GF`, `~DG`)
 Cross cutting
 - [ ] V13 Conversions: every value converted TPCL / TSPL / ZPL lands valid in the target (clamp / snap + one aviso); matrix of tests per pair
@@ -294,7 +294,41 @@ fields of ^SN and ^FN 1636+, 1700+). Vol 2 gives no ranges of its own; the matri
 Other changes: the properties panel size field (`^A` h, w) is a custom field that snaps the typed value to the font in force (the font typed in the same edit counts) at the dpi of the document; `fitData` (js/languages/zpl.js) limits the data of every ^FD / ^FV written (shared with the barcode slices).
 Expectation changes in existing tests: tests/zpl-fonts.test.js uses the standard size for the P..V fonts (30 x 30 is not a multiple of their matrices); tests/zpl-text.test.js updateItem of font D writes 54 x 60 (multiples of 18 x 10) instead of 60 x 55.
 
+### V11 ZPL barcodes (`^B*`, `^BY`), QR (`^BQ`), Data Matrix (`^BX`)
+Manuals: ZPL II Programming Guide vol 1 (2003; text lines of pdftotext -layout: ^B2 1285+ .. ^B3 1419+, ^B8 2047+, ^B9 2085+, ^BA 2188+, ^BC 2489+, ^BE 2921+, ^BI 3129+, ^BJ 3183+, ^BK 3241+, ^BM 3359+, ^BQ 3500+, ^BU 4046+, ^BX 4114+, ^BY 4302+, Table J 4330+) and vol 2 (2005; the XML table of ^BY limits 3941+).
+Vol 2 has no barcode command pages, only that table. All linear commands share o N R I B, h 1..32000, f / g Y / N; the per-type data rules (EAN / UPC digit counts, MSI 1..14 digits, Code 39 / 93 character sets) were already checked by the encoders.
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `^BY` w | 1..10 (V1 4302+, V2 3949) | module field 1..10 (already) | clamped + one warning (already) | out of range silently ignored (the previous module stayed) / drawn at the nearest limit, warning with 1..10; not a whole number warned and ignored |
+| `^BY` r | 2.0..3.0 in 0.1 steps (V1 4302+, V2 3941) | 2..3 step 0.1 (already) | clamped + info (already) | out of range silently ignored / drawn at the nearest 0.1 step inside the range, warning (2.55 says "múltiplo de 0.1"); text warned and ignored |
+| `^BY` h | V1 garbled ("2.0 to 3.0"), V2 1..9999; the bar codes say "1..32000, default set by ^BY": 32000 used | not a field | - | any value >= 1 / drawn at 1..32000, warning with the range; text warned and ignored |
+| `^B*` o | N R I B (all) | select (already) | already | invalid letter warned (already) |
+| `^B*` h | 1..32000 (1..9999 in ^BU, V1 4063) | number 1..32000 (already) | clamped silently / clamped, one warning | > 32000 or < 1 fell back to ^BY with a message without range / > 32000 drawn at 32000 (native keeps the written height), < 1 or text falls back to ^BY, both messages state 1..32000 |
+| `^B*` f, g | Y / N | checkbox (already) | already | any other value silently meant yes (f) / no (g) / warning "Y o N", default used |
+| `^B*` e | Y / N (^BC UCC, ^B3 Mod 43, ^B2 Mod 10, ^BU ^B9 ^BA print check digit); ^BM A..D; ^BK fixed N | select per type with the valid options (already) | valid table (already) | silently / warning with the valid values; ^BM e2 Y / N, ^BC m N U A (D of later guides, kept) also warned |
+| Data per type | EAN-13 12, EAN-8 7, UPC-A 11, UPC-E 10 (padded on the left), ITF digits, Code 39 standard set, Code 128 ASCII, MSI 1..14 digits (V1 2047+ ..) | content field | EAN / UPC / Code 93 / Codabar / MSI / Industrial 2 of 5 reported / also Code 39, ITF and Code 128 (non ASCII 0-127) reported once per symbology | drawing warnings of the encoders (already) |
+| `^BQ` a | fixed N (V1 3500+) | no field | N (already) | another letter: info, ignored (already) |
+| `^BQ` b | 1 or 2, default 2 | select (already) | model from the file or 2 | warned (already) |
+| `^BQ` c | 1..10 | number 1..10 (already) | clamped + warning (already) | 0 or 11 used the dpi default / drawn at the nearest limit (1 / 10), warning with 1..10; text: default + warning |
+| `^BQ` ^FD prefix | level H Q M L, input mode A / M, mixed `D` form (V1 3560+) | ecc select (already) | `<ECC>A,` (already) | missing or unreadable prefix warned (already) |
+| `^BX` o | N R I B | select (already) | already | warned (already) |
+| `^BX` h | 1 .. width of the label (V1 4114+); 0 or omitted: from ^BY | 1..9999 (convenience, see Open) | clamped + warning (already) | a negative or text value: "ignored" without range / warning with 1..9999, ^BY height used |
+| `^BX` s | 0 50 80 100 140 200 | not offered | the quality, else 200 + warning (already) | warned (already) |
+| `^BX` c, r | quality 0..140: 9..49 odd, > 49 = 0 (automatic), even = INVALID-P, < 9 = no symbol; quality 200: even 10..144 (V1 4114+) | size select of the table (200 only, already) | forced size only for ECC 200 (already) | 200: sizes outside the table warned (already) / 0..140: 3 messages for the odd, > 49 and < 9 cases (silent before) |
+| `^BX` f | 1..6 (the label says 0 to 6), not used with quality 200 | not offered | read value kept | any value silently / warning outside 1..6 for qualities below 200 |
+| `^BX` g | any character, quality 200 only | not offered | kept | the first character used silently / warning when more than one character |
+
+Other changes: `PB.languages` ZPL helpers gain `limited` and `rangeText` (shared with the slices); `byValues` (js/languages/zpl.js) now returns the nearest valid value, so the panel, the move / describe engines and the parser agree on what a bad ^BY means.
+Expectation changes in existing tests: tests/zpl-barcodes.test.js (^BY99 is drawn as module 10; a non numeric ^BY still changes nothing), tests/zpl-2d.test.js (a ^BQ magnification of 0 or 11 is drawn as 1 or 10 instead of the default).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V11 `^BY` height: vol 1 prints "2.0 to 3.0" (a typo) and vol 2's XML table 1..9999; 32000 is used because every bar code command says "1 to 32000, default set by ^BY". `^BU` says 1..9999 (as `^B5` and `^BF`, which are not modelled): 32000 is applied to all.
+- V11 `^BX` module h: "1 to the width of the label" (printer dependent): 9999 is kept as the viewer's limit; the title of f says "0 to 6" while the values list 1..6 (1..6 used); the aspect ratio (8th parameter) and `^BX` quality 200 escape sequences beyond `__` are of later guides and not validated.
+- V11 `^BQ` capacity per level and mode (versions 1..40) is not applied to the data (only the 3072 characters of ^FD, V10); the mixed mode counts (code number, divisions, parity) and the manual character modes are read, not validated. `^BQ` model 1 is drawn as model 2 (existing info).
+- V11 `^BS` (UPC / EAN extensions), `^BL` (LOGMARS), `^BP` (Plessey), `^B1` (Code 11), `^B4`, `^B5`, `^B7`, `^BB`, `^BD`, `^BF`, `^BR`, `^BT`, `^BZ` and the 2D symbols other than QR and Data Matrix are not modelled: the field is reported as unsupported and its parameters are not validated.
+- V11 Data length per type in the panel content field is not limited (EAN / UPC counts, Code 39 set): the next parse reports it; the 3072 character limit of V10 applies. A type switch in the panel cannot report data that does not fit the new type.
+- V11 Code 39 / Code 93 full ASCII (`+$`, `/` pairs), Code 128 modes U / A / D and the UCC check digit are read but drawn as the plain symbology (existing infos); the width of the field data ("limited to the width of the label") is not checked.
 - V10 `^A@` (font by name) fields are read as an unsupported command (not drawn as text); `^FP`, `^FC` and `^CI13` backslash handling in `^FB` data are not validated. A literal backslash in block data is written as is (the guide needs ^CI13 to print it).
 - V10 The sizes of a `^CF` are not checked against a font that comes later (a `^CFA,30` is only warned when out of 0..32000; a non multiple is silent because the font of the field decides). Changing the font in the panel does not re-snap the sizes already written (the next size edit does; the next parse warns).
 - V10 Data length 3072 is counted in characters of the data before the ^FH escapes (the guide does not say which side); fonts without matrix (I..O, W..Z, 1..9, downloaded) are checked as scalable (10..32000), which may be wrong for a downloaded bitmapped font. ^SF (mask serialization) is still not modelled; the `^FB` width upper bound is "the label width (or 9999)": 9999 is used.
@@ -357,3 +391,4 @@ Expectation changes in existing tests: tests/zpl-fonts.test.js uses the standard
 - V8 (route: delegated writer, one writer, direct; RED first: 9 of the 13 new tests failed on the old code): TSPL images (tests/tspl-image-validation.test.js, 13 tests). Verification: `node --test` 4168 tests, 4167 pass, 0 fail, 1 skipped (was 4155 / 4154 before; +13 new). Commit: see `git log` (fix: validate TSPL image values against the manual).
 - V9 (route: delegated writer, one writer, direct; RED first: 16 of the 23 new tests failed on the old code): ZPL label setup and shapes (tests/zpl-label-validation.test.js, 23 tests). Verification: `node --test` 4191 tests, 4190 pass, 0 fail, 1 skipped (was 4168 / 4167 before; +23 new). Commit: see `git log` (fix: validate ZPL label setup and shapes against the manuals).
 - V10 (route: delegated writer, one writer, direct; RED first: 17 of the 21 new tests failed on the old code): ZPL text (tests/zpl-text-validation.test.js, 21 tests). Verification: `node --test` 4212 tests, 4211 pass, 0 fail, 1 skipped (was 4191 / 4190 before; +21 new). Commit: see `git log` (fix: validate ZPL text values against the manuals).
+- V11 (route: delegated writer, one writer, direct; RED first: 13 of the 16 new tests failed on the old code): ZPL barcodes, QR and Data Matrix (tests/zpl-barcode-validation.test.js, 16 tests). Verification: `node --test` 4228 tests, 4227 pass, 0 fail, 1 skipped (was 4212 / 4211 before; +16 new). Commit: see `git log` (fix: validate ZPL barcode, QR and Data Matrix values against the manuals).

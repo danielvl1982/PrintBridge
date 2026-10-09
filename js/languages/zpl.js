@@ -104,6 +104,10 @@
   const PW_RANGE = Object.freeze([2, 32000]);
   const LL_RANGE = Object.freeze([1, 32000]);
   const COORD_RANGE = Object.freeze([0, zplEdit.COORD_MAX]);
+  /** ^BYw,r,h (V1 4302+; V2 3941+ lists the height as 1..9999, the bar codes themselves take 1..32000 and "the value set by ^BY"). */
+  const BY_MODULE_RANGE = Object.freeze([1, 10]);
+  const BY_RATIO_RANGE = Object.freeze([2, 3]);
+  const BY_HEIGHT_RANGE = Object.freeze([1, 32000]);
   const rangeText = ([min, max]) => `${min}..${max}`;
   const limit = (v, [min, max]) => Math.min(max, Math.max(min, v));
   const COORD_NOTE = `Hay campos con una posición fuera de ${rangeText(COORD_RANGE)} puntos (^FO / ^FT): ZPL no admite coordenadas negativas ni mayores, se escriben en el límite`;
@@ -392,7 +396,12 @@
    */
   function byValues(cmd) {
     const [w, r, h] = [int(cmd.args[0]), num(cmd.args[1]), int(cmd.args[2])];
-    const out = { module: w !== null && w >= 1 && w <= 10 ? w : undefined, ratio: r !== null && r >= 2 && r <= 3 ? r : undefined, height: h !== null && h >= 1 ? h : undefined };
+    // A number out of range is applied at the nearest limit (the ratio also rounded to 0.1); `limited` / the handler report it
+    const out = {
+      module: w !== null ? limit(w, BY_MODULE_RANGE) : undefined,
+      ratio: r !== null ? limit(Math.round(r * 10) / 10, BY_RATIO_RANGE) : undefined,
+      height: h !== null ? limit(h, BY_HEIGHT_RANGE) : undefined,
+    };
     out.invalid = cmd.args.some(a => a.raw !== '') && out.module === undefined && out.ratio === undefined && out.height === undefined;
     return out;
   }
@@ -401,7 +410,7 @@
   const SLICE_HELPERS = Object.freeze({
     commands, byValues, isImmediate: id => Boolean(handlerFor(id, true)), argEdit: zplEdit.argEdit,
     sourceOf, argValue, num, int, ROTATIONS, ORIENTATIONS, rotationOf, orientationOf,
-    roundDots, exactDots, toDots, fitCoord, coordDots, safeData, fieldData, dataCommands, fo, ft,
+    roundDots, exactDots, toDots, fitCoord, coordDots, safeData, fieldData, dataCommands, fo, ft, limited, rangeText,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     encodeData: zplEdit.encodeData, decodeData: zplEdit.decodeData,
     numberField: zplEdit.numberField, selectField: zplEdit.selectField, stringSelectField: zplEdit.stringSelectField,
@@ -552,7 +561,22 @@
       immediate: true,
       handle(m, cmd, ctx) {
         const v = byValues(cmd);
-        if (v.invalid) { invalid(ctx, '^BY', cmd); return; }
+        if (v.invalid) { invalid(ctx, '^BY', cmd, 'módulo 1..10, relación 2.0..3.0 y altura 1..32000, números'); return; }
+        // Out of range: applied at the nearest limit (byValues) and reported; not a number: ignored and reported
+        [['módulo', 0, BY_MODULE_RANGE, 'puntos'], ['altura', 2, BY_HEIGHT_RANGE, 'puntos']].forEach(([label, i, range, unit]) => {
+          const a = cmd.args[i];
+          if (!a || a.raw === '') return;
+          const n = int(a);
+          if (n === null) ctx.report(diag.warning(`^BY: ${label} "${a.raw.slice(0, 20)}" no es un número entero (${rangeText(range)} ${unit}), se ignora`));
+          else limited(ctx, cmd, label, n, range, unit);
+        });
+        const ratioArg = cmd.args[1];
+        if (ratioArg && ratioArg.raw !== '') {
+          const r = num(ratioArg);
+          if (r === null) ctx.report(diag.warning(`^BY: relación "${ratioArg.raw.slice(0, 20)}" no es un número (2.0..3.0 en pasos de 0.1), se ignora`));
+          else if (r < 2 || r > 3) ctx.report(diag.warning(`^BY: relación ${ratioArg.raw} fuera de 2.0..3.0, se usa ${limit(r, BY_RATIO_RANGE).toFixed(1)}`));
+          else if (Math.abs(Math.round(r * 10) / 10 - r) > 1e-9) ctx.report(diag.warning(`^BY: relación ${ratioArg.raw} no es múltiplo de 0.1 (2.0..3.0 en pasos de 0.1), se usa ${(Math.round(r * 10) / 10).toFixed(1)}`));
+        }
         ctx.by = { module: v.module ?? ctx.by.module, ratio: v.ratio ?? ctx.by.ratio, height: v.height ?? ctx.by.height };
       },
     },
