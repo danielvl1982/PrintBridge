@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadApp } = require('./helpers/load');
 
 // TPCL text alignment (text/tpcl.js, text/render.js, text/tspl.js): the "Pq" option of PC / "Po" of PV is P1 (left, the default),
-// P2 (center), P3 (right) or P4aaaa (equal space over a string area aaaa wide, 0050..1040 in 0.1 mm). It is parsed into
+// P2 (center), P3 (right) or P4aaaa (equal space over a string area aaaa wide, 0050..1057 in 0.1 mm). It is parsed into
 // item.align = { kind, width? } (absent = left), drawn through text-anchor / textLength (pure geometry in render.js), written
 // back by emit and edited from the panel. The other optional parameters (J, M, n, Z) are never interpreted, only kept.
 const PB = loadApp();
@@ -30,7 +30,7 @@ test('parse: P2 is center, P3 right, P4aaaa equal space with the area width in 0
   assert.deepEqual(alignOf(pc(',P3')), { kind: 'right' });
   assert.deepEqual(alignOf(pc(',P40300')), { kind: 'equal', width: 300 });
   assert.deepEqual(alignOf(pv(',P2')), { kind: 'center' });
-  assert.deepEqual(alignOf(pv(',P41040')), { kind: 'equal', width: 1040 });
+  assert.deepEqual(alignOf(pv(',P41057')), { kind: 'equal', width: 1057 });
 });
 
 test('parse: the P option is found among the other optional parameters (J, M, n, Z) and after a W/F/C attribute', () => {
@@ -110,9 +110,9 @@ test('emit: left or no alignment writes nothing, center/right/equal write ,P2 ,P
   assert.match(emitted({ align: { kind: 'center' }, attribute: { kind: 'reverse', h: 5, v: 5, native: { h: 5, v: 7 } } }), /,W\d{4},P2\|\}/);
 });
 
-test('emit: the equal space width is clamped to 50..1040 and defaults when missing', () => {
+test('emit: the equal space width is clamped to 50..1057 and defaults when missing', () => {
   assert.match(emitted({ align: { kind: 'equal', width: 10 } }), /,P40050\|\}/);
-  assert.match(emitted({ align: { kind: 'equal', width: 5000 } }), /,P41040\|\}/);
+  assert.match(emitted({ align: { kind: 'equal', width: 5000 } }), /,P41057\|\}/);
   assert.match(emitted({ align: { kind: 'equal' } }), /,P40500\|\}/);
 });
 
@@ -143,11 +143,11 @@ test('describe: align is a select over the four kinds (left when omitted) and al
   assert.equal(field(pc(',P2'), 'alignWidth'), undefined);
   const w = field(pc(',Z05,P40300'), 'alignWidth');
   assert.equal(field(pc(',Z05,P40300'), 'align').value, 'equal');
-  assert.deepEqual([w.type, w.value, w.min, w.max, w.label], ['number', 300, 50, 1040, 'Ancho del área']);
+  assert.deepEqual([w.type, w.value, w.min, w.max, w.label], ['number', 300, 50, 1057, 'Ancho del área']);
 });
 
 test('describe: with and without the command text the fields are the same', () => {
-  for (const tail of ['', ',P2', ',J0101,M0,P3', ',P40300', ',Z02,P41040']) {
+  for (const tail of ['', ',P2', ',J0101,M0,P3', ',P40300', ',Z02,P41057']) {
     const item = itemsOf(pc(tail))[0];
     const [withText, withoutText] = [tpcl.describeItem(item, pc(tail)), tpcl.describeItem(item)];
     for (const key of ['align', 'alignWidth']) {
@@ -174,10 +174,10 @@ test('update: changing an existing token rewrites only it, equal space gets its 
   assert.equal(set(pc(',P40300'), { align: 'right' }), pc(',P3'));
 });
 
-test('update: the width of an equal space is clamped to 50..1040 and written with 4 digits', () => {
+test('update: the width of an equal space is clamped to 50..1057 and written with 4 digits', () => {
   assert.equal(set(pc(',P40300'), { alignWidth: 640 }), pc(',P40640'));
   assert.equal(set(pc(',P40300'), { alignWidth: 20 }), pc(',P40050'));
-  assert.equal(set(pc(',P40300'), { alignWidth: 5000 }), pc(',P41040'));
+  assert.equal(set(pc(',P40300'), { alignWidth: 5000 }), pc(',P41057'));
   assert.equal(set(pc(',P40300'), { alignWidth: 99.6 }), pc(',P40100'));
 });
 
