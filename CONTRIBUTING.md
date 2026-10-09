@@ -56,6 +56,7 @@ so parsers, encoders, emitters, editors and the SVG renderer are all testable wi
   `tests/tspl-emit-barcode-qr-image.test.js` and `tests/cross-conversion.test.js`. Whatever cannot be written must produce a diagnostic, never silent loss.
 - **Conversion matrix:** `tests/conversion-matrix.test.js` converts every component, one feature per case, in the six directions between TPCL, TSPL and ZPL at both resolutions, reads the output back and compares it item by item with a table of expected results
   (exact, degraded with its diagnostic, or skipped with its diagnostic). **Every new component or feature must add its rows there** (a case, and a rule when it is not exact in some direction), and a change to what a conversion loses must also update the loss table of the README (*Convertir a…*).
+- **Examples:** a new example goes in `js/config.js` (`PB.examples`) with a `group` (`blank`, `basic` or `full`, the section of the Ejemplo combo) and keep the original four first, because `examples[0]` is the label the app starts with. `tests/example-templates.test.js` checks every example (detected language, no warnings), and the conversion matrix runs each one through `RULES`: add a rule there if converting it loses something.
 - Tests that pin documentation text (for example that the README names the ZPL barcode commands) fail if a section is renamed: keep the headings and the key terms they look for.
 
 ## Line endings

@@ -25,7 +25,7 @@ from scratch with the example label.
 | `index.html` | The page structure |
 | `css/viewer.css` | Look of the page: toolbars, panels and messages |
 | `css/label.css` | Look of the label drawing: colors, grid and typefaces |
-| `js/config.js` | Known label sizes and the example label |
+| `js/config.js` | Known label sizes and the example labels (a blank template and a basic example per language, plus four complete examples) |
 | `js/manifest.json` | Ordered list of every script (same order as `index.html`; the tests load from it) |
 | `js/core/` | Part common to all languages, one file per module: diagnostics, units, sources, variables, language registry, validation and sizes |
 | `js/core/emit.js` | Shared helpers of the emitters (dots, escaping, id numbering, diagnostics) and the driver that calls each item's slice `emit` |
@@ -56,7 +56,10 @@ Any of these ways:
 - Paste the label content into the **Código de etiqueta** box.
 - Drag the file (`.ter`, `.txt`, `.zpl`, `.prn`, `.tspl` or `.tpcl`) onto that box.
 - **Abrir archivo…** button.
-- **Ejemplo** combo: choosing an entry loads one of four labels with sample data: the reference 99×55 spool label (TPCL), a barcode example (TPCL), a 100×60 TSPL label or a 100×60 ZPL label.
+- **Ejemplo** combo: choosing an entry loads a label, grouped in three sections.
+  - **En blanco:** one empty 100×60 mm template per language (TPCL, TSPL and ZPL), header only. It sets the language and the label size, so the **Componentes** palette inserts commands of that language.
+  - **Básicos:** the same 100×60 mm label in TPCL, TSPL and ZPL (a frame, a title, three lines with variables, a line, a Code128 bar code and a QR), with sample data for its variables. It is also a handy way to compare the three languages.
+  - **Ejemplos completos:** four labels with sample data: the reference 99×55 spool label (TPCL), a barcode example (TPCL), a 100×60 TSPL label and a 100×60 ZPL label.
 
 The drawing updates immediately while typing in the code, so coordinates and sizes can be tried directly.
 
