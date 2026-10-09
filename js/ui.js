@@ -26,14 +26,30 @@
 /**
  * "Ejemplo" combo: a disabled placeholder is the shown value; choosing an example calls onPick(example) and the combo
  * goes back to the placeholder, so choosing the same example again loads it again.
+ * The examples are listed in <optgroup>s by their optional `group` (GROUPS, in that order); an example without a known
+ * group is listed last, outside any group.
  */
 (function (PB) {
   'use strict';
 
+  /** Sections of the combo: example group id -> header. */
+  const GROUPS = Object.freeze([['blank', 'En blanco'], ['basic', 'Básicos'], ['full', 'Ejemplos completos']]);
+
   function createExamplePicker(select, examples, { onPick }) {
     const option = (value, textContent) => Object.assign(document.createElement('option'), { value, textContent });
     const placeholder = Object.assign(option('', 'Elegir ejemplo…'), { disabled: true });
-    select.replaceChildren(placeholder, ...examples.map(e => option(e.id, e.name)));
+    const optionOf = e => option(e.id, e.name);
+    const groupNodes = GROUPS
+      .map(([id, label]) => [label, examples.filter(e => e.group === id)])
+      .filter(([, members]) => members.length)
+      .map(([label, members]) => {
+        const node = document.createElement('optgroup');
+        node.label = label;
+        node.replaceChildren(...members.map(optionOf));
+        return node;
+      });
+    const known = new Set(GROUPS.map(([id]) => id));
+    select.replaceChildren(placeholder, ...groupNodes, ...examples.filter(e => !known.has(e.group)).map(optionOf));
     select.value = '';
     select.addEventListener('change', () => {
       const example = examples.find(e => e.id === select.value);
