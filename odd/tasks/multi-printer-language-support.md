@@ -12,14 +12,14 @@ sizes, diagnostics) with TPCL-specific parsing. The drawing layer already consum
 ## Scope
 - In: language registry, language auto-detection (+ manual override), ZPL parser, TSPL parser, emitters for the
   three languages, fidelity warnings on conversion, UI to pick language / convert / copy / download, docs, tests.
-- Out: sending data to printers, printer discovery, graphics/images (`^GF`, `BITMAP`), font-exact rendering.
+- Out: sending data to printers (now planned: odd/tasks/print-agent.md), printer discovery, font-exact rendering. Graphics/images (`^GF`, `BITMAP`, TPCL `SG`) were first out of scope and were added later (superseded 2026-10-09: images exist in the three languages, see odd/tasks/image-overlay.md and zpl-support.md).
 
 ## Constraints
 - Vanilla JS, no build step, must keep working by double-clicking `index.html` (globals under `PrintBridge`, IIFE modules).
 - UI/user text stays Spanish; code identifiers, comments, tests and technical docs are English (T10).
 - Existing TPCL behavior must not regress (the reference 99x55 spool example label stays the reference).
 - Planning heuristic: ~400 authored changed lines per task (advisory only).
-- Project is NOT a git repository: work-unit commits are not possible until `git init` is authorized (pending).
+- Superseded 2026-10-09: the project IS a git repository now (public: https://github.com/danielvl1982/PrintBridge); work-unit commits and feature branches are the normal flow. (It was not a repository when this plan was written.)
 
 ## Authorized scope
 Files under the project root only (`js/`, `css/`, `index.html`, `README.md`, `odd/`, `tests/`).
@@ -54,11 +54,11 @@ Project name is now PrintBridge (done in T10).
       namespace (`Ter` -> `PrintBridge`, `index.html`, `js/core.js`, `js/config.js`, `js/drawing.js`, `js/ui.js`, `js/barcodes.js`, `js/view.js`, `js/languages/`, `css/viewer.css`, `css/label.css`), identifiers, CSS classes/ids, comments, tests and technical docs to English;
       user-visible strings stay Spanish. Must be behavior-neutral (tests green, rendered SVG equal modulo renames).
       Runs BEFORE T9 by user request.
-- [ ] T3 ZPL parser (`^XA ^PW ^LL ^FO ^FT ^A ^FD ^FV ^BC ^BQ ^GB ^FR ^FB basic`) + tests. ON HOLD by the user; the only open item of this plan.
+- [x] T3 ZPL parser (`^XA ^PW ^LL ^FO ^FT ^A ^FD ^FV ^BC ^BQ ^GB ^FR ^FB basic`) + tests. Done (the hold was lifted): the whole ZPL language (parser, emitter, conversion, images, barcodes, shapes, counters, variables, `^FB`) is in odd/tasks/zpl-support.md (merges up to d1b4d06) and zpl-vol2.md (b7ae979), all merged into main.
 - [x] T4 TSPL parser. Done in odd/tasks/tspl-parser.md (372 tests at the time; editing in tspl-edit.md, BITMAP CR fix in tspl-bitmap-cr.md).
-- [~] T5 Emitters. TPCL and TSPL done in odd/tasks/emitters.md; the ZPL emitter waits for T3.
+- [x] T5 Emitters. TPCL and TSPL done in odd/tasks/emitters.md; the ZPL emitter is done in odd/tasks/zpl-support.md (Z1..Z7).
 - [x] T6 UI: "Convertir a…" panel with copy/download. Done in odd/tasks/emitters.md (T7 there, js/convert-panel.js); the placement is tracked in layout-redesign.md.
-- [~] T7 Round-trip tests TPCL <-> TSPL exist (tests/convert.test.js and the emit tests); the ZPL round trip waits for T3.
+- [x] T7 Round-trip tests TPCL <-> TSPL exist (tests/convert.test.js and the emit tests); the ZPL round trip is covered by the six-direction conversion matrix (tests/conversion-matrix.test.js, Z8 in odd/tasks/zpl-support.md).
 
 ## Acceptance criteria
 - Pasting valid TPCL, ZPL or TSPL draws the label and reports unknown commands as warnings.
@@ -94,4 +94,4 @@ Per task, delegated direct (one writer, 2+ non-trivial files each); the parent r
   Manual checks: open index.html, load "Códigos de barras — Code39, ITF y Code128", check the three barcodes and the Avisos panel (3 info lines, no warnings), switch Giro and the resolution, edit a type/data to see the warnings (lowercase in Code39, odd ITF), scan each with a phone/scanner app.
 
 ## Next step
-Reconciled 2026-10-08: only T3 (ZPL) is open and on hold by the user; T5/T7 finish with it. Everything else is done in the sibling feature documents.
+Reconciled 2026-10-09: every task of this plan (T1..T10) is done; ZPL (T3, T5, T7) was completed in odd/tasks/zpl-support.md and zpl-vol2.md (the earlier "T3 on hold, the only open item" is superseded). What is still pending lives in `odd/tasks/optional-backlog.md` (optional items and the verification debt that needs a printer or a browser) and in the planned task files `odd/tasks/gs1-128.md`, `odd/tasks/print-agent.md` and `odd/tasks/zpl-sf-mask.md`.

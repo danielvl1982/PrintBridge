@@ -7,7 +7,7 @@ After closing the editable-property gaps (odd/tasks/editable-gaps.md), add the c
 (Toshiba B-SV4 spec, TEC B-442/443 TSPL manual; local copies in `docs/`, git-ignored).
 
 ## Decisions (user)
-- Out: PDF417 / MicroPDF417, MaxiCode, text block (TSPL `BLOCK` wrapping, TPCL P4 auto line feed). Everything else valued in the assessment is in.
+- Out: PDF417 / MicroPDF417, MaxiCode, text block (TSPL `BLOCK` wrapping, TPCL P4 auto line feed; superseded 2026-10-09: the text block was implemented later in the three languages, see odd/tasks/text-block.md and odd/tasks/tpcl-text-types.md, where TPCL uses `P5aaaabbbcc`). Everything else valued in the assessment is in.
 - Unverified formats (no local manual): TSPL `ELLIPSE`/`CIRCLE` and the `BOX` radius come from the TSC TSPL2 manual v3.0, which is not in `docs/`: mark them "not verified on a printer" in code comments and README.
 
 ## Groups and tasks

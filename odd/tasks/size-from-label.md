@@ -52,7 +52,8 @@ out rewrites `{D…|}` / `SIZE`; picking a standard rewrites the label; opening 
   parser's tokenizer, else inserts SIZE at the top and GAP after it; keeps line ending/trailing newline; BITMAP/BLINE/quoted text untouched; pitch == height keeps an
   existing GAP). New tests/tspl-size.test.js (11 tests, all failed before: no hooks); tspl-app tests updated; README/CONTRIBUTING no longer say TSPL cannot write the size.
   Suite 637 green.
-- Open: the TSPL parser reports the separation as size.gap and leaves size.pitch null (deriving it changed the TSPL -> TPCL conversion and 6 cross-conversion tests,
+- Superseded 2026-10-09: RESOLVED by `feat/label-gap` (merge 83f3516, odd/tasks/label-gap.md): the TSPL parser now derives pitch = height + gap and the TSPL <-> TPCL conversion carries it, so the Paso / Separación field and the combo match work for TSPL; the README no longer says the pitch is not converted. Original open note:
+- Open (historical): the TSPL parser reports the separation as size.gap and leaves size.pitch null (deriving it changed the TSPL -> TPCL conversion and 6 cross-conversion tests,
   and the README says the pitch is not converted), so the Paso field of a TSPL label stays empty and the combo shows "Personalizado…" even after writing a standard
   size. Decide whether the parser should expose pitch = height + gap (and the TSPL -> TPCL conversion then carries it).
   Browser checks pending (see Verification).

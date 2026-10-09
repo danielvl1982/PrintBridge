@@ -214,7 +214,7 @@ between dots and mm (set it to the printer's before converting), and the target 
   extension; for pasted text with no file it is `etiqueta`.
 
 What is exact, approximated (**~**, reported in the warnings list) or left out (**x**, reported) in each direction; **=** is exact within one dot (and the 0.1 mm rounding) and **–** does not apply.
-The positions of the items are carried through the neutral model, so they are exact; see the open question about the origin of a text below.
+The positions of the items are carried through the neutral model, so they are exact; see the "Text origin" note below for how each language places a text.
 
 | Component / feature | TPCL→TSPL | TPCL→ZPL | TSPL→TPCL | TSPL→ZPL | ZPL→TPCL | ZPL→TSPL |
 |---|---|---|---|---|---|---|

@@ -8,13 +8,13 @@ form of a text gets a **Tipo** select whose valid values depend on the language 
 
 ## Decisions (user, 2026-10-09)
 - Where: the Propiedades section, one **Tipo** select at the start of the text form.
-- Values by language: TPCL -> only "Línea de texto" (TPCL has no text block in any of the four manuals; a note says so); TSPL -> "Línea de texto"
+- Values by language: TPCL -> only "Línea de texto" (CORRECTED 2026-10-09: wrong, TPCL does have a text block, the `PC ...,P5aaaabbbcc` automatic line feed, implemented in odd/tasks/tpcl-text-types.md, merge 8d5771f; the original text said "no text block in any of the four manuals; a note says so"); TSPL -> "Línea de texto"
   (`TEXT`) / "Bloque de texto" (`BLOCK`); ZPL -> "Línea de texto" / "Bloque de texto" (`^FB` before `^FD`).
 - Block fields: width, maximum lines, alignment (left / center / right / justified) and, where the language has it, the line spacing.
   Changing the Tipo rewrites the command (TEXT <-> BLOCK in TSPL; `^FB` added / removed in ZPL).
 - Palette keeps one "Texto" entry (inserts a line); the block comes from the Tipo select.
 - Drawing: the viewer wraps the text with an approximate character measure; line breaks may differ a little from the printer (README note).
-- Conversion: a block carries its width, lines and alignment between TSPL and ZPL; towards TPCL it is written as a one-line text with a warning.
+- Conversion: a block carries its width, lines and alignment between TSPL and ZPL; towards TPCL it is written as a one-line text with a warning (superseded 2026-10-09: a TSPL / ZPL block now becomes a TPCL `PC ...,P5` block when its font maps to a bitmap PC font; the one-line warning stays for fonts only PV can write).
 - Out of scope: `^SF` (mask) stays for its own task.
 
 ## Tasks
@@ -36,3 +36,4 @@ command, back to "Línea" removes the block; a TPCL text offers only "Línea de 
 - B4 done (this commit): README (Tipo, Text blocks section, conversion row, ZPL limits), odd/tasks/zpl-support.md note, Chrome probe run outside the repo (TSPL and ZPL templates: Tipo -> block, width / lines / alignment edit the code and the preview wraps, back to line restores the text, Ctrl+Z; TPCL: Tipo offers only the line; no page errors).
 - Decisions taken without the user (open for review): default block width = 20 characters of the font (not the remaining label width: the edit engines do not know the label size); default lines = what the wrapped text needs; ZPL ^FB keeps the guide default of 1 line only when written without the argument; the "extra line pitch" = character height + space (the manuals give no line height); TSPL has no justification (written left with an info); ^FT blocks: lines / line space edits move the first line (the guide: ^FT is the baseline of the last line), only the Tipo change keeps it.
 - Correction (feat/tpcl-text-types): the statement "TPCL has no text block" above is wrong. The PC alignment option `P5aaaabbbcc` (automatic line feed) is a text block; see odd/tasks/tpcl-text-types.md. The TPCL Tipo select now offers the block for PC texts, and a TSPL / ZPL block becomes `PC ...,P5` when its font maps to a bitmap PC font.
+- Same correction for task B2 ("TPCL warns and writes one line"), B3 (TPCL "a disabled one-option select") and the acceptance line ("a TPCL text offers only Línea de texto"): they describe the state before feat/tpcl-text-types; today the TPCL Tipo select offers the block for `PC` texts and only `PV` texts offer just the line.

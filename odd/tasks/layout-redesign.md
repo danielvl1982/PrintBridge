@@ -94,6 +94,6 @@ Trade-off accepted: the strip uses vertical space (compact, ~48 px); alternative
   - Browser checklist: with Código and Variables expanded and a tall page, scroll: the drawing stays in view next to the column; select an item and edit in Propiedades while scrolled; many warnings (invalid label): Avisos scrolls inside the stage, no page jump; collapse/expand sections: stage height follows; rotate 90/270: tall label fits or the stage scrolls; narrow window (< 901px): one column, nothing sticky; Ctrl+wheel zoom 150%: the stage scrolls inside instead of being cut off.
 
 ## Open ideas
-- Optional: load the example on select and drop the button.
+- [x] Optional: load the example on select and drop the button. Done 2026-10-09 check: odd/tasks/example-on-select.md (T1); `PB.ui.createExamplePicker` in js/ui.js loads on change and `#btnExample` is gone.
 - P1i done (user request): the "Componentes" title (`.strip-title`) now has the same typography as the "Propiedades" heading (13px, bold, uppercase, letter-spacing .04em, muted), checked by a CSS-parsing structural test; node --test 596/596. Browser check: both titles look identical.
 - P1j done (user request): titles "Formato" (size row) and "Vista" (view row) added with the same `.strip-title` style as Componentes/Propiedades; structural test; browser check: both rows show their title and still fit one line at normal width.
