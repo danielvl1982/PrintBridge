@@ -197,7 +197,8 @@
       if (standard) onApply(sizes.resolve(standard));
     });
     inputs.forEach(input => {
-      input.addEventListener('input', () => { editing = input; });
+      // An input event on a field that is not the focused one is the browser's undo reaching an earlier typed edit: not the user typing
+      input.addEventListener('input', () => { if (!document.activeElement || document.activeElement === input) editing = input; });
       input.addEventListener('change', commit);
     });
 

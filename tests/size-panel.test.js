@@ -227,3 +227,18 @@ test('the combo sets the standard pitch (height + 3 mm) whatever the language', 
     assert.deepEqual([applied[0].h, applied[0].p], [600, 630]);
   });
 });
+
+test('an input event on a field that is not the focused one (the browser undo reaching a typed edit) does not freeze that field', () => {
+  withLanguagePanel(({ panel, els }) => {
+    panel.setLanguage('tpcl');
+    panel.showArea(area(1000, 600, 630));
+    globalThis.document.activeElement = fakeElement('textarea');
+    els.pitch.type('5');
+    panel.showArea(area(1000, 600, 650));
+    assert.equal(els.pitch.value, 65, 'the field follows the label');
+    globalThis.document.activeElement = els.pitch;
+    els.pitch.type('7');
+    panel.showArea(area(1000, 600, 650));
+    assert.equal(els.pitch.value, '7', 'the field being typed in is left alone');
+  });
+});
