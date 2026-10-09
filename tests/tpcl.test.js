@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadUpTo } = require('./helpers/load');
 
 const PB = loadUpTo('js/languages/tpcl.js');
-const example = PB.examples[0];
+const example = PB.examples.find(e => e.id === 'spool-99x55');
 const tpcl = PB.languages.get('tpcl');
 const parse = src => tpcl.parse(src);
 

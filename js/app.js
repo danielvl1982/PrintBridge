@@ -21,7 +21,9 @@
   // image also holds `rotationPicked` (true once the user chose a "Rotación" for this image; until then it follows Giro, see
   // images.rotationForView) and `converted` once the 1-bit conversion that the preview shows is ready:
   // { key: 'WxH@threshold', bitmap: { w, h, data } | null (null = conversion failed, plain picture shown) }.
-  const state = { values: { ...examples[0].values }, image: null, fileName: undefined };
+  // The app starts with the first template (a filled label), not with a blank one
+  const startExample = examples.find(e => e.group === 'template') || examples[0];
+  const state = { values: { ...startExample.values }, image: null, fileName: undefined };
 
   const messages = ui.createMessagesPanel($('msgs'));
   const variablesPanel = ui.createVariablesPanel($('vars'), { values: state.values, onChange: () => refresh() });
@@ -507,5 +509,5 @@
   $('dpi').addEventListener('input', () => updatePreview({ delay: PREVIEW_DELAY_MS }));
 
   sizePanel.init();
-  loadExample(examples[0]);
+  loadExample(startExample);
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

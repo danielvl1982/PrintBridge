@@ -494,10 +494,10 @@ const RULES = [
   // ---- the example labels
   [/^example-(spool-99x55|barcodes-code39-itf-code128)$/, [T2S], deg(['font'], FONTS)],
   [/^example-tspl-label-100x60$/, [S2T, S2Z], deg(['font'], FONTS)],
-  // The basic examples (same label in three languages): the title and lines change font family when the language has no equivalent
-  [/^example-basic-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],
-  [/^example-basic-tspl$/, [S2T, S2Z], deg(['font'], FONTS)],
-  [/^example-basic-zpl$/, [Z2S], deg(['font'], FONTS, ['font.width'])],
+  // The templates (same label in three languages): the title and lines change font family when the language has no equivalent
+  [/^example-template-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],
+  [/^example-template-tspl$/, [S2T, S2Z], deg(['font'], FONTS)],
+  [/^example-template-zpl$/, [Z2S], deg(['font'], FONTS, ['font.width'])],
   [/^example-zpl-label-100x60$/, [Z2T], deg(['font', 'reverse'], FONTS)],
   [/^example-zpl-label-100x60$/, [Z2S], deg(['font', 'reverse'], FONTS, ['font.width'])],
 ];

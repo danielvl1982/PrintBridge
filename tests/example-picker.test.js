@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { loadUpTo } = require('./helpers/load');
+const { loadUpTo, shippedExamples } = require('./helpers/load');
 
 // example-on-select T1: the Ejemplo combo (PB.ui.createExamplePicker) on a minimal fake DOM.
 const PB = loadUpTo('js/ui.js');
@@ -94,18 +94,17 @@ function withGroupedPicker(examples, fn) {
 }
 
 const GROUPED = [
-  { id: 'f1', name: 'Full 1', group: 'full' },
   { id: 'x1', name: 'No group' },
   { id: 'b1', name: 'Blank 1', group: 'blank' },
-  { id: 's1', name: 'Basic 1', group: 'basic' },
+  { id: 's1', name: 'Template 1', group: 'template' },
   { id: 'b2', name: 'Blank 2', group: 'blank' },
 ];
 
-test('examples with a group are listed under one optgroup per group, in the fixed order En blanco, Básicos, Ejemplos completos', () => {
+test('examples with a group are listed under one optgroup per group, in the fixed order En blanco, Plantillas', () => {
   withGroupedPicker(GROUPED, ({ select }) => {
     const groups = select.children.filter(node => node.tagName === 'OPTGROUP');
-    assert.deepEqual(groups.map(g => g.label), ['En blanco', 'Básicos', 'Ejemplos completos']);
-    assert.deepEqual(groups.map(g => g.children.map(o => o.value)), [['b1', 'b2'], ['s1'], ['f1']]);
+    assert.deepEqual(groups.map(g => g.label), ['En blanco', 'Plantillas']);
+    assert.deepEqual(groups.map(g => g.children.map(o => o.value)), [['b1', 'b2'], ['s1']]);
   });
 });
 
@@ -120,25 +119,25 @@ test('the placeholder stays first and an example without group goes last, outsid
 });
 
 test('a group with no examples gets no optgroup', () => {
-  withGroupedPicker([{ id: 's1', name: 'Basic 1', group: 'basic' }], ({ select }) => {
-    assert.deepEqual(select.children.filter(n => n.tagName === 'OPTGROUP').map(g => g.label), ['Básicos']);
+  withGroupedPicker([{ id: 's1', name: 'Template 1', group: 'template' }], ({ select }) => {
+    assert.deepEqual(select.children.filter(n => n.tagName === 'OPTGROUP').map(g => g.label), ['Plantillas']);
   });
 });
 
 test('picking an example from inside a group loads it and returns to the placeholder', () => {
   withGroupedPicker(GROUPED, ({ select, picked }) => {
     select.pick('b2');
-    assert.deepEqual(picked, [GROUPED[4]]);
+    assert.deepEqual(picked, [GROUPED[3]]);
     assert.equal(select.value, '');
   });
 });
 
-test('the shipped examples: blank, basic and full groups, the four existing ones still listed', () => {
-  const shipped = PB.examples;
+test('the shipped examples: the En blanco and Plantillas groups, three each, and no example outside them', () => {
+  const shipped = shippedExamples();
   withGroupedPicker(shipped, ({ select, options }) => {
     const groups = select.children.filter(node => node.tagName === 'OPTGROUP');
-    assert.deepEqual(groups.map(g => [g.label, g.children.length]), [['En blanco', 3], ['Básicos', 3], ['Ejemplos completos', 4]]);
+    assert.deepEqual(groups.map(g => [g.label, g.children.length]), [['En blanco', 3], ['Plantillas', 3]]);
     assert.equal(options.length, shipped.length + 1);
-    assert.equal(select.children[select.children.length - 1].tagName, 'OPTGROUP');
+    assert.equal(select.children[select.children.length - 1].tagName, 'OPTGROUP', 'nothing outside the groups');
   });
 });

@@ -4,7 +4,7 @@ const { loadUpTo } = require('./helpers/load');
 
 // drawing.js: render does not touch the DOM, so it can be tested in Node (the layout.analyze part cannot)
 const PB = loadUpTo('js/drawing.js');
-const example = PB.examples[0];
+const example = PB.examples.find(e => e.id === 'spool-99x55');
 const tpcl = PB.languages.get('tpcl');
 
 const draw = (src, { dpi = 203, values = example.values, model } = {}) => {
