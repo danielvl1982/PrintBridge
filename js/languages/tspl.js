@@ -279,26 +279,93 @@
     return values;
   }
 
+  // --- Setup ranges (B-442/443 manual: GAP 0 <= m <= 1 inch and |n| <= label length; BLINE 0.1..1 inch and 0 <= n <= label length;
+  // OFFSET 0..1 inch; DENSITY 0..15; FEED and PRINT 1..65535). Lengths are 0.1 mm here; 1 inch = 25.4 mm. ---
+
+  const EPS = 1e-6;
+  /** [min, max] of the GAP distance, the BLINE height and the OFFSET distance, in 0.1 mm. */
+  const GAP_LIMITS = Object.freeze([0, INCH]);
+  const BLINE_LIMITS = Object.freeze([INCH / 10, INCH]);
+  const OFFSET_LIMITS = GAP_LIMITS;
+  const COUNT_MAX = 65535;
+  const outside = (v, [lo, hi]) => v < lo - EPS || v > hi + EPS;
+  const clampLength = (v, [lo, hi]) => Math.min(hi, Math.max(lo, v));
+  const mmText = mm10 => String(mm10 / 10).replace('.', ',');
+  const lengthRange = ([lo, hi]) => `${mmText(lo)}..${mmText(hi)} mm`;
+
+  /** Warning for a whole-number argument outside min..max (null when valid). */
+  function countWarning(name, label, arg, min, max) {
+    const v = int(arg);
+    if (v !== null && v >= min && v <= max) return null;
+    return diag.warning(`${name}: ${label} ${arg ? `"${arg.raw}" ` : 'ausente '}fuera de ${min}..${max} (número entero): la impresora puede no aceptarlo`);
+  }
+
   const HANDLERS = [
     {
       // Label size: SIZE m[,n] (inches), SIZE 100 mm,60 mm, SIZE 800 dot,480 dot
       pattern: /^SIZE\b/i,
       handle(m, cmd, ctx) {
         sizeHandler(ctx, cmd, ([width, height]) => {
+          ctx.model.size.native.sizeRaw = cmd.raw;
+          if (width <= 0 || (height !== undefined && height <= 0)) {
+            ctx.report(diag.warning(`SIZE: el ancho y el alto deben ser mayores que 0, no se aplica: ${cmd.raw.slice(0, 40)}`));
+            return;
+          }
           ctx.model.size.width = width;
           if (height !== undefined) ctx.model.size.height = height;
-          ctx.model.size.native.sizeRaw = cmd.raw;
         }, 'SIZE');
       },
     },
     {
-      // Gap between labels: GAP m,n; black line: BLINE m,n (the first value is the distance)
+      // Gap between labels: GAP m,n; black line: BLINE m,n (the first value is the distance). A distance outside the manual range is
+      // reported and drawn at the nearest limit (gapRaw keeps what was written); the offset n is checked against the label length at the end.
       pattern: /^(GAP|BLINE)\b/i,
       handle(m, cmd, ctx) {
-        sizeHandler(ctx, cmd, ([distance]) => {
-          ctx.model.size.gap = distance;
-          ctx.model.size.native[m[1].toUpperCase() === 'GAP' ? 'gapRaw' : 'blineRaw'] = cmd.raw;
-        }, m[1].toUpperCase());
+        const name = m[1].toUpperCase();
+        const limits = name === 'GAP' ? GAP_LIMITS : BLINE_LIMITS;
+        sizeHandler(ctx, cmd, ([distance, offset]) => {
+          let value = distance;
+          if (outside(distance, limits)) {
+            ctx.report(diag.warning(`${name}: ${name === 'GAP' ? 'separación' : 'altura de la marca'} "${cmd.args[0].raw}" fuera de ${lengthRange(limits)}: la impresora puede no aceptarla, se dibuja con el límite más cercano`));
+            value = clampLength(distance, limits);
+          }
+          ctx.model.size.gap = value;
+          ctx.model.size.native[name === 'GAP' ? 'gapRaw' : 'blineRaw'] = cmd.raw;
+          if (offset !== undefined) ctx.offsets.push({ name, value: offset, raw: cmd.args[1].raw });
+        }, name);
+      },
+    },
+    {
+      // OFFSET m: extra feed after each label, 0..1 inch
+      pattern: /^OFFSET\b/i,
+      handle(m, cmd, ctx) {
+        const v = cmd.args.length ? parseLength(cmd.args[0], ctx.dot) : null;
+        if (v === null) ctx.report(diag.warning(`OFFSET no válido: ${cmd.raw.slice(0, 40)}`));
+        else if (outside(v, OFFSET_LIMITS)) ctx.report(diag.warning(`OFFSET: distancia "${cmd.args[0].raw}" fuera de ${lengthRange(OFFSET_LIMITS)}: la impresora puede no aceptarla`));
+      },
+    },
+    {
+      // DENSITY n: 0 (lightest) .. 15 (darkest); nothing to draw
+      pattern: /^DENSITY\b/i,
+      handle(m, cmd, ctx) {
+        const w = countWarning('DENSITY', 'nivel', cmd.args[0], 0, 15);
+        if (w) ctx.report(w);
+      },
+    },
+    {
+      // SPEED n: inches per second; the manual lists 1.5, 2.0 and 3.0 for its models, the other models of the family have other values
+      pattern: /^SPEED\b/i,
+      handle(m, cmd, ctx) {
+        const v = num(cmd.args[0]);
+        if (v === null || v <= 0) ctx.report(diag.warning(`SPEED no válido (se espera una velocidad positiva, por ejemplo 1.5, 2.0 o 3.0): ${cmd.raw.slice(0, 40)}`));
+      },
+    },
+    {
+      // FEED n: dots, 1..65535
+      pattern: /^FEED\b/i,
+      handle(m, cmd, ctx) {
+        const w = countWarning('FEED', 'longitud', cmd.args[0], 1, COUNT_MAX);
+        if (w) ctx.report(w);
       },
     },
     {
@@ -308,7 +375,7 @@
         const direction = int(cmd.args[0]);
         const mirror = cmd.args.length > 1 ? int(cmd.args[1]) : 0;
         if (direction !== 0 && direction !== 1) {
-          ctx.report(diag.warning(`DIRECTION no válido: ${cmd.raw.slice(0, 40)}`));
+          ctx.report(diag.warning(`DIRECTION no válido (0 o 1): ${cmd.raw.slice(0, 40)}`));
           return;
         }
         ctx.direction = direction;
@@ -336,9 +403,17 @@
       },
     },
     {
-      // CLS and PRINT delimit the label: nothing to draw
-      pattern: /^(CLS|PRINT)\b/i,
+      // CLS delimits the label: nothing to draw
+      pattern: /^CLS\b/i,
       handle() {},
+    },
+    {
+      // PRINT m[,n]: m sets of labels and n copies of each, whole numbers 1..65535; nothing to draw
+      pattern: /^PRINT\b/i,
+      handle(m, cmd, ctx) {
+        const problems = [countWarning('PRINT', 'juegos', cmd.args[0], 1, COUNT_MAX), cmd.args.length > 1 && countWarning('PRINT', 'copias', cmd.args[1], 1, COUNT_MAX)];
+        for (const w of problems) if (w) ctx.report(w);
+      },
     },
     {
       // SET COUNTER @n step: the increment of counter n (the viewer keeps it for the items that use "@n")
@@ -380,6 +455,8 @@
       direction: 1,
       reference: { x: 0, y: 0 },
       shift: { x: 0, y: 0 },
+      /** GAP / BLINE offsets (n) to check against the label length once the whole text is read. */
+      offsets: [],
       /** Declared counters (SET COUNTER) and assigned start values (@n="..."), by number, as the commands appear. */
       counters: new Map(),
       values: new Map(),
@@ -425,8 +502,13 @@
       if (handler) handler.handle(cmd.raw.match(handler.pattern), cmd, ctx);
       else ctx.report(diag.warning(`Comando no soportado por el visor: ${cmd.raw.slice(0, 40)}`));
     }
-    // pitch = height + gap, whatever the order of SIZE and GAP in the text
     const size = model.size;
+    // GAP n is at most the label length (either sign); BLINE n is 0..label length (needs the height, so after the whole text)
+    for (const { name, value, raw } of ctx.offsets) {
+      const bad = name === 'GAP' ? Number.isFinite(size.height) && Math.abs(value) > size.height + EPS : value < -EPS || (Number.isFinite(size.height) && value > size.height + EPS);
+      if (bad) model.diagnostics.push(diag.warning(`${name}: desplazamiento "${raw}" fuera de ${name === 'GAP' ? '±' : '0..'}alto de la etiqueta: la impresora puede no aceptarlo`));
+    }
+    // pitch = height + gap, whatever the order of SIZE and GAP in the text
     if (Number.isFinite(size.height) && Number.isFinite(size.gap) && size.gap > 0) size.pitch = size.height + size.gap;
     return { model, ctx };
   }
@@ -487,6 +569,18 @@
   /** 0.1 mm -> the number of a "<n> mm" length, with at most one decimal ("991" -> "99.1"). */
   const mmNumber = mm10 => String(+(mm10 / 10).toFixed(1));
 
+  const GAP_NOTE = `La separación entre etiquetas (GAP) se ajusta al rango de TSPL (${lengthRange(GAP_LIMITS)}, 0..1 pulgada)`;
+
+  /**
+   * Resolved size (0.1 mm: w, h, p) with the gap (pitch - height) limited to the GAP range: { size, diagnostics }. One warning when it had to
+   * change. Used by the Formato row (PB.sizes.apply) and by sizeCommands.
+   */
+  function fitSize(size) {
+    const pitch = size.p == null ? size.h : size.p;
+    if (!(pitch - size.h > GAP_LIMITS[1] + EPS)) return { size, diagnostics: [] };
+    return { size: { ...size, p: size.h + GAP_LIMITS[1] }, diagnostics: [diag.warning(GAP_NOTE)] };
+  }
+
   /**
    * SIZE, GAP, DIRECTION and CLS. SIZE needs both measures (else it is omitted with a warning); GAP only when the model
    * knows the separation (else omitted with an info). REFERENCE and SHIFT are never written: the parser folds them into
@@ -497,13 +591,19 @@
   function headerLines(model, ctx) {
     const size = (model && model.size) || {};
     const out = [];
-    if (Number.isFinite(size.width) && Number.isFinite(size.height)) {
+    if (Number.isFinite(size.width) && Number.isFinite(size.height) && size.width > 0 && size.height > 0) {
       out.push(`SIZE ${mmNumber(size.width)} mm,${mmNumber(size.height)} mm`);
+    } else if (Number.isFinite(size.width) && Number.isFinite(size.height)) {
+      ctx.report(diag.warning('El tamaño de la etiqueta no es válido (el ancho y el alto deben ser mayores que 0): no se escribe SIZE, indique el tamaño antes de exportar'));
     } else {
       ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe SIZE, indique el tamaño antes de exportar'));
     }
-    // gap = pitch - height: a label that only knows its pitch (TPCL) still gets its GAP
-    const gap = Number.isFinite(size.gap) ? size.gap : (size.pitch > size.height ? size.pitch - size.height : null);
+    // gap = pitch - height: a label that only knows its pitch (TPCL) still gets its GAP; the manual allows 0..1 inch, so more is clamped
+    let gap = Number.isFinite(size.gap) ? size.gap : (size.pitch > size.height ? size.pitch - size.height : null);
+    if (Number.isFinite(gap) && outside(gap, GAP_LIMITS)) {
+      ctx.report(diag.warning(GAP_NOTE));
+      gap = clampLength(gap, GAP_LIMITS);
+    }
     if (Number.isFinite(gap)) out.push(`GAP ${mmNumber(gap)} mm,0 mm`);
     else ctx.report(diag.info('No se escribe GAP: la separación entre etiquetas o la marca negra no está especificada, compruebe el ajuste en su impresora'));
     // DIRECTION 0 (printed rotated 180 degrees) is written back as it was read; a ^POI of ZPL has no TSPL counterpart here and is reported
@@ -528,7 +628,8 @@
   // Size writing: resolved size (0.1 mm: { w, h, p }) -> SIZE / GAP lines
 
   /** SIZE always; GAP (pitch - height) only when the pitch is larger than the height (else the separation is unknown). */
-  function sizeCommands(size) {
+  function sizeCommands(wanted) {
+    const size = fitSize(wanted).size;
     const out = [`SIZE ${mmNumber(size.w)} mm,${mmNumber(size.h)} mm`];
     const pitch = size.p == null ? size.h : size.p;
     if (pitch > size.h) out.push(`GAP ${mmNumber(pitch - size.h)} mm,0 mm`);
@@ -611,7 +712,7 @@
   PB.tspl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CR_PLACEHOLDER });
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
-  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize,
+  PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize, fitSize, sizeLimits: { gap: [...GAP_LIMITS] },
     insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem, updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

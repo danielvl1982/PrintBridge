@@ -41,7 +41,9 @@
       if (item.white === true) ctx.once('tspl-shape-white', () => diag.warning('Hay líneas o cajas en blanco (color W de ZPL): TSPL no tiene color de trazo, se escriben en negro'));
       else if (item.reverse === true) ctx.once('tspl-shape-reverse', () => diag.warning('Hay líneas o cajas con impresión inversa (^FR o ^LR de ZPL): TSPL no la tiene en estas formas, se escriben normales'));
       const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
-      const thickness = Math.max(1, roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0)));
+      const rawThickness = roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0));
+      if (rawThickness < 1) ctx.once('tspl-shape-min', () => diag.warning('Hay formas con grosor, ancho o alto menor de 1 punto: TSPL necesita al menos 1 punto, se escriben con 1 punto'));
+      const thickness = Math.max(1, rawThickness);
       const horizontal = Math.abs(y2 - y1) <= 1;
       if (!horizontal && Math.abs(x2 - x1) > 1) {
         ctx.once('tspl-diagonal', () => diag.warning('Hay líneas diagonales que no se escriben: TSPL tiene DIAGONAL, pero el intérprete de este visor no lo soporta'));

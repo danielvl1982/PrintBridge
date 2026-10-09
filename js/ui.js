@@ -158,7 +158,7 @@
 
     /**
      * Sets what the pitch input is for, by language id: 'tpcl' pitch, 'tspl' gap, anything else hides it. `limits` (optional, the
-     * language's sizeLimits: { width, height, pitch } as [min, max] in 0.1 mm) sets the min / max of the inputs so that they only offer
+     * language's sizeLimits: { width, height, pitch } (TPCL) or { gap } (TSPL) as [min, max] in 0.1 mm) sets the min / max of the inputs so that they only offer
      * what the printer accepts; without it the inputs keep the generic 5 mm minimum and have no maximum.
      */
     function setLanguage(id, limits) {
@@ -174,7 +174,7 @@
         const field = FIELD[mode];
         if (els.pitchText) els.pitchText.textContent = field.text;
         if (els.pitchField) els.pitchField.title = field.title;
-        range(els.pitch, mode === 'pitch' ? limits && limits.pitch : null, field.min);
+        range(els.pitch, limits && limits[mode], field.min);
       }
       if (shown) showArea(shown);
     }

@@ -33,8 +33,12 @@
     /** REVERSE / ERASE x,y,w,h of an area item. */
     function emit(item, ctx) {
       const dots = v => exactDots(ctx, Number.isFinite(v) ? v : 0);
-      const [x, y] = [item.x, item.y].map(v => Math.max(0, roundDots(dots(v))));
-      const [w, h] = [item.width, item.height].map(v => Math.max(1, roundDots(dots(v))));
+      const rawXY = [item.x, item.y].map(v => roundDots(dots(v)));
+      if (rawXY.some(v => v < 0)) ctx.once('tspl-shape-negative', () => diag.warning('Hay elementos con posición negativa: TSPL no admite coordenadas negativas en estas formas, se escriben en 0'));
+      const [x, y] = rawXY.map(v => Math.max(0, v));
+      const rawSize = [item.width, item.height].map(v => roundDots(dots(v)));
+      if (rawSize.some(v => v < 1)) ctx.once('tspl-shape-min', () => diag.warning('Hay formas con grosor, ancho o alto menor de 1 punto: TSPL necesita al menos 1 punto, se escriben con 1 punto'));
+      const [w, h] = rawSize.map(v => Math.max(1, v));
       return `${COMMAND_BY_MODE[item.mode] || 'REVERSE'} ${x},${y},${w},${h}`;
     }
 

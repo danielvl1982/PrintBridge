@@ -30,7 +30,7 @@ TPCL (manuals: docs/tpcl)
 - [x] V3 TPCL barcodes (`{XB` types, widths, ratios, heights, check digits, data lengths and character sets), QR, Data Matrix
 - [x] V4 TPCL images (`{SG`)
 TSPL (manual: docs/tspl)
-- [ ] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
+- [x] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
 - [ ] V6 TSPL text: `TEXT`, `BLOCK`, fonts, multipliers, rotation, `SET COUNTER` / `@` variables
 - [ ] V7 TSPL barcodes, `QRCODE`, `DMATRIX`
 - [ ] V8 TSPL images (`BITMAP`)
@@ -156,7 +156,42 @@ Other changes: shared limits live in `PB.images.SG_LIMITS` / `sgBytes` / `rowByt
 checked before writing (position, size, buffer) and an out-of-range image is refused with the usual "No se pudo insertar la imagen" error instead of an invalid `{SG`.
 Expectation changes in existing tests: tests/sg.test.js (a 5-digit width now also reports its format, so two warnings).
 
+### V5 TSPL label setup and shapes
+Manual: B-442/443 interface manual (docs/tspl, 137 pages; an older subset: no QRCODE, SHIFT, ELLIPSE, CIRCLE, BOX radius, units `dot`, DIRECTION mirror; the code follows TSC TSPL/TSPL2 v3.0, which is not local). Line numbers are those of
+`pdftotext -layout`. A parameter only v3.0 defines keeps its behaviour and is listed under Open. Lengths below are 0.1 mm in the code (1 inch = 25.4 mm).
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `SIZE` m,n | no range; inch by default, `mm` (lines 209-227; `dot` is v3.0) | width / height min 5 mm, no max (no manual limit, Open) / unchanged | written whatever the value, 0 or negative gave `SIZE 0 mm,...` / a size <= 0 is not written, one warning | a size <= 0 was applied / reported and not applied (the label keeps no size) |
+| `GAP` m | 0 <= m <= 1 inch (25.4 mm) (253+) | Separación field min 0, no max / min 0, max 25.4 mm (`sizeLimits.gap`) | gap above 25.4 (a converted TPCL pitch) or negative written as is / clamped to 0..25.4 mm, one warning | any value read, negative or huge drawn / warning with the range, drawn at the nearest limit, `gapRaw` keeps the text |
+| `GAP` n | [-]n <= label length (253+) | not offered (always 0) | always 0 / same | none / warning when |n| is above the SIZE height (any command order) |
+| `BLINE` m,n | m 0.1..1 inch (2.54..25.4 mm), n 0 <= n <= label length (285+) | not offered | never written | none / warning for m and for n, m drawn at the nearest limit |
+| `OFFSET` m | 0 <= m <= 1 inch (25.4 mm) (317+) | not offered | never written | silently ignored / warning outside 0..25,4 mm or malformed |
+| `SPEED` n | 1.5, 2.0, 3.0 depending on the model (344+) | not offered | never written | silently ignored / warning only when not a positive number (the set is model dependent, Open) |
+| `DENSITY` n | 0..15 (362+) | not offered | never written | silently ignored / warning outside 0..15 or not a whole number |
+| `DIRECTION` n | 0 or 1 (381+); the mirror m is v3.0 | not offered | `DIRECTION 1`, or 0 as read | warned already / message now says "0 o 1" (mirror Open) |
+| `REFERENCE` x,y | dots, no range (400+) | not offered | never written (folded into the coordinates) | non numeric warned already / unchanged (negative values Open) |
+| `SHIFT` | not in the local manual (v3.0) | - | never written | unchanged (Open) |
+| `CLS`, `CUT` | no parameters (502+, 21+) | - | `CLS` written, `CUT` never | `CUT` is reported "no soportado por el visor" (unchanged: it is a printer action, nothing to draw) |
+| `FEED` n | 1..65535 dots (520+) | not offered | never written | silently ignored / warning outside 1..65535 or not a whole number |
+| `PRINT` m[,n] | m, n 1..65535 (583+) | not offered | always `PRINT 1,1` (valid) | silently ignored / warning per argument (sets, copies, missing m) |
+| `BAR` x,y,w,h | dots, no range (690+) | width / height 1..9999 (Open: no manual max) | written >= 1 dot thick / same, the clamp to 1 is now reported once | w or h <= 0 warned already / unchanged |
+| `BOX` x,y,xe,ye,t | corners upper left and lower right, thickness dots, no range (883+); the radius is v3.0 | thickness 1..9999, radius 0..9999 (Open) | thickness at least 1 silently / reported once; corners already normalized | end before start was drawn silently / warning, drawn as the rectangle the corners span |
+| `ELLIPSE`, `CIRCLE` | not in the local manual (v3.0) | width / height / diameter / thickness 1..9999 (Open) | negative position and sizes under 1 clamped silently / each reported once | non positive measures warned already / unchanged |
+| `ERASE`, `REVERSE` | x, y start; width and height in dots, no range (905+, 1179+) | width / height 1..9999 (Open) | position < 0 and size < 1 clamped silently / each reported once | non positive size warned already / unchanged |
+| Coordinates and units | dots; 200 dpi 1 mm = 8 dots, 300 dpi 1 mm = 12 dots (SIZE note); no range for x / y | - | always whole dots from 0.1 mm at the label dpi (already) | read as written (already) |
+
+Other changes: `PB.languages` TSPL gains `sizeLimits: { gap }` and `fitSize` (the same hook TPCL uses: `PB.sizes.apply` returns its diagnostics and the Formato row reads `limits[mode]`); `sizeCommands` and the emit header share the GAP clamp;
+`PRINT` and `CLS` are separate handlers, and `OFFSET`, `DENSITY`, `SPEED`, `FEED` moved from the ignored list to checking handlers (still nothing drawn).
+Expectation changes in existing tests: tests/tspl.test.js BLINE fixture is 3 mm (2 mm is below the manual's 2.54 mm minimum).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V5 SIZE has no range in the local manual (v3.0 and the model tables give limits per printer); no maximum is applied, the panel offers min 5 mm only. Same for every shape measure: the 9999 dot limit of the properties panel is an existing convenience, not a manual value.
+- V5 DIRECTION mirror (m), REFERENCE (negative values), SHIFT, ELLIPSE, CIRCLE and the BOX radius are v3.0 only: not validated beyond "is a number".
+- V5 SPEED lists 1.5 / 2.0 / 3.0 per model in the local manual; other models of the family accept other values, so only a non positive or non numeric speed is reported.
+- V5 PRINT 1..65535 and FEED 1..65535 are the local manual's limits; if v3.0 allows more for PRINT, a large value is warned although the printer may accept it.
+- V5 Negative coordinates of BAR and BOX are still written as they come (the manual says nothing); ellipse and area clamp them to 0 (reported now). The `GAP` offset n is always written 0, `BLINE` is only read.
+- V5 `CUT` is the only local command of the task not read by the viewer ("no soportado por el visor"); not changed.
 - V4 The 512 KB image buffer is read as the limit of the dot data of one graphic, not of the whole label image (the manual's sentence is about the width drawn); the printer's exact behaviour (cut width or error) is not given.
 - V4 `{SG0;` (printer driver compression, mode A with a data count), hex mode (1, 5), BMP / PCX (2, 6) and TOPIX (3, 7) are not read (warned as not supported by the viewer); the `D` dots suffix is only in R.
 - V4 TS12 says 4 digits for Y and height, SV4 / R 4 or 5: the wider form is accepted. The conversion in app.js still refuses a picture over 9999 dots on either side before the language check (js/app.js is outside this task's surface).
@@ -189,3 +224,4 @@ Expectation changes in existing tests: tests/sg.test.js (a 5-digit width now als
 - V2 (route: delegated writer, one writer, direct; RED first: 31 of the 34 new tests failed on the old code): TPCL text (tests/tpcl-text-validation.test.js, 34 tests). Verification: `node --test` 4049 tests, 4048 pass, 0 fail, 1 skipped (was 4015 / 4014 before; +34 new). Commit: see `git log` (fix: validate TPCL text values against the manuals).
 - V3 (route: delegated writer, one writer, direct; RED first: 34 of the 35 new tests failed on the old code): TPCL barcodes, QR and Data Matrix (tests/tpcl-barcode-validation.test.js, 35 tests). Verification: `node --test` 4084 tests, 4083 pass, 0 fail, 1 skipped (was 4049 / 4048 before; +35 new). Commit: see `git log` (fix: validate TPCL barcode, QR and Data Matrix values against the manuals).
 - V4 (route: delegated writer, one writer, direct; RED first: 15 of the 16 new tests failed on the old code): TPCL images (tests/tpcl-image-validation.test.js, 16 tests). Verification: `node --test` 4100 tests, 4099 pass, 0 fail, 1 skipped (was 4084 / 4083 before; +16 new). Commit: see `git log` (fix: validate TPCL image values against the manuals).
+- V5 (route: delegated writer, one writer, direct; RED first: 20 of the 23 new tests failed on the old code): TSPL label setup and shapes (tests/tspl-label-validation.test.js, 23 tests). Verification: `node --test` 4123 tests, 4122 pass, 0 fail, 1 skipped (was 4100 / 4099 before; +23 new). Commit: see `git log` (fix: validate TSPL label setup and shape values against the manual).
