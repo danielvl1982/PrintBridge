@@ -160,7 +160,7 @@
       const opts = options();
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));
-      sizePanel.setLanguage(model.language);
+      sizePanel.setLanguage(model.language, (languages.get(model.language) || {}).sizeLimits);
       sizePanel.showArea(area);
       sizePanel.selectFor({ ...model.size, pitch: sizes.declaredPitch(model.size) });
       lastModel = model;
@@ -313,7 +313,7 @@
     // The resolution travels with the size: ZPL writes it in dots (TPCL and TSPL ignore it)
     const result = sizes.apply(languages.detect(text), text, { ...size, dpi: Number($('dpi').value) });
     editor.setText(result.text);
-    refresh({ notices: result.supported ? [] : [diag.warning('No se puede escribir el tamaño: el lenguaje de la etiqueta no lo admite o no se reconoce')] });
+    refresh({ notices: result.supported ? result.diagnostics || [] : [diag.warning('No se puede escribir el tamaño: el lenguaje de la etiqueta no lo admite o no se reconoce')] });
   }
 
   /** Reads a picture file as a data URL and measures its natural size in pixels. */

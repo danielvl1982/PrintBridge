@@ -24,8 +24,8 @@
   /** FNC1 in the TPCL notation of a barcode's data. */
   const FNC1_NOTATION = />8/g;
 
-  /** Control commands that draw nothing. */
-  const CONTROL_COMMANDS = Object.freeze(['C', 'XS', 'AX', 'XQ']);
+  /** Control commands that draw nothing and have no parameters to check ({AX and {XS have their own handlers). */
+  const CONTROL_COMMANDS = Object.freeze(['C', 'XQ']);
 
   const DIGITS = /^\d+$/;
 
@@ -38,20 +38,127 @@
   /** Item -> position of the command in the source text (a single span: the format command). */
   const sourceOf = cmd => ({ spans: [{ start: cmd.start, end: cmd.end }], label: `{${cmd.raw}|}` });
 
+  // --- Label setup ranges (0.1 mm). Sources: B-452-R 2012 6.3.1 (pitch 0100..9999, width 0100..1057, length 0060..9970), B-SV4 2004 6.3.1
+  // (print width up to 108 mm, the widest of the manuals), B-452-TS12 ES 6.3. Only the widest value any manual allows is used. ---
+
+  /** {D limits [min, max]: pitch (aaaa), effective print width (bbbb) and effective print length (cccc). */
+  const SIZE_LIMITS = Object.freeze({ pitch: Object.freeze([100, 9999]), width: Object.freeze([100, 1080]), height: Object.freeze([60, 9970]) });
+  const rangeText = ([lo, hi]) => `${pad4(lo)}..${pad4(hi)}`;
+  const clampTo = (n, [lo, hi]) => Math.min(hi, Math.max(lo, n));
+  /** The pitch has to leave at least 2 mm after the print length (B-SV4 note 8, B-452-TS12 note 5). */
+  const MIN_GAP = 20;
+
+  /**
+   * Diagnostics of a parsed {D command (match of its pattern + pitch and length already limited to the ranges). A gap under 2 mm is only
+   * information: the printer fixes it itself (and the app writes it when the source has no pitch); the rest are warnings.
+   */
+  function dProblems(m, { pitch, height }) {
+    const out = [];
+    if (![4, 5].includes(m[1].length) || m[2].length !== 4 || ![4, 5].includes(m[3].length)) {
+      out.push(diag.warning('D: paso y alto con 4 o 5 dígitos, ancho con 4 (0,1 mm): la impresora puede no aceptarlo'));
+    }
+    for (const [name, raw, range] of [['paso', m[1], SIZE_LIMITS.pitch], ['ancho', m[2], SIZE_LIMITS.width], ['alto', m[3], SIZE_LIMITS.height]]) {
+      if (+raw < range[0] || +raw > range[1]) out.push(diag.warning(`D: ${name} ${raw} fuera de ${rangeText(range)} (0,1 mm): la impresora lo ajusta al límite`));
+    }
+    if (pitch < height) out.push(diag.warning(`D: el paso (${pad4(pitch)}) es menor que el alto (${pad4(height)}): la impresora da error de comando`));
+    else if (pitch - height < MIN_GAP) out.push(diag.info(`D: paso - alto = ${pitch - height} (0,1 mm), menos de 2 mm: la impresora reduce el alto efectivo a paso - 2 mm`));
+    return out;
+  }
+
+  /**
+   * {D size (resolved, 0.1 mm: w, h, p) limited to the manual ranges, the pitch at least the length: { size, diagnostics }.
+   * One warning when something had to be changed. Used by the Formato row (PB.sizes.apply), applySize and the emit.
+   */
+  function fitSize(size) {
+    const num = v => (Number.isFinite(v) ? Math.round(v) : null);
+    const h0 = num(size.h);
+    const h = clampTo(h0 ?? SIZE_LIMITS.height[0], SIZE_LIMITS.height);
+    const w0 = num(size.w);
+    const w = clampTo(w0 ?? SIZE_LIMITS.width[0], SIZE_LIMITS.width);
+    const p0 = num(size.p) ?? h0;
+    const p = Math.max(h, clampTo(p0 ?? h, SIZE_LIMITS.pitch));
+    const changed = h !== h0 || w !== w0 || p !== p0;
+    const note = `El tamaño de la etiqueta se ajusta a los rangos de {D} de TPCL (paso ${rangeText(SIZE_LIMITS.pitch)}, ancho ${rangeText(SIZE_LIMITS.width)}, alto ${rangeText(SIZE_LIMITS.height)}, en 0,1 mm; el paso no puede ser menor que el alto)`;
+    return { size: { ...size, w, h, p }, diagnostics: changed ? [diag.warning(note)] : [] };
+  }
+
+  /**
+   * {AX;abbb,cddd,eff(,ghhh)|} problems as warning texts (none when valid). Ranges: feed 000..500 and cut 000..500 (B-SV4 6.3.2: 500 and 350,
+   * B-452-R 6.3.2: 500 and 500, B-452-TS12 ES 6.4: 100 and 100: the widest), back feed 00..99, correction 000..100 (0.1 %, TS12 only).
+   */
+  function axProblems(raw) {
+    const m = /^AX;([+-])(\d{3}),([+-])(\d{3}),([+-])(\d{2})(?:,([+-])(\d{3}))?$/.exec(raw.replace(/\s+/g, ''));
+    if (!m) return ['AX no válido: se esperaba {AX;±bbb,±ddd,±ff(,±hhh)|} (signo y 3, 3, 2 y 3 dígitos): la impresora puede no aceptarlo'];
+    const out = [];
+    for (const [name, value, max, unit] of [['alimentación', m[2], 500, '0,1 mm'], ['corte', m[4], 500, '0,1 mm'], ['corrección', m[8], 100, '0,1 %']]) {
+      if (value !== undefined && +value > max) out.push(`AX: ${name} ${value} fuera de 000..${String(max).padStart(3, '0')} (${unit}): la impresora puede no aceptarlo`);
+    }
+    return out;
+  }
+
+  /**
+   * {XS;I,aaaa,bbbcdefgh|} problems as warning texts (none when valid): count 0001..9999, cut interval 000..100, sensor 0..5, mode C|D|E,
+   * speed 1..9|A, ribbon 0..2, rotation 0..3, status response 0..1 (B-SV4 6.3.13, B-452-R 6.3.14, B-452-TS12 ES 6.16: the widest).
+   */
+  function xsProblems(raw) {
+    const m = /^XS;I,(\d{4}),(\d{3})(\d)([A-Za-z])([0-9A-Za-z])(\d)(\d)(\d)$/.exec(raw.replace(/\s+/g, ''));
+    if (!m) return ['XS no válido: se esperaba {XS;I,aaaa,bbbcdefgh|} (cantidad de 4 dígitos y 9 caracteres de condiciones): la impresora puede no aceptarlo'];
+    const checks = [
+      ['cantidad de etiquetas', m[1], +m[1] >= 1, '0001..9999'],
+      ['intervalo de corte', m[2], +m[2] <= 100, '000..100'],
+      ['sensor', m[3], +m[3] <= 5, '0..5'],
+      ['modo de emisión', m[4], /^[CDE]$/.test(m[4]), 'C, D o E'],
+      ['velocidad', m[5], /^[1-9A]$/.test(m[5]), '1..9 o A'],
+      ['cinta', m[6], +m[6] <= 2, '0..2'],
+      ['giro', m[7], +m[7] <= 3, '0..3'],
+      ['respuesta de estado', m[8], +m[8] <= 1, '0..1'],
+    ];
+    return checks.filter(([, , ok]) => !ok).map(([name, value, , range]) => `XS: ${name} ${value} fuera de ${range}: la impresora puede no aceptarlo`);
+  }
+
+  /**
+   * Warning for the coordinates of a command whose digits are fixed: X exactly 4 digits, Y 4 or 5 (B-SV4 / B-452-R LC and XR).
+   * coords: [[name, digits as written]] with names starting x or y. Returns a diagnostic or null.
+   */
+  function coordDigitsWarning(ref, coords) {
+    const bad = coords.filter(([name, raw]) => !(name.startsWith('x') ? /^\d{4}$/ : /^\d{4,5}$/).test(raw));
+    if (!bad.length) return null;
+    const list = bad.map(([name, raw]) => `${name}="${raw}"`).join(', ');
+    return diag.warning(`${ref}: ${list} fuera del formato (X con 4 dígitos, Y con 4 o 5, en 0,1 mm): la impresora puede no aceptarlo`);
+  }
+
   const HANDLERS = [
     {
       // Label size: D<pitch>,<width>,<length>
       pattern: /^D(\d+),(\d+),(\d+)/,
       handle(m, cmd, ctx) {
-        Object.assign(ctx.model.size, { pitch: +m[1], width: +m[2], height: +m[3] });
+        // The printer changes a value beyond the limits to the limit itself (B-SV4 note 8): the label is drawn that way, the
+        // command as written stays in native.dRaw and the warnings say what the printer will do
+        const size = ctx.model.size;
+        const pitch = clampTo(+m[1], SIZE_LIMITS.pitch);
+        const width = clampTo(+m[2], SIZE_LIMITS.width);
+        const height = clampTo(+m[3], SIZE_LIMITS.height);
+        dProblems(m, { pitch, height }).forEach(d => ctx.report(d));
+        Object.assign(size, { pitch, width, height });
         // pitch = height + gap: the gap is what the pitch leaves after the label
-        ctx.model.size.gap = +m[1] > +m[3] ? +m[1] - +m[3] : null;
-        ctx.model.size.native.dRaw = cmd.raw;
+        size.gap = pitch > height ? pitch - height : null;
+        size.native.dRaw = cmd.raw;
       },
     },
     {
-      pattern: /^AX;/,
-      handle(m, cmd, ctx) { ctx.model.size.native.axRaw = cmd.raw; },
+      // Position fine adjustment: kept as written (it is printer specific), checked against the manual ranges
+      pattern: /^AX(;|$)/,
+      handle(m, cmd, ctx) {
+        ctx.model.size.native.axRaw = cmd.raw;
+        for (const text of axProblems(cmd.raw)) ctx.report(diag.warning(text));
+      },
+    },
+    {
+      // Issue command: the viewer prints nothing, but a value the printer does not accept is reported
+      pattern: /^XS(;|$)/,
+      handle(m, cmd, ctx) {
+        for (const text of xsProblems(cmd.raw)) ctx.report(diag.warning(text));
+      },
     },
     {
       // Data of a field: RCnn (bitmap text), RVnn (outline text), RBnn (barcode / QR)
@@ -114,7 +221,7 @@
 
   /** The {D…|} line that declares the size (the {AX…|} adjustment is printer specific and is never written here). */
   function sizeCommands(size) {
-    return [`{${dCommand(size)}|}`];
+    return [`{${dCommand(fitSize(size).size)}|}`];
   }
 
   /** Writes the size in the text, replacing the {D…|} command or adding it at the start. An existing {AX…|} is left untouched. */
@@ -284,14 +391,20 @@
     } else {
       // Pitch = height + gap: a label that only knows its gap (TSPL) still gets its pitch
       const gap = Number.isFinite(size.gap) && size.gap > 0 ? size.gap : null;
-      const pitch = size.pitch ?? (gap == null ? size.height : size.height + gap);
+      const wanted = size.pitch ?? (gap == null ? size.height : size.height + gap);
+      // Never written out of the {D ranges: limited (and reported once) like the Formato row does
+      const fit = fitSize({ w: size.width, h: size.height, p: wanted });
+      fit.diagnostics.forEach(d => ctx.report(d));
+      const { w, h, p: pitch } = fit.size;
       const m = native.dRaw && /^D(\d+),(\d+),(\d+)/.exec(native.dRaw);
-      const unchanged = !!m && +m[1] === pitch && +m[2] === size.width && +m[3] === size.height;
-      out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w: size.width, h: size.height })));
-      const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : null;
-      if (ax) out.push(wrap(ax));
-      else ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
-      if (size.pitch == null && gap == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
+      const unchanged = !!m && +m[1] === pitch && +m[2] === w && +m[3] === h;
+      out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w, h })));
+      const source = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : null;
+      const axBad = source ? axProblems(source) : [];
+      if (axBad.length) ctx.report(diag.warning(`No se escribe {AX…|}: el de la etiqueta de origen no es válido en TPCL (${axBad.join('; ')})`));
+      if (source && !axBad.length) out.push(wrap(source));
+      else if (!axBad.length) ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
+      if (size.pitch == null && gap == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta (la impresora reduce el alto efectivo a paso - 2 mm), compruebe el valor en su impresora'));
     }
     if (native.direction === 0 || native.invert === true) {
       ctx.report(diag.info('La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora'));
@@ -366,7 +479,7 @@
    * Passed once to each slice's `languages.tpcl` factory.
    */
   const SLICE_HELPERS = Object.freeze({
-    sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
+    sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder, coordDigitsWarning,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
     wrap, safeData, coordText, allocId,
     COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
@@ -535,6 +648,8 @@
     validate: model => model.items.flatMap(item => ALL_RULES.flatMap(rule => rule(item))),
     sizeCommands,
     applySize,
+    fitSize,
+    sizeLimits: { width: [...SIZE_LIMITS.width], height: [...SIZE_LIMITS.height], pitch: [...SIZE_LIMITS.pitch] },
     insertCommand,
     insertImage: true, // the app writes the preview image as a TPCL SG command (images.buildSG); see js/core/languages.js
     moveItem,

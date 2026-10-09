@@ -58,7 +58,7 @@ test('TPCL: an LC rectangle keeps its radius (0.1 mm) and the native token', () 
   const item = parseT(RECT_R);
   assert.equal(item.rect, true);
   assert.equal(item.radius, 50);
-  assert.deepEqual(item.native, { width: 2, radius: 50 });
+  assert.deepEqual(item.native, { width: 2, type: 1, radius: 50 });
   assert.equal(parseT(RECT).radius, undefined);
   assert.equal(parseT(RECT_R0).radius, 0);
 });

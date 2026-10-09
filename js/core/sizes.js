@@ -59,11 +59,17 @@
   }
 
   /**
-   * Label text with the size written by the given language: { text, supported }.
+   * Label text with the size written by the given language: { text, supported, diagnostics? } (diagnostics only when the language
+   * had to adjust the size to its limits).
    * If the language has no applySize (or there is no language) the text does not change and supported is false.
    */
   function apply(language, text, chosen) {
-    return language && language.applySize ? { text: language.applySize(text, chosen), supported: true } : { text, supported: false };
+    if (!language || !language.applySize) return { text, supported: false };
+    // A language with limits (TPCL {D) has `fitSize(size) -> { size, diagnostics }`: what it adjusts is written and reported
+    const fit = language.fitSize ? language.fitSize(chosen) : null;
+    const result = { text: language.applySize(text, fit ? fit.size : chosen), supported: true };
+    if (fit && fit.diagnostics.length) result.diagnostics = fit.diagnostics;
+    return result;
   }
 
   PB.sizes = Object.freeze({ resolve, createCatalog, declaredPitch, view, apply });

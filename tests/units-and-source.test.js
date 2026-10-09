@@ -32,7 +32,7 @@ test('dpi: barcode module and line thickness in 0.1 mm; height already comes in 
   assert.equal(bar.height, 100);
   const [line] = tpcl.parse(LINE, { dpi: 203 }).items;
   assert.equal(line.width, 3 * PB.units.dotSize(203));
-  assert.deepEqual(line.native, { width: 3 });
+  assert.deepEqual(line.native, { width: 3, type: 1 });
   assert.deepEqual([line.x1, line.y1, line.x2, line.y2], [100, 100, 500, 300]);
 });
 

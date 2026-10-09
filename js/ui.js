@@ -156,15 +156,25 @@
       inputs.forEach((input, i) => { if (input !== editing) input.value = values[i]; });
     }
 
-    /** Sets what the pitch input is for, by language id: 'tpcl' pitch, 'tspl' gap, anything else hides it. */
-    function setLanguage(id) {
+    /**
+     * Sets what the pitch input is for, by language id: 'tpcl' pitch, 'tspl' gap, anything else hides it. `limits` (optional, the
+     * language's sizeLimits: { width, height, pitch } as [min, max] in 0.1 mm) sets the min / max of the inputs so that they only offer
+     * what the printer accepts; without it the inputs keep the generic 5 mm minimum and have no maximum.
+     */
+    function setLanguage(id, limits) {
       mode = id === 'tpcl' ? 'pitch' : id === 'tspl' ? 'gap' : null;
       if (els.pitchField) els.pitchField.hidden = mode === null;
+      const range = (input, pair, min) => {
+        input.min = pair ? String(units.toMm(pair[0])) : min;
+        input.max = pair ? String(units.toMm(pair[1])) : '';
+      };
+      range(els.width, limits && limits.width, '5');
+      range(els.height, limits && limits.height, '5');
       if (mode) {
         const field = FIELD[mode];
         if (els.pitchText) els.pitchText.textContent = field.text;
         if (els.pitchField) els.pitchField.title = field.title;
-        els.pitch.min = field.min;
+        range(els.pitch, mode === 'pitch' ? limits && limits.pitch : null, field.min);
       }
       if (shown) showArea(shown);
     }

@@ -29,7 +29,7 @@
   const XR_PATTERN = /^\{XR;(\d+),(\d+),(\d+),(\d+),([AB])/d;
 
   function tpcl(helpers) {
-    const { sourceOf, numberField, insertCommand, pad4, clampCoord, coordText, wrap, MAX_COORD } = helpers;
+    const { sourceOf, numberField, insertCommand, pad4, clampCoord, coordText, coordDigitsWarning, wrap, MAX_COORD } = helpers;
 
     /** Normalised [min, max] of two coordinates. */
     const span = (a, b) => [Math.min(a, b), Math.max(a, b)];
@@ -65,6 +65,9 @@
             ctx.report(diag.warning(`XR con tipo desconocido "${type.slice(0, 10)}" (se esperaba A o B): {${cmd.raw.slice(0, 40)}|}`));
             return;
           }
+          // X fixed to 4 digits, Y 4 or 5 (the values are read as written)
+          const coords = coordDigitsWarning('XR', [['x1', parts[1]], ['y1', parts[2]], ['x2', parts[3]], ['y2', parts[4]]]);
+          if (coords) ctx.report(coords);
           const [x1, y1, x2, y2] = parts.slice(1, 5).map(Number);
           const [x, right] = span(x1, x2);
           const [y, bottom] = span(y1, y2);
