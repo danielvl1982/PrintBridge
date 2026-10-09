@@ -47,7 +47,7 @@
       const top = roundDots(dots(item.y) - t.exact / 2);
       const white = item.white === true ? ',W' : '';
       const body = item.ref === 'CIRCLE' && w === h ? `^GC${w},${t.dots}${white}` : `^GE${w},${h},${t.dots}${white}`;
-      return `${S.place(item, left, top, h)}${body}${S.fr(item)}^FS`;
+      return `${S.place(ctx, item, left, top, h)}${body}${S.fr(item)}^FS`;
     }
 
     // Move: the field origin (^FO / ^FT), the default coordinates

@@ -178,12 +178,15 @@ test('^PW and ^LL give the size in 0.1 mm at the resolution, rounded to 0.1 mm; 
   assert.deepEqual(m203.diagnostics, []);
 });
 
-test('a label without ^PW / ^LL declares no size; invalid values are warnings and the last valid one wins', () => {
+test('a label without ^PW / ^LL declares no size; invalid values are warnings and the last valid one wins; one outside 2..32000 is drawn at the limit', () => {
   const none = parse('^XA^XZ');
   assert.deepEqual([none.size.width, none.size.height], [null, null]);
-  const bad = parse('^XA^PWabc^LL^PW400^PW0^XZ', 254);
+  const bad = parse('^XA^PW400^PWabc^LL^PW400^PWx^XZ', 254);
   assert.equal(bad.size.width, 400);
   assert.equal(bad.diagnostics.filter(d => d.level === 'warning' && /\^PW/.test(d.text)).length, 2);
+  const zero = parse('^XA^PW400^PW0^XZ', 254); // V9: 0 is outside 2..32000, read as written and drawn as the smallest valid width
+  assert.equal(zero.size.width, 2);
+  assert.equal(zero.size.native.pw, 0);
   assert.equal(bad.diagnostics.filter(d => d.level === 'warning' && /\^LL/.test(d.text)).length, 1);
 });
 

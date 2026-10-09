@@ -99,7 +99,7 @@
       }
       const left = roundDots(Math.min(x1, x2) - t.exact / 2);
       const top = roundDots(Math.min(y1, y2) - t.exact / 2);
-      return `${S.place(item, left, top, h)}${S.gb(w, h, t.dots, { white: item.white === true, rounding })}${S.fr(item)}^FS`;
+      return `${S.place(ctx, item, left, top, h)}${S.gb(w, h, t.dots, { white: item.white === true, rounding })}${S.fr(item)}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------

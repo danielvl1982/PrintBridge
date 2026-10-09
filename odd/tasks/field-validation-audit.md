@@ -35,7 +35,7 @@ TSPL (manual: docs/tspl)
 - [x] V7 TSPL barcodes, `QRCODE`, `DMATRIX`
 - [x] V8 TSPL images (`BITMAP`)
 ZPL (manuals: docs/zpl vol 1 and 2)
-- [ ] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
+- [x] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
 - [ ] V10 ZPL text: `^A`, `^CF`, `^FB`, `^FW`, `^SN`, `^FN`, character sizes per resolution
 - [ ] V11 ZPL barcodes (`^B*`, `^BY`), `^BQ` QR, `^BX` Data Matrix
 - [ ] V12 ZPL images (`^GF`, `~DG`)
@@ -244,7 +244,40 @@ The manual fixes only the mode; X, Y, width and height have no range (width "in 
 Other changes: none outside the image slice and `imageCommand` (the TSPL equivalent of the TPCL insert check from V4: position, size, data length, limits).
 Expectation changes in existing tests: none (new file tests/tspl-image-validation.test.js, 13 tests).
 
+### V9 ZPL label setup and shapes
+Manuals: ZPL II Programming Guide vol 1 (2003) and vol 2 (2005); line numbers are those of `pdftotext -layout` of vol 1 (V1 below) unless marked V2. Vol 2 only repeats the descriptions of ^FR, ^LR, ^GB (V2 1623, 1627, 2072) and
+the dots per mm (V2 1930+); it gives no ranges of its own, so every range below is vol 1's. Most shape ranges were already checked on typed code and on emit before this task; the table says so ("already").
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `^PW` a | 2 .. label width, printer dependent (V1 9287+); 32000 dots is used as the widest | Formato width min 5 mm, no max / min 5 mm, max 32000 dots in mm at the selected dpi (`sizeLimitsFor`) | `max(1, dots)`, no maximum / limited to 2..32000, one warning | out of range or not a number: "no válido" without range, size not applied / 0, 1, > 32000 read as written (`native.pw`), drawn at the limit, warning with 2..32000; not a whole number: warning with the range, not applied |
+| `^LL` y | 1 .. 32000 dots (V1 8296+) | as ^PW / as ^PW | `max(1, dots)`, no maximum / limited to 1..32000, one warning | as ^PW (range 1..32000) |
+| `^LH` x,y | 0 .. 32000 (V1 8245+) | not offered | never written (folded into the coordinates) | any integer applied / warning with the range, applied at the nearest limit (also by the move / describe engines) |
+| `^LS` a / `^LT` x | -9999 .. 9999 (V1 8390+) / -120 .. 120 (V1 8440+: "a maximum of 120 dot rows", may be smaller per platform) | not offered | never written | any integer applied / warning with the range, applied at the nearest limit |
+| `^FO` / `^FT` x,y | 0 .. 32000 (V1 5907+, 6021+); `^FO` justification is not in these editions | no field (move only) / the move and a dropped palette item never write above 32000 | negative silently 0, above 32000 written / limited to 0..32000 for every item (shapes, text, bar codes, QR, Data Matrix), one warning | negative, > 32000 and fractional drawn as written / warning with the range, drawn at the nearest whole valid dot, `field.origin` keeps what was written |
+| `^GB` w,h,t,c,r | t 1..32000; w, h t..32000; c B / W; r 0..8 (V1 6224+; rounding formula 6250+) | width / height 1..32000, thickness 1..32000, rounding select 0..8 (already) | thickness limited to 1..32000 with one warning, sizes limited (already) | out of range warned with the range, drawn at the limit; a w or h below t (or 0, as the guide's own lines) is raised to t silently (already) |
+| `^GC` d,t,c | d 3..4095 (larger replaced by 4095), t 2..4095, c B / W (V1 6287+) | diameter 3..4095, thickness 2..4095 (already) | limited with one warning each (already) | diameter / thickness out of range warned, drawn at the limit (already; see Open for thickness 1) |
+| `^GD` w,h,t,c,o | w, h 3..32000; t 1..32000; c B / W; o R (/) or L (\\) (V1 6320+) | 3..32000 / 1..32000, orientation select (already) | diagonals under 3 dots limited with one warning (already) | warned with the range (already) |
+| `^GE` w,h,t,c | w, h 3..4095, t 2..4095 (the table of V1 6366+ is garbled, same ranges as ^GC) | 3..4095 / 2..4095 (already) | limited with one warning each (already) | warned with the range (already) |
+| `^FR` / `^LR` a | `^FR` none; `^LR` Y or N (V1 5971+, 8352+) | checkbox (already) | `^FR` per item, `^LR` never written (already) | `^LR` other value warned (already) |
+| `^PQ` q,p,r,o | q 1..99999999, p 0 (no pause) or 1..99999999, r 0..99999999, o Y / N (V1 9125+) | not offered | never written | ignored silently / warning per out-of-range or malformed argument |
+| `^MD` a | -30 .. 30 (V1 8487+) | not offered | never written | ignored silently / warning with -30..30 |
+| `^PR` p,s,b | A..E, 2..6, 8..12 (V1 9190+; 7 does not exist; `~PR` is another command and is not checked) | not offered | never written | ignored silently / warning for an unknown speed |
+| `^PM` a, `^PO` a | Y / N (V1 9034+); N / I (V1 9069+) | not offered | `^POI` kept (already) | `^PM` ignored silently / warning outside Y / N; `^PO` already warned |
+| `^CI` a | 0..24, 18..23 reserved (V1 4563+) | not offered | never written | "no válido" without range / message gives 0..24 |
+| dots per mm | 6 / 8 / 12 / 24 dots per mm = 152.4 / 203.2 / 304.8 / 609.6 dpi (V1 8245+, V2 1930+) | the app offers 203 and 300 dpi; the Formato maximum follows the selected one | conversions mm -> dots use the document dpi (already) | - |
+
+Other changes: `PB.languages` ZPL gains `fitSize`, `sizeLimits` and `sizeLimitsFor(dpi)` (the same hook as TPCL / TSPL; js/app.js passes the limits of the selected resolution, because 32000 dots are a different length at 203 and 300 dpi); `zplEdit` exports `COORD_MAX` and
+`OFFSET_LIMITS`; the shape helper `place()` takes the emit context and the shared helpers `fitCoord` / `coordDots` limit every origin. A converted TPCL / TSPL shape at a negative position (for example a TSPL BAR) now reports the ZPL limit once.
+Expectation changes in existing tests: tests/zpl.test.js (a `^PW0` is no longer "ignored, the last valid one wins": it is drawn as the smallest valid width, 2 dots, and warned).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V9 `^GC` and `^GE` thickness: the table says "2 to 4095" but also "default 1"; typed code accepts 1 without a warning (the default), the panel and the emit use 2..4095 as the accepted range. `^GB` w / h below t are raised to t silently because the guide's own examples use 0 (^GB0,100,20).
+- V9 `^PW` upper limit is "the width of the label" (model dependent, no number given); 32000 dots is the widest the viewer accepts, so a width above the printhead is not warned. `^LL` also depends on the memory installed (V1 8296+).
+- V9 `^LT` range "might be smaller depending on the printer platform", `^LS` and `^LH` do not say what happens beyond their ranges: the viewer applies the nearest limit. `^PO I`, `^PM`, `^LS` / `^LT` and the printer state commands are still not drawn (reported once).
+- V9 `^FT` / `^FO` omitted parameters: `^FT` without values should continue after the last text field (V1 6021+); the viewer takes 0. `^FO` third parameter (justification) is of later guides, ignored.
+- V9 The Formato row has a 5 mm minimum for ZPL (the guide allows 2 dots wide and 1 dot long), a convenience; `^PW` / `^LL` values below it typed in code are accepted. The 600 dpi (24 dots per mm) printheads of the guide are not among the app's resolutions (203, 300).
+- V9 `^PQ`, `^MD`, `^PR` and `^PM` are only checked on typed code (never drawn or written); `^CC` / `^CT` / `^CD` prefix changes are not validated.
 - V8 The local manual gives no range for BITMAP X, Y, width or height: 1..1250 bytes and 1..9999 dots are the code's safety limits (what a malformed header may allocate), not manual values. A negative position is refused / written as 0 without a manual statement; TSC v3.0 may define more.
 - V8 Modes 1 (OR) and 2 (XOR) are valid but drawn as overwrite (items are independent in the model); `DOWNLOAD`, `PUTBMP`, `PUTPNG` and files stored in the printer are not drawn. The TPCL / ZPL images converted to TSPL use the same emit (size limit and negative position are reported once).
 - V7 The ratio table of BARCODE (narrow : wide 1:1, 1:2, 1:3, 2:5 per type) is garbled in the extraction and gives no limit; the ratio of Code 39 / ITF / NW7 / 93 is not validated (the emit snaps to 1:2, 2:5 or 1:3 as before).
@@ -296,3 +329,4 @@ Expectation changes in existing tests: none (new file tests/tspl-image-validatio
 - V6 (route: delegated writer, one writer, direct; RED first: 11 of the 17 new tests failed on the old code): TSPL text (tests/tspl-text-validation.test.js, 17 tests). Verification: `node --test` 4140 tests, 4139 pass, 0 fail, 1 skipped (was 4123 / 4122 before; +17 new). Commit: see `git log` (fix: validate TSPL text values against the manual).
 - V7 (route: delegated writer, one writer, direct; RED first: 12 of the 15 new tests failed on the old code): TSPL barcodes, QRCODE and DMATRIX (tests/tspl-barcode-validation.test.js, 15 tests). Verification: `node --test` 4155 tests, 4154 pass, 0 fail, 1 skipped (was 4140 / 4139 before; +15 new). Commit: see `git log` (fix: validate TSPL barcode, QR and Data Matrix values against the manual).
 - V8 (route: delegated writer, one writer, direct; RED first: 9 of the 13 new tests failed on the old code): TSPL images (tests/tspl-image-validation.test.js, 13 tests). Verification: `node --test` 4168 tests, 4167 pass, 0 fail, 1 skipped (was 4155 / 4154 before; +13 new). Commit: see `git log` (fix: validate TSPL image values against the manual).
+- V9 (route: delegated writer, one writer, direct; RED first: 16 of the 23 new tests failed on the old code): ZPL label setup and shapes (tests/zpl-label-validation.test.js, 23 tests). Verification: `node --test` 4191 tests, 4190 pass, 0 fail, 1 skipped (was 4168 / 4167 before; +23 new). Commit: see `git log` (fix: validate ZPL label setup and shapes against the manuals).

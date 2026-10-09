@@ -160,7 +160,9 @@
       const opts = options();
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));
-      sizePanel.setLanguage(model.language, (languages.get(model.language) || {}).sizeLimits);
+      const sized = languages.get(model.language) || {};
+      // A language whose limits depend on the resolution (ZPL: dots) offers them for the one selected
+      sizePanel.setLanguage(model.language, sized.sizeLimitsFor ? sized.sizeLimitsFor(Number($('dpi').value)) : sized.sizeLimits);
       sizePanel.showArea(area);
       sizePanel.selectFor({ ...model.size, pitch: sizes.declaredPitch(model.size) });
       lastModel = model;
