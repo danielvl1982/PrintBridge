@@ -222,18 +222,17 @@ test('ZPL: editing the block of one field leaves the others and the other argume
 
 // ---- TPCL
 
-test('TPCL: the Tipo select offers only "Línea de texto", with a note that TPCL has no text block', () => {
+test('TPCL: the Tipo select offers the line and the block for a PC text, only the line (with a note) for a PV text', () => {
   const src = '{D0630,1000,0600|}{AX;+000,+000,+00|}{C|}{PC000;0100,0200,06,06,J,00,B|}{RC000;Hola|}{PV001;0100,0400,0100,0100,B,00,B|}{RV001;Hola|}';
   const model = tpcl.parse(src, { dpi: DPI });
-  for (const item of model.items) {
-    const d = tpcl.describeItem(item, src);
-    assert.equal(keys(d)[0], 'kind');
-    const kind = byKey(d, 'kind');
-    assert.deepEqual([kind.label, kind.type, kind.value], ['Tipo', 'select', 'line']);
-    assert.deepEqual(kind.options, [{ value: 'line', label: 'Línea de texto' }]);
-    assert.match(kind.note, /TPCL no tiene bloque de texto/);
-    assert.equal(tpcl.updateItem(src, item, { kind: 'block' }), src);
-  }
+  const [pc, pv] = model.items.map(item => byKey(tpcl.describeItem(item, src), 'kind'));
+  assert.deepEqual([pc.label, pc.type, pc.value], ['Tipo', 'select', 'line']);
+  assert.deepEqual(pc.options, [{ value: 'line', label: 'Línea de texto' }, { value: 'block', label: 'Bloque de texto' }]);
+  assert.equal(pc.note, undefined);
+  assert.deepEqual(pv.options, [{ value: 'line', label: 'Línea de texto' }]);
+  assert.equal(pv.note, 'Bloque de texto solo con fuente de mapa de bits (PC)');
+  assert.equal(tpcl.updateItem(src, model.items[1], { kind: 'block' }), src);
+  assert.match(tpcl.updateItem(src, model.items[0], { kind: 'block' }), /[{]PC000;0100,0200,06,06,J,00,B,P5[0-9]{9}[|][}]/);
 });
 
 // ---- the panel
@@ -256,15 +255,15 @@ test('the panel shows a one-option select disabled, with its note as text and to
     panel.show({
       kind: 'text',
       fields: [
-        { key: 'kind', label: 'Tipo', type: 'select', value: 'line', options: [{ value: 'line', label: 'Línea de texto' }], note: 'TPCL no tiene bloque de texto' },
+        { key: 'kind', label: 'Tipo', type: 'select', value: 'line', options: [{ value: 'line', label: 'Línea de texto' }], note: 'Bloque de texto solo con fuente de mapa de bits (PC)' },
         { key: 'other', label: 'Otro', type: 'select', value: 'a', options: [{ value: 'a', label: 'A' }, { value: 'b', label: 'B' }] },
       ],
     });
     const [single, pair] = els.form.children;
     const select = single.children[1];
     assert.equal(select.disabled, true);
-    assert.equal(select.title, 'TPCL no tiene bloque de texto');
-    assert.equal(single.children[2].textContent, 'TPCL no tiene bloque de texto');
+    assert.equal(select.title, 'Bloque de texto solo con fuente de mapa de bits (PC)');
+    assert.equal(single.children[2].textContent, 'Bloque de texto solo con fuente de mapa de bits (PC)');
     assert.equal(single.children[2].className, 'props-note');
     assert.notEqual(pair.children[1].disabled, true);
     assert.equal(pair.children.length, 2);

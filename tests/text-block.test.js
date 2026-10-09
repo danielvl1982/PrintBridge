@@ -330,13 +330,13 @@ test('ZPL emit: justify is written J, a block without lines gets the wrapped cou
   assert.ok(levelsOf(r, 'info').some(t => /contador/.test(t)));
 });
 
-test('TPCL emit: a block is one line of text with ONE warning that TPCL has no text block; the breaks become spaces', () => {
+test('TPCL emit: a block whose font is vector-only (PV) is one line of text with ONE warning that the block needs a bitmap font; the breaks become spaces', () => {
   const model = zpl.parse('^XA^FO50,100^A0N,30,30^FB300,3,0,L^FDone\\&two^FS^XZ', { dpi: 203 });
   model.items.push({ ...zpl.parse('^XA^FO50,300^A0N,30,30^FB300,3,0,L^FDthree^FS^XZ', { dpi: 203 }).items[0] });
   const out = emit('tpcl', model);
   const warnings = levelsOf(out, 'warning').filter(t => /bloque/.test(t));
   assert.equal(warnings.length, 1);
-  assert.match(warnings[0], /TPCL no tiene bloque de texto/);
+  assert.match(warnings[0], /necesita una fuente de mapa de bits [(]PC[)]/);
   assert.match(out.text, /one two/);
   assert.ok(!/saltos de línea/.test(levelsOf(out, 'warning').join('|')));
   const back = PB.languages.get('tpcl').parse(out.text, { dpi: 203 });
@@ -361,7 +361,7 @@ test('TSPL <-> ZPL carry the block: width, lines, alignment, line space and the 
   near(c.block.width, a.block.width, 0.7);
 });
 
-test('a block converted to TPCL warns once and reads back as a line', () => {
-  const r = convert('SIZE 100 mm,60 mm\r\nBLOCK 40,60,300,100,"3",0,1,1,"alpha beta"\r\nPRINT 1,1\r\n', 'tpcl', 'tspl');
-  assert.equal(r.diagnostics.filter(d => /TPCL no tiene bloque de texto/.test(d.text)).length, 1);
+test('a block with a vector-only font converted to TPCL warns once and reads back as a line', () => {
+  const r = convert('SIZE 100 mm,60 mm\r\nBLOCK 40,60,300,100,"1",0,1,1,"alpha beta"\r\nPRINT 1,1\r\n', 'tpcl', 'tspl');
+  assert.equal(r.diagnostics.filter(d => /necesita una fuente de mapa de bits [(]PC[)]/.test(d.text)).length, 1);
 });
