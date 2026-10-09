@@ -368,10 +368,12 @@
   /** Largest width or height (dots) of an SG command: its fields have 4 digits. */
   const MAX_SG_DOTS = 9999;
 
-  /** The bytes of the label in the editor as Descargar writes them (PB.convert.toBytes in the label's own language); throws a Spanish Error when there is nothing to print. */
+  /** The bytes of the label in the editor as Descargar writes them (PB.convert.toBytes in the label's own language) with the assigned variables replaced; throws a Spanish Error when there is nothing to print. */
   function labelBytes() {
-    const text = editor.text();
-    if (text.trim() === '') throw new Error('No hay etiqueta que imprimir: el editor está vacío');
+    const source = editor.text();
+    if (source.trim() === '') throw new Error('No hay etiqueta que imprimir: el editor está vacío');
+    // The variables that have an assigned value (Variables panel or the label's own defaults) are replaced; the others are sent as written
+    const text = variables.substitute(source, variables.assigned(state.values));
     const language = PB.languages.detect(text);
     if (!language) throw new Error('No se reconoce el lenguaje de impresión de la etiqueta');
     return PB.convert.toBytes(text, language.id);

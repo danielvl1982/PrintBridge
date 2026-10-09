@@ -269,7 +269,7 @@ It needs Windows and [Node.js](https://nodejs.org) LTS, has no dependencies and 
 3. In the app, open the **Impresión** panel: it shows "Agente conectado", the printers of the PC (the Windows default one is preselected, and the last one you chose is remembered), the **Copias** and **Imprimir**.
    **Agente** is the address of the agent (default `http://127.0.0.1:9631`) and **Reintentar** checks it again.
 
-**Imprimir** sends the label in the **Código de etiqueta** box in its own language, with the bytes that saving it as a file would write (TSPL `BITMAP` data included).
+**Imprimir** sends the label in the **Código de etiqueta** box in its own language, with the bytes that saving it as a file would write (TSPL `BITMAP` data included). The variables (`#NAME#`) that have an assigned value in the **Variables** panel (or a default of the label itself, as `^FN` data in ZPL) are replaced by it; a variable that still shows only its own name, i.e. without a value, is sent as written.
 Several copies are sent as one print job. If the agent is not running the panel says so and **Descargar** (panel **Convertir a…**) stays as the alternative.
 Chrome asks once for permission to access the local network: allow it. **Nothing has been verified on a real printer yet**: try one label first.
 Requirements, configuration, allowed origins, security notes and troubleshooting: [agent/README.md](agent/README.md).
