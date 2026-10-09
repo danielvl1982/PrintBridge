@@ -393,7 +393,7 @@ test('the viewer draws a reverse text in white blended with difference and keeps
 // The example label
 
 test('the ZPL example is a plausible label that parses without diagnostics and draws text of several fonts, a rotated one and a reverse one', () => {
-  const example = PB.examples.find(e => e.language === 'zpl');
+  const example = PB.examples.find(e => e.id === 'zpl-label-100x60');
   assert.ok(example, 'there is a ZPL example');
   assert.equal(PB.examples.filter(e => e.id === example.id).length, 1);
   assert.match(example.source, /^\^XA\r?\n/);

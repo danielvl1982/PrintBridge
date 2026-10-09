@@ -33,7 +33,7 @@
   'use strict';
 
   /** Sections of the combo: example group id -> header. */
-  const GROUPS = Object.freeze([['blank', 'En blanco'], ['basic', 'Básicos'], ['full', 'Ejemplos completos']]);
+  const GROUPS = Object.freeze([['blank', 'En blanco'], ['template', 'Plantillas']]);
 
   function createExamplePicker(select, examples, { onPick }) {
     const option = (value, textContent) => Object.assign(document.createElement('option'), { value, textContent });

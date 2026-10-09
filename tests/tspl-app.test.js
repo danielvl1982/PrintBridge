@@ -73,7 +73,7 @@ test('decodeFile handles large binary payloads (chunked latin1)', () => {
 });
 
 test('the TSPL example is in the example list and parses without warnings or errors', () => {
-  const example = PB.examples.find(e => e.language === 'tspl');
+  const example = PB.examples.find(e => e.id === 'tspl-label-100x60');
   assert.ok(example, 'a TSPL example exists');
   assert.equal(PB.examples.filter(e => e.id === example.id).length, 1);
   assert.equal(PB.languages.detect(example.source).id, 'tspl');

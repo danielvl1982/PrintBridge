@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadUpTo } = require('./helpers/load');
 
 const PB = loadUpTo('js/languages/tpcl.js');
-const example = PB.examples[0];
+const example = PB.examples.find(e => e.id === 'spool-99x55');
 const tpcl = PB.languages.get('tpcl');
 
 const BARCODE = '{XB02;0100,0200,9,0,03,0,0100,0,000,1,00|}{RB02;>8AB>8CD|}';

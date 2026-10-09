@@ -8,6 +8,7 @@ const path = require('node:path');
 const vm = require('node:vm');
 
 const ROOT = path.join(__dirname, '..', '..');
+const LEGACY_EXAMPLES = require('./legacy-examples.js');
 const DOM_FILES = ['js/ui.js', 'js/app.js'];
 
 /** The ordered list of every script, as in index.html. */
@@ -18,8 +19,19 @@ function manifest() {
 function load(files) {
   for (const file of files) {
     vm.runInThisContext(fs.readFileSync(path.join(ROOT, file), 'utf8'), { filename: file });
+    // The complete sample labels are a test fixture, not part of the shipped app: append them after js/config.js
+    if (file === 'js/config.js') {
+      globalThis.PrintBridge.examples = Object.freeze([...globalThis.PrintBridge.examples, ...LEGACY_EXAMPLES]);
+    }
   }
   return globalThis.PrintBridge;
+}
+
+/** The examples the app ships: js/config.js alone, in a fresh context, without the fixture that load() appends. */
+function shippedExamples() {
+  const context = vm.createContext({});
+  vm.runInContext(fs.readFileSync(path.join(ROOT, 'js', 'config.js'), 'utf8'), context, { filename: 'js/config.js' });
+  return context.PrintBridge.examples;
 }
 
 /** Loads the manifest files in order up to and including `file`. */
@@ -35,4 +47,4 @@ function loadApp() {
   return load(manifest().filter((file) => !DOM_FILES.includes(file)));
 }
 
-module.exports = { load, manifest, loadUpTo, loadApp };
+module.exports = { LEGACY_EXAMPLES, shippedExamples, load, manifest, loadUpTo, loadApp };

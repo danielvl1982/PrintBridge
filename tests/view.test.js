@@ -51,7 +51,7 @@ test('rotation: transformFor matches rotate (SVG matrix) and an invalid angle th
 });
 
 // --- Drawing with rotation (drawing.js does not touch the DOM) ---
-const example = PB.examples[0];
+const example = PB.examples.find(e => e.id === 'spool-99x55');
 const tpcl = PB.languages.get('tpcl');
 const draw = rotation => {
   const model = tpcl.parse(example.source, { dpi: 203 });

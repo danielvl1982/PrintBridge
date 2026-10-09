@@ -16,7 +16,7 @@ Want to help? See [CONTRIBUTING.md](CONTRIBUTING.md). The development plan and i
 
 Use the [live app](https://danielvl1982.github.io/PrintBridge/), or double-click **`index.html`** to run it locally. It opens in
 the browser, nothing needs to be installed and it works without internet. It stores nothing: every time it is opened it starts
-from scratch with the example label.
+from scratch with the TPCL template label.
 
 **Always copy the whole folder**: `index.html` needs the `css` and `js` folders next to it.
 
@@ -25,7 +25,7 @@ from scratch with the example label.
 | `index.html` | The page structure |
 | `css/viewer.css` | Look of the page: toolbars, panels and messages |
 | `css/label.css` | Look of the label drawing: colors, grid and typefaces |
-| `js/config.js` | Known label sizes and the example labels (a blank template and a basic example per language, plus four complete examples) |
+| `js/config.js` | Known label sizes and the example labels (a blank template and a ready-made template per language) |
 | `js/manifest.json` | Ordered list of every script (same order as `index.html`; the tests load from it) |
 | `js/core/` | Part common to all languages, one file per module: diagnostics, units, sources, variables, language registry, validation and sizes |
 | `js/core/emit.js` | Shared helpers of the emitters (dots, escaping, id numbering, diagnostics) and the driver that calls each item's slice `emit` |
@@ -56,10 +56,9 @@ Any of these ways:
 - Paste the label content into the **Código de etiqueta** box.
 - Drag the file (`.ter`, `.txt`, `.zpl`, `.prn`, `.tspl` or `.tpcl`) onto that box.
 - **Abrir archivo…** button.
-- **Ejemplo** combo: choosing an entry loads a label, grouped in three sections.
+- **Ejemplo** combo: choosing an entry loads a label, grouped in two sections.
   - **En blanco:** one empty 100×60 mm template per language (TPCL, TSPL and ZPL), header only. It sets the language and the label size, so the **Componentes** palette inserts commands of that language.
-  - **Básicos:** the same 100×60 mm label in TPCL, TSPL and ZPL (a frame, a title, three lines with variables, a line, a Code128 bar code and a QR), with sample data for its variables. It is also a handy way to compare the three languages.
-  - **Ejemplos completos:** four labels with sample data: the reference 99×55 spool label (TPCL), a barcode example (TPCL), a 100×60 TSPL label and a 100×60 ZPL label.
+  - **Plantillas:** the same 100×60 mm label in TPCL, TSPL and ZPL (a frame, a title, three lines with variables, a line, a Code128 bar code and a QR), with sample data for its variables. It is also a handy way to compare the three languages.
 
 The drawing updates immediately while typing in the code, so coordinates and sizes can be tried directly.
 
@@ -325,7 +324,7 @@ The language is detected from the text (no selector): a label with a `^XA` forma
 - **Setup read:** `^LH`, `^LS` and `^LT` move every later field, `^FW` (default orientation), `^CF` (default font), `^BY` and `^CI` are kept for the components. `^POI` (label printed rotated 180°) is reported and not applied. Printer configuration commands (`^MM`, `^MN`, `^MT`, `^PR`, `~SD`, `^MD`, `^PQ`...) are recognised and not drawn (one information message per label); a command the viewer does not know is one warning each.
 - **Several formats** (`^XA` ... `^XZ`) in one file: the viewer shows the first one and says how many there are.
 - **Fields:** a field is `^FO` / `^FT` ... `^FS`; `^FD` data may carry `^` and `~` through the `^FH` hex escapes (`_5E`, `_7E`). `^CC` / `^CT` / `^CD` prefix and delimiter changes are read. `^FO` is the top-left corner and `^FT` the origin of the baseline (text), the base of the bars (barcodes) or the bottom-left corner (shapes, images, 2D symbols); the orientation `N R I B` is 0 / 90 / 180 / 270° clockwise and `^FW` is the default.
-- **Components panel:** *Texto*, *Código de barras*, *QR*, *Data Matrix*, *Línea*, *Caja*, *Elipse*, *Círculo*, *Área invertida* and *Imagen* (what each writes is listed under its heading below). The **ZPL example** of **Ejemplo** shows several fonts, a rotated text and a reverse one.
+- **Components panel:** *Texto*, *Código de barras*, *QR*, *Data Matrix*, *Línea*, *Caja*, *Elipse*, *Círculo*, *Área invertida* and *Imagen* (what each writes is listed under its heading below). The **Plantilla — ZPL** of **Ejemplo** is a ready-made ZPL label to start from.
 
 ### Text
 
