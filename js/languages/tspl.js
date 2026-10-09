@@ -247,6 +247,11 @@
     ctx.report(diag.warning(`${where}: el contador @${n} no existe, la impresora solo tiene @0 a @${COUNTER_SLOTS - 1}`));
   }
 
+  /** Parse side: every "@n" reference of a content argument goes through counterNumberWarning (barcode, QR, Data Matrix). */
+  function counterRefsWarning(ctx, where, arg) {
+    for (const m of arg.raw.matchAll(/(?:^|\+)\s*@(\d+)/g)) counterNumberWarning(ctx, where, Number(m[1]));
+  }
+
   // ---------------------------------------------------------------------------------------------------------------
   // Helpers of the palette `build` hooks
 
@@ -272,7 +277,7 @@
   /** Helpers the slices' TSPL hooks share with this file. Passed once to each slice's `languages.tspl` factory. */
   const SLICE_HELPERS = Object.freeze({
     sourceOf, argValue, num, int, unquote, parseLength, ROTATIONS, INCH,
-    quoted, roundDots, exactDots, toDots, safeData, counterSetup, counterNumberWarning,
+    quoted, roundDots, exactDots, toDots, safeData, counterSetup, counterNumberWarning, counterRefsWarning,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     numberField: PB.tsplEdit.numberField, selectField: PB.tsplEdit.selectField, stringSelectField: PB.tsplEdit.stringSelectField, textField: PB.tsplEdit.textField,
   });

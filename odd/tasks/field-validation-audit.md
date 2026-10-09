@@ -32,7 +32,7 @@ TPCL (manuals: docs/tpcl)
 TSPL (manual: docs/tspl)
 - [x] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
 - [x] V6 TSPL text: `TEXT`, `BLOCK`, fonts, multipliers, rotation, `SET COUNTER` / `@` variables
-- [ ] V7 TSPL barcodes, `QRCODE`, `DMATRIX`
+- [x] V7 TSPL barcodes, `QRCODE`, `DMATRIX`
 - [ ] V8 TSPL images (`BITMAP`)
 ZPL (manuals: docs/zpl vol 1 and 2)
 - [ ] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
@@ -202,7 +202,37 @@ Manual: B-442/443 (docs/tspl); `TEXT` at text lines 1190-1245, `SET COUNTER` at 
 Other changes: `PB.languages` TSPL helpers gain `counterNumberWarning` (shared with the barcode slice in V7); `multiplier()` of the TSPL text slice returns the value to draw and the one written.
 Expectation changes in existing tests: none (one new file, tests/tspl-text-validation.test.js).
 
+### V7 TSPL barcodes, QRCODE, DMATRIX
+Manual: B-442/443 (docs/tspl); `BARCODE` at text lines 735-840 (type list 700-760, ratio table 800+), `DMATRIX` 918-939. `QRCODE` is not in the local manual (TSC v3.0 only); its ranges are the ones the code already had. Counters 3116-3150.
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `BARCODE` x, y | dots, no range (740) | move fields (unchanged) | whole dots (already) | unchanged |
+| code type | 128, 128M, EAN128, 25, 25C, 39, 39C, 93, EAN13 / EAN8 / UPCA / UPCE (+2 / +5), CODA, POST (755-785) | select of the nine symbologies with their check options (only valid TSPL types, already) | unsupported symbologies (MSI, 2 of 5, ...) skipped with a warning (already) | unknown type drawn approximately and warned by the slice validator (already) |
+| height | dots, no range | 1..9999 (convenience, Open) | 0 was clamped to 1 silently / reported once | 0 or negative refused (already); a fraction was drawn as written / warning, drawn as the nearest whole dot count |
+| human readable | 0 / 1 (790); 2 / 3 left / center / right are v3.0, kept (widest) | select 0..3 (already) | 1 or 0 (already) | any other value silently meant "not readable" / warning with 0 a 3 |
+| rotation | 0, 90, 180, 270 (795) | select (already) | nearest quarter turn + warning (already) | warned / the warning now lists the four values |
+| narrow | dots (800) | 1..10 (convenience, Open) | clamped to 1 silently / reported once | 0 or negative: "se usa 2" (already); a fraction drawn as written / warning, drawn rounded |
+| wide | dots; ratios 1:2, 1:3, 2:5 per type (table 800-830, garbled by the extraction) | 1..9999 for Code 39, ITF, NW7 | nearest manual ratio (already) | 0, negative, text or a fraction silently became 3 x narrow / warning, drawn as the nearest valid (or 3 x narrow) |
+| content | no length given (840) | content field | data of EAN / UPC / Code 93 / NW7 reported (already) / also Code 39, ITF and Code 128 (ASCII 0-127) | encoder warnings (already) |
+| arguments | 9, or 10 with the alignment | - | - | an 11th and later argument was ignored silently / warning |
+| counter `@n` in the content | n 0..49 (3116) | - | beyond 50 counters written as text (already) | `@50` and above in a barcode content silently / warning with "@0 a @49" (same helper as TEXT) |
+| `QRCODE` ECC | L, M, Q, H (v3.0) | select (already) | unknown -> M + warning (already) | unknown level was an info / warning naming L, M, Q o H |
+| QR cell width | whole dots, 1..10 in the code (v3.0, Open) | 1..10 (already) | clamped to 1..10 + warning (already) | 14 drawn as 14, 3.6 as 3.6 / warning, drawn as the nearest whole 1..10, native keeps the text |
+| QR mode, rotation | A / M, 0 / 90 / 180 / 270 | select (already) | A, 0 (already) | warned (already) |
+| QR model M, mask S, justification J | model 1 or 2, mask 0..8, J 1..9 (code, v3.0) | not offered | never written | out-of-range ignored silently, unknown letters ignored silently / warning for each |
+| `DMATRIX` x, y, width, height | dots, no range (926) | width / height 1..9999 (convenience) | whole dots (already) | non positive refused (already) |
+| DMATRIX module xm | dots (934) | 1..99 (convenience) | >= 1 (already) | 0 or negative warned (already); a fraction / warning, drawn rounded |
+| DMATRIX rows, columns | no range given; the viewer draws the square ECC200 sizes 10..144 | select of the table sizes | only table sizes (already) | other sizes warned with the 10..144 range (already) |
+
+Other changes: `PB.languages` TSPL helpers gain `counterRefsWarning` (every `@n` of a content argument through `counterNumberWarning`, used by the three slices); Code 39 / ITF / Code 128 data checks of the emit use the same encoders as the other symbologies (no TPCL code shared).
+Expectation changes in existing tests: tests/qr-tspl.test.js (an unknown optional parameter such as Q9 is now reported); new file tests/tspl-barcode-validation.test.js.
+
 ## Open (manuals silent or contradictory; kept as is)
+- V7 The ratio table of BARCODE (narrow : wide 1:1, 1:2, 1:3, 2:5 per type) is garbled in the extraction and gives no limit; the ratio of Code 39 / ITF / NW7 / 93 is not validated (the emit snaps to 1:2, 2:5 or 1:3 as before).
+- V7 Height, narrow and wide have no maximum in the local manual; the 9999 / 10 limits of the properties panel are conveniences. Human readable 2 and 3, the alignment argument, 39S / ITF14 / EAN14 and 128M / EAN128 details are v3.0 only.
+- V7 QRCODE is v3.0 only: cell 1..10, model 1 / 2, mask 0..8 and justification 1..9 are the ranges the code already had, not verified against a manual; X and L (area, length) are not validated. The viewer ignores the rotation of QR codes.
+- V7 DMATRIX: the manual gives no range for width, height, module, rows or columns, nor how a symbol is placed in the area; rectangular symbols are not modelled. A type switch in the panel cannot report data that does not fit the new type (the next parse does).
 - V6 The local manual says TEXT multipliers are 1~8; the code keeps 1..10 (TSC v3.0 range, which is not local). A bitmap multiplier of 9 or 10 is therefore not warned although the B-442/443 prints at most 8x.
 - V6 Fonts 0, 6, 7, 8 and ROMAN.TTF, BLOCK (all arguments, alignment, fit, space), the TEXT alignment argument and the scalable font size limits are v3.0 only: validated as "positive number" only; the 200 pt panel limit is a convenience. The `.BF2` Asian fonts of the local manual are drawn with a sans font (info).
 - V6 CR / LF in TEXT content are written as spaces; the manual's `\[R]` / `\[L]` escapes are read literally by TEXT (only BLOCK turns them into breaks). Content length: no limit in the manual.
@@ -246,3 +276,4 @@ Expectation changes in existing tests: none (one new file, tests/tspl-text-valid
 - V4 (route: delegated writer, one writer, direct; RED first: 15 of the 16 new tests failed on the old code): TPCL images (tests/tpcl-image-validation.test.js, 16 tests). Verification: `node --test` 4100 tests, 4099 pass, 0 fail, 1 skipped (was 4084 / 4083 before; +16 new). Commit: see `git log` (fix: validate TPCL image values against the manuals).
 - V5 (route: delegated writer, one writer, direct; RED first: 20 of the 23 new tests failed on the old code): TSPL label setup and shapes (tests/tspl-label-validation.test.js, 23 tests). Verification: `node --test` 4123 tests, 4122 pass, 0 fail, 1 skipped (was 4100 / 4099 before; +23 new). Commit: see `git log` (fix: validate TSPL label setup and shape values against the manual).
 - V6 (route: delegated writer, one writer, direct; RED first: 11 of the 17 new tests failed on the old code): TSPL text (tests/tspl-text-validation.test.js, 17 tests). Verification: `node --test` 4140 tests, 4139 pass, 0 fail, 1 skipped (was 4123 / 4122 before; +17 new). Commit: see `git log` (fix: validate TSPL text values against the manual).
+- V7 (route: delegated writer, one writer, direct; RED first: 12 of the 15 new tests failed on the old code): TSPL barcodes, QRCODE and DMATRIX (tests/tspl-barcode-validation.test.js, 15 tests). Verification: `node --test` 4155 tests, 4154 pass, 0 fail, 1 skipped (was 4140 / 4139 before; +15 new). Commit: see `git log` (fix: validate TSPL barcode, QR and Data Matrix values against the manual).
