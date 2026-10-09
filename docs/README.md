@@ -26,6 +26,7 @@ The code follows the *TSC TSPL/TSPL2 Programming Manual v3.0*; if you find it, s
 | File | Printer / scope | Why it is here |
 |---|---|---|
 | `Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` | Zebra ZPL II, Programming Guide Volume One (English, 428 pages, 2003) | Reference for the ZPL support: label setup (`^XA`, `^PW`, `^LL`, `^LH`), fields (`^FO`, `^FT`, `^FD`, `^FS`), text (`^A`, `^CF`, `^FW`, `^FH`), barcodes (`^B*`), graphics (`^GB`, `^GC`, `^GD`, `^GE`, `^GF`), reverse (`^FR`, `^LR`), counters (`^SN`) and variable fields (`^FN`). |
+| `Zebra_ZPL-II_programming-guide-vol-2_2005.pdf` | Zebra ZPL II, Programming Guide Volume Two (English, 132 pages, part 45542L-002 Rev. A, 2005) | What Volume One lacks: the **font matrices** per printhead (6 / 8 / 12 / 24 dots per mm, fonts A..H, GS, P..V and 0), the alternative compression for `~DG` / `~DB`, ZB64 (B64 / Z64) encoding and compression, and the bar code overview. |
 
 ## Left out on purpose
 
