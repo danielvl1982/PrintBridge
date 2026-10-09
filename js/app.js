@@ -71,6 +71,9 @@
   // "Convertir a...": converts what the editor holds at the resolution the app parses with; downloads are named after the opened file (or the example)
   ui.createConvertPanel({ root: $('convert'), getText: () => editor.text(), getDpi: () => Number($('dpi').value), getSourceName: () => state.fileName });
 
+  // "Impresión": sends to the local print agent the same bytes that Descargar writes for the label in the editor (its own language)
+  ui.createPrintPanel({ root: $('print'), getBytes: labelBytes });
+
   // Collapsible sections: after every title is rendered (the Convertir panel builds its own)
   ui.initCollapsible(document);
 
@@ -364,6 +367,15 @@
 
   /** Largest width or height (dots) of an SG command: its fields have 4 digits. */
   const MAX_SG_DOTS = 9999;
+
+  /** The bytes of the label in the editor as Descargar writes them (PB.convert.toBytes in the label's own language); throws a Spanish Error when there is nothing to print. */
+  function labelBytes() {
+    const text = editor.text();
+    if (text.trim() === '') throw new Error('No hay etiqueta que imprimir: el editor está vacío');
+    const language = PB.languages.detect(text);
+    if (!language) throw new Error('No se reconoce el lenguaje de impresión de la etiqueta');
+    return PB.convert.toBytes(text, language.id);
+  }
 
   /** Pause after the last change of a control before the preview is converted again. */
   const PREVIEW_DELAY_MS = 150;

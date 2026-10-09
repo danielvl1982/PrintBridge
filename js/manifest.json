@@ -89,6 +89,7 @@
   "js/properties.js",
   "js/ui.js",
   "js/convert-panel.js",
+  "js/print-panel.js",
   "js/collapse.js",
   "js/app.js"
 ]
