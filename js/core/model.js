@@ -12,7 +12,7 @@
  *     variables that have no test value yet, so a value typed by the user is never overwritten.
  *   - language: id of the language that parsed it (key of PB.languages).
  *   - size: { width, height, pitch, gap, native }. Measures in 0.1 mm (null if the label does not declare them);
- *     pitch = distance between labels, gap = separation between labels; tolerance? = the precision of width and height in 0.1 mm, when the
+ *     pitch = start of one label to the start of the next, gap = separation between labels; they are one value (pitch = height + gap) that the TPCL and TSPL parsers derive from each other when reading (gap null when it is 0); tolerance? = the precision of width and height in 0.1 mm, when the
  *     language declares whole dots (ZPL: one dot; absent = exact): the Formato row matches a standard size within it; native = language-specific data
  *     (TPCL: dRaw, axRaw; TSPL: sizeRaw, gapRaw...; ZPL: pw, ll (dots), pwRaw, llRaw, invert), which only that language interprets. ZPL sizes are
  *     whole dots rounded to 0.1 mm, pitch and gap are null (ZPL has neither).

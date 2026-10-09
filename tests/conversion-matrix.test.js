@@ -652,6 +652,12 @@ for (const dpi of DPIS) {
         near(A.size.height, B.size.height, dotOf(dpi) + 0.5) || assert.fail(`height ${A.size.height} -> ${B.size.height}`);
         // Only what the target has is written: ZPL has neither pitch nor gap, TPCL has the pitch, TSPL the gap
         if (to === 'zpl') assert.deepEqual([B.size.pitch, B.size.gap], [null, null]);
+        // pitch = height + gap: TPCL <-> TSPL carry it (within the 0.1 mm rounding), the target reads back both forms
+        if (from !== 'zpl' && to !== 'zpl' && A.size.gap != null) {
+          near(A.size.pitch, B.size.pitch, 1) || assert.fail(`pitch ${A.size.pitch} -> ${B.size.pitch}`);
+          near(A.size.gap, B.size.gap, 1) || assert.fail(`gap ${A.size.gap} -> ${B.size.gap}`);
+          assert.equal(result.diagnostics.filter(d => /paso de etiqueta|No se escribe GAP/.test(d.text)).length, 0, 'no word about the pitch / gap');
+        }
         // Nothing is lost without a word: the pitch or the gap of the source is reported once when the target cannot take it
         const lossInfos = result.diagnostics.filter(d => /paso de etiqueta|GAP/.test(d.text));
         if (to === 'zpl' && (A.size.pitch != null || A.size.gap != null)) assert.equal(result.diagnostics.filter(d => /ZPL solo declara el ancho y el largo/.test(d.text)).length, 1, 'ZPL: one info for the pitch / gap');

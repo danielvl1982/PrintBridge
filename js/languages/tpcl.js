@@ -44,6 +44,8 @@
       pattern: /^D(\d+),(\d+),(\d+)/,
       handle(m, cmd, ctx) {
         Object.assign(ctx.model.size, { pitch: +m[1], width: +m[2], height: +m[3] });
+        // pitch = height + gap: the gap is what the pitch leaves after the label
+        ctx.model.size.gap = +m[1] > +m[3] ? +m[1] - +m[3] : null;
         ctx.model.size.native.dRaw = cmd.raw;
       },
     },
@@ -280,14 +282,16 @@
     if (size.width == null || size.height == null) {
       ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe {D…|}, indique el tamaño antes de exportar'));
     } else {
-      const pitch = size.pitch ?? size.height;
+      // Pitch = height + gap: a label that only knows its gap (TSPL) still gets its pitch
+      const gap = Number.isFinite(size.gap) && size.gap > 0 ? size.gap : null;
+      const pitch = size.pitch ?? (gap == null ? size.height : size.height + gap);
       const m = native.dRaw && /^D(\d+),(\d+),(\d+)/.exec(native.dRaw);
       const unchanged = !!m && +m[1] === pitch && +m[2] === size.width && +m[3] === size.height;
       out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w: size.width, h: size.height })));
       const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : null;
       if (ax) out.push(wrap(ax));
       else ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
-      if (size.pitch == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
+      if (size.pitch == null && gap == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
     }
     if (native.direction === 0 || native.invert === true) {
       ctx.report(diag.info('La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora'));

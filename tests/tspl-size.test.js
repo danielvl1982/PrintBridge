@@ -84,9 +84,11 @@ test('round trip: the parser reads back the width and height and the gap (pitch 
       const model = tspl.parse(tspl.applySize(text, s));
       assert.equal(model.size.width, s.w);
       assert.equal(model.size.height, s.h);
-      // the TSPL parser reports the separation as `gap` and never derives a pitch (the conversion to TPCL relies on it)
-      assert.equal(model.size.pitch, null);
-      if (s.p > s.h) assert.equal(+(model.size.height + model.size.gap).toFixed(4), s.p);
+      // pitch = height + gap, derived when the label is read
+      if (s.p > s.h) {
+        assert.equal(+(model.size.height + model.size.gap).toFixed(4), s.p);
+        assert.equal(+model.size.pitch.toFixed(4), s.p);
+      }
     }
   }
   // no GAP written and none present: the separation is unknown

@@ -285,7 +285,9 @@ test('a TPCL label emitted as TSPL produces text lines and the expected warnings
   assert.ok(out.text.split('\r\n').filter(l => l.startsWith('TEXT ')).length > 0);
   assert.ok(out.diagnostics.some(d => d.level === 'info' && /fuentes TSPL/.test(d.text)));
   assert.ok(out.diagnostics.every(d => !/sin emisor/.test(d.text)));
-  assert.ok(out.diagnostics.some(d => d.level === 'info' && /separación/.test(d.text)));
+  // the pitch of the TPCL label (610 - 550) is carried as GAP 6 mm: nothing is said about the separation
+  assert.match(out.text, /^GAP 6 mm,0 mm$/m);
+  assert.ok(!out.diagnostics.some(d => /separación|GAP/.test(d.text)));
   const back = tspl.parse(out.text);
   assert.deepEqual(levels(back.diagnostics, 'error', 'warning'), []);
 });
