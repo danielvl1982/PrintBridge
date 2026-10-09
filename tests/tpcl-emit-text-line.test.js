@@ -80,7 +80,7 @@ test('PC keeps different horizontal and vertical magnifications', () => {
 
 test('serif italic matches the italic bitmap font F', () => {
   const font = { size: 12 * PB.units.UNITS_PER_POINT, scaleX: 1, family: 'serif', weight: 400, style: 'italic' };
-  assert.equal(body(model([text({ font })]))[0], '{PC00;0600,0075,10,10,F,00,B|}');
+  assert.equal(body(model([text({ font })]))[0], '{PC00;0600,0075,1,1,F,00,B|}');
 });
 
 test('outline fonts: a font that matches no bitmap font becomes PV + RV with width = size * scaleX', () => {

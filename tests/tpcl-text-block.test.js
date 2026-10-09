@@ -85,7 +85,7 @@ const emit = items => tpcl.emit(neutral(items), { dpi: DPI });
 
 test('emit: a block with a bitmap font is PC ...,P5aaaabbbcc (the model values in 0.1 mm), with the data in RC and the unit information', () => {
   const out = emit([textItem({ block: { width: 300, lines: 3, align: 'left', lineSpace: 20 } })]);
-  assert.match(out.text, /\{PC00;0100,0200,10,10,S,00,B,P5030002003\|\}\n\{RC00;alpha beta gamma\|\}/);
+  assert.match(out.text, /\{PC00;0100,0200,1,1,S,00,B,P5030002003\|\}\n\{RC00;alpha beta gamma\|\}/);
   assert.deepEqual(levels(out.diagnostics, 'warning'), []);
   assert.ok(levels(out.diagnostics, 'info').some(t => /interlineado.*0,1 mm.*1 mm/.test(t)));
 });
@@ -108,7 +108,7 @@ test('emit: a block has no alignment token; a centred one is written left with o
 
 test('emit: a rotated block keeps its P5 (the rotations 00, 11, 22, 33 keep the block); spacing and bold stay', () => {
   const out = emit([textItem({ rotation: 90, spacing: { value: 12, native: 3 }, bold: { h: 1, v: 1, native: { h: 1, v: 1 } }, block: { width: 300, lines: 2, align: 'left', lineSpace: 20 } })]);
-  assert.match(out.text, /\{PC00;0100,0200,10,10,S,\+03,11,B,J0101,P5030002002\|\}/);
+  assert.match(out.text, /\{PC00;0100,0200,1,1,S,\+03,11,B,J0101,P5030002002\|\}/);
 });
 
 test('emit: a block with a vector-only font (PV) is one line with ONE warning that says the block needs the bitmap font (PC)', () => {

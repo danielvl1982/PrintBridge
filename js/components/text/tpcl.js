@@ -17,8 +17,38 @@
 
   const { units, diagnostics: diag } = PB;
 
-  /** TPCL magnification: "08" -> 0.8 ; "14" -> 1.4 ; "1" -> 1. */
-  const magnification = s => (s.length >= 2 ? Number(s) / 10 : Number(s));
+  /**
+   * PC magnification (d, e) as the manuals define it (B-SV4 2004, B-452-R 2012, B-452-TS12 ES 2001): one digit 1..9 (whole), or two digits
+   * 05..09 (0.5..0.9, steps of 0.1) and from 1 up in steps of 0.5 (10, 15, 20 ... 95: second digit 0 or 5). Any other token (01..04, 11..14,
+   * 16..19, 21 ...) is not valid and the printer prints nothing for the field. Values are handled in tenths (5..95).
+   */
+  const MAGNIFICATIONS = Object.freeze([5, 6, 7, 8, 9, ...Array.from({ length: 18 }, (_, i) => 10 + i * 5)]);
+  const MAGNIFICATION_TOKEN = /^(?:[1-9]|0[5-9]|[1-9][05])$/;
+  const isValidMagnification = token => typeof token === 'string' && MAGNIFICATION_TOKEN.test(token);
+
+  /** Tenths of a token as written, valid or not: "08" -> 8 ; "14" -> 14 ; "1" -> 10. */
+  const tenthsOf = s => (s.length >= 2 ? Number(s) : Number(s) * 10);
+
+  /** Nearest valid magnification (tenths) to a value in tenths; on a tie the one closer to 1.0. A non-number is 1.0. */
+  function snapMagnification(tenths) {
+    if (!Number.isFinite(tenths)) return 10;
+    let best = MAGNIFICATIONS[0];
+    for (const candidate of MAGNIFICATIONS) {
+      const [d, bd] = [Math.abs(candidate - tenths), Math.abs(best - tenths)];
+      if (d < bd - 1e-9 || (Math.abs(d - bd) <= 1e-9 && Math.abs(candidate - 10) < Math.abs(best - 10))) best = candidate;
+    }
+    return best;
+  }
+
+  /** The only way a magnification is written: the token of the valid magnification nearest to `tenths` (whole numbers in one digit, the rest in two). */
+  function magnificationToken(tenths) {
+    const n = snapMagnification(tenths);
+    return n % 10 === 0 ? String(n / 10) : String(n).padStart(2, '0');
+  }
+
+  /** Magnification drawn for a token as written: the nearest valid one ("08" -> 0.8 ; "14" -> 1.5 ; "1" -> 1). */
+  const magnification = s => snapMagnification(tenthsOf(s)) / 10;
+
 
   /**
    * TEC bitmap fonts of the PC command: size in points, family, weight and style they are simulated with.
@@ -190,7 +220,19 @@
     };
   }
 
-  const FAMILY_NAMES = Object.freeze({ serif: 'Serif', sans: 'Sans', mono: 'Mono' });
+  /**
+   * Magnification field of a PC text (tenths): the token is written whole (`exact`) and only ever as a valid one (the nearest valid
+   * magnification to the value). The value read is the token's, in tenths ("1" = 10, "09" = 9, "14" = 14).
+   */
+  function magnificationField(key, label, group) {
+    return {
+      key, label, type: 'number', min: MAGNIFICATIONS[0], max: MAGNIFICATIONS[MAGNIFICATIONS.length - 1], step: 1, group, exact: true,
+      read: raw => (/^\d+$/.test(raw) ? tenthsOf(raw) : undefined),
+      write: v => (typeof v === 'number' && Number.isFinite(v) ? magnificationToken(v) : null),
+    };
+  }
+
+  const FAMILY_NAMES =Object.freeze({ serif: 'Serif', sans: 'Sans', mono: 'Mono' });
 
   /**
    * [letter, label] of each PC font for the panel, derived from BITMAP_FONTS: family, size in points and weight/style.
@@ -211,7 +253,7 @@
   /** Format options of a freshly inserted PV command; {rot2} is the 2-digit rotation code. */
   const VARIABLE = Object.freeze({ format: 'PV', data: 'RV', name: 'TEXTO', tail: '0060,0080,B,{rot2},B' });
 
-  /** How far (in 0.1 magnification steps) a model font may be from an exact PC font + magnifications to still be a PC. */
+  /** How far (in tenths of a magnification) a model font may be from an exact PC font + valid magnifications to still be a PC. */
   const MAGNIFICATION_TOLERANCE = 0.05;
 
   /** Fallback outline size (0.1 mm) for a text whose font has no usable size. */
@@ -219,8 +261,9 @@
 
   /**
    * PC font that draws a model font exactly: the entry of BITMAP_FONTS with the same family, weight and style whose
-   * magnifications (steps of 0.1, 1..99) reproduce its size and scaleX within MAGNIFICATION_TOLERANCE. Several fit:
-   * the one with the vertical magnification closest to 1. Null when none (the text becomes an outline PV).
+   * valid magnifications (MAGNIFICATIONS: 0.5..0.9, then 1..9.5 in steps of 0.5) reproduce its size and scaleX within MAGNIFICATION_TOLERANCE.
+   * Several fit: the one with the vertical magnification closest to 1. { letter, h, v } with h, v in tenths. Null when none (the text becomes
+   * an outline PV).
    */
   function bitmapChoice(font) {
     let best = null;
@@ -228,8 +271,7 @@
       if (family !== font.family || weight !== font.weight || style !== (font.style || 'normal')) continue;
       const v = (font.size / (points * units.UNITS_PER_POINT)) * 10;
       const h = v * font.scaleX;
-      const [vi, hi] = [Math.round(v), Math.round(h)];
-      if (vi < 1 || vi > 99 || hi < 1 || hi > 99) continue;
+      const [vi, hi] = [snapMagnification(v), snapMagnification(h)];
       if (Math.abs(v - vi) > MAGNIFICATION_TOLERANCE || Math.abs(h - hi) > MAGNIFICATION_TOLERANCE) continue;
       const distance = Math.abs(vi - 10);
       if (!best || distance < best.distance) best = { letter, h: hi, v: vi, distance };
@@ -239,8 +281,8 @@
 
   /**
    * PC font that stands for an outline (PV) font when the radio "Tipo de fuente" switches to the bitmap font: the PV font is always drawn sans bold
-   * (OUTLINE_FONT), so only the sans bold PC fonts compete; each is tried with the whole magnifications (1..99) closest to the size and the width of
-   * the item, and the one with the smallest relative error wins (the one nearest to 1.0 on a tie). { letter, h, v } with h, v the magnifications in 0.1.
+   * (OUTLINE_FONT), so only the sans bold PC fonts compete; each is tried with the valid magnifications closest to the size and the width of
+   * the item, and the one with the smallest relative error wins (the one nearest to 1.0 on a tie). { letter, h, v } with h, v the magnifications in tenths.
    */
   function nearestBitmap(font) {
     const size = Number.isFinite(font.size) && font.size > 0 ? font.size : DEFAULT_OUTLINE_SIZE;
@@ -250,7 +292,7 @@
       if (family !== OUTLINE_FONT.family || weight !== OUTLINE_FONT.weight || style !== 'normal') continue;
       const v = (size / (points * units.UNITS_PER_POINT)) * 10;
       const h = v * scaleX;
-      const [vi, hi] = [clampInt(v, 1, 99), clampInt(h, 1, 99)];
+      const [vi, hi] = [snapMagnification(v), snapMagnification(h)];
       const error = Math.abs(v - vi) / v + Math.abs(h - hi) / h;
       const distance = Math.abs(vi - 10);
       if (!best || error < best.error - 1e-9 || (Math.abs(error - best.error) <= 1e-9 && distance < best.distance)) best = { letter, h: hi, v: vi, error, distance };
@@ -576,8 +618,7 @@
       const align = block || (item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignToken(item.align.kind, item.align.width) : '');
       if (choice) {
         const id = allocId(ctx, 'PC');
-        const mag = n => String(n).padStart(2, '0');
-        return [wrap(`PC${id};${x},${y},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RC${id};${data}`)];
+        return [wrap(`PC${id};${x},${y},${magnificationToken(choice.h)},${magnificationToken(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RC${id};${data}`)];
       }
       if (item.bold) ctx.once('tpcl-bold-pv', () => diag.info('Hay textos en negrita (J) que se escriben con la fuente vectorial (PV), que no tiene ese parámetro: se escriben sin negrita'));
       // The outline font is always drawn sans bold: any other family, weight or style is lost
@@ -723,10 +764,9 @@
     function vectorToBitmap({ stripped, match: m }, item, id) {
       const at = i => m.indices[i];
       const choice = nearestBitmap(item.font);
-      const mag = n => String(n).padStart(2, '0');
       const coords = /^\{PV\d+;(\d+,\d+),/.exec(stripped)[1];
       const spacing = m[4] ? `${spacingToken(Number(m[4].slice(0, -1)), 'PC') ?? '+00'},` : '';
-      return `{PC${id};${coords},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacing}${stripped.slice(at(5)[0], at(6)[1])}${stripped.slice(at(6)[1])}`;
+      return `{PC${id};${coords},${magnificationToken(choice.h)},${magnificationToken(choice.v)},${choice.letter},${spacing}${stripped.slice(at(5)[0], at(6)[1])}${stripped.slice(at(6)[1])}`;
     }
 
     /**
@@ -833,8 +873,8 @@
             fontTypeField,
             bitmapKindField,
             ...blockFields(10),
-            numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
-            numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
+            magnificationField('hMag', 'Ampliación horizontal (×0,1)', 1),
+            magnificationField('vMag', 'Ampliación vertical (×0,1)', 2),
             rotationField(5),
             fontField(3, BITMAP_FONT_OPTIONS),
             spacingField(4, 'PC'),
@@ -848,5 +888,6 @@
     };
   }
 
-  PB.slices.text.tpcl = tpcl;
+  // The magnification rule, for the tests and the other TPCL code
+  PB.slices.text.tpcl = Object.assign(tpcl, { isValidMagnification, magnificationToken, MAGNIFICATIONS });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

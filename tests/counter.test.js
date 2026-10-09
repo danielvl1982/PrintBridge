@@ -169,7 +169,7 @@ test('round trip: text and barcodes keep their counters and their zero suppressi
     assert.equal(items[i].zeroSuppress, item.zeroSuppress, `item ${i}`);
     assert.equal(items[i].data, item.data, `item ${i}`);
   });
-  assert.match(out.text, /\{PC00;0100,0200,10,05,J,00,B,J0102,\+0000000010,Z05,P2\|\}/);
+  assert.match(out.text, /\{PC00;0100,0200,1,05,J,00,B,J0102,\+0000000010,Z05,P2\|\}/);
   assert.match(out.text, /\{PV00;0100,0200,0060,0080,B,00,B,-0000000003,Z02\|\}/);
   assert.match(out.text, /,0100,\+0000000001,000,1,05\|\}/);
   assert.match(out.text, /,0080,-0000000007,1,03\|\}/);
@@ -178,7 +178,7 @@ test('round trip: text and barcodes keep their counters and their zero suppressi
 test('round trip: items without counters write exactly what they wrote before (no new tokens)', () => {
   const { out } = roundTrip(`${pc()}\n${pv()}\n${XB128(',0,000,1,00')}\n${XB39(',1')}`);
   assert.doesNotMatch(out.text, /\+0000000|-0000000|Z\d\d/);
-  assert.match(out.text, /\{PC00;0100,0200,10,05,J,00,B\|\}/);
+  assert.match(out.text, /\{PC00;0100,0200,1,05,J,00,B\|\}/);
   assert.match(out.text, /,0100,0,000,1,00\|\}/);
   assert.match(out.text, /,0080,1\|\}/);
 });

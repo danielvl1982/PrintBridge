@@ -488,14 +488,13 @@ const RULES = [
   [/^text-counter-zero-suppress$/, [T2S, Z2S], deg(['zeroSuppress'], ZERO_TSPL)],
   [/^text-counter-zero-suppress$/, [T2Z], deg(['zeroSuppress'], ZERO_ZPL)],
   [/^text-zpl-reverse$/, [Z2T, Z2S], deg(['reverse'], REVERSE)],
-  // The ZPL font 0 of the neutral sans 100 is an outline (PV) font in TPCL (no block); the TSPL scalable font 0 happens to be a PC bitmap font
-  // at a magnification, so the block survives and only the line space 0 (TPCL's minimum is 010) moves
-  [/^text-block-breaks$/, [Z2T], deg(['block', 'data'], TPCL_BLOCK)],
+  // The ZPL and TSPL font 0 of the neutral sans 100 is an outline (PV) font in TPCL (no block): the TSPL one (28 pt) was H at 2.8 when the PC
+  // magnification took any tenth, but the printer only accepts 0.5 steps from 1 (2.5 or 3.0), which do not reproduce the size
+  [/^text-block-breaks$/, [Z2T, S2T], deg(['block', 'data'], TPCL_BLOCK)],
   [/^text-block(?!-bitmap)/, [Z2T], deg(['block'], TPCL_BLOCK)],
+  [/^text-block(?!-bitmap|-mono)/, [S2T], deg(['block'], TPCL_BLOCK)],
   // mono 100 is an outline font at 203 dpi but a PC font at 300 dpi
   [/^text-block-mono$/, [S2T], deg(['block'], /cuya fuente solo se escribe vectorial \(PV\)|fuera de los rangos de TPCL/, ['block.lineSpace'])],
-  [/^text-block-(center|right)$/, [S2T], both([], ['block.lineSpace', 'block.align'], [TPCL_BLOCK_RANGE, TPCL_BLOCK_ALIGN])],
-  [/^text-block(?!-bitmap|-line-space|-mono|-center|-right)/, [S2T], deg(['block.lineSpace'], TPCL_BLOCK_RANGE, ['data'])],
   // The breaks of the data become spaces in TPCL (its data has none), and the TPCL block has no alignment
   [/^text-block-bitmap-(center|right)$/, [S2T, Z2T], deg(['block.align'], TPCL_BLOCK_ALIGN)],
   [/^text-block-bitmap-justify$/, [Z2T], deg(['block.align'], TPCL_BLOCK_ALIGN)],

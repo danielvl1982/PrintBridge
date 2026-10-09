@@ -287,8 +287,9 @@ for (const dpi of [203, 300]) {
     const fourth = step(third.text, 'tspl', dpi);
     // first -> third: same items (kinds, data, positions, sizes) even though the family/weight may still change once
     assertSameLabel(first.model, third.model, dpi);
-    // from the second round on nothing changes at all
-    assert.equal(fourth.text, second.text);
+    // from the second round on nothing changes, except the y of a TEXT by one dot: the valid PC magnifications (0.5 steps from 1) round the font size
+    // more than the old tenths did, and the top of the cell is the baseline minus the ascent of that size
+    assertSameTspl(fourth.text, second.text, `second round at ${dpi} dpi`);
     assert.deepEqual(levels(third.diagnostics, 'warning', 'error'), []);
     assert.deepEqual(levels(fourth.diagnostics, 'warning', 'error'), []);
   });
