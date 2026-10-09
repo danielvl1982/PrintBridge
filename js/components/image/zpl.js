@@ -187,7 +187,7 @@
   const commaRows = rows => rows.map(row => row.replace(/(?:00)+$/, ',')).join('');
 
   /**
-   * ^GFA command (no origin) of a bitmap. Default: ASCII hex with the documented comma only. `compress: true`: the full scheme of the later guides, used only
+   * ^GFA command (no origin) of a bitmap. Default: ASCII hex with the documented comma only. `compress: true`: the full scheme of Volume Two (page 52), used only
    * when it is shorter than the plain hex (otherwise the comma form).
    */
   function graphicCommand(bm, options) {
