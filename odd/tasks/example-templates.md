@@ -35,3 +35,12 @@ The four existing examples stay as complete examples.
 - E2 125caff: createExamplePicker builds optgroups (En blanco, Básicos, Ejemplos completos). app.js needed no change: loadExample passes the language, so the palette follows it (verified in Chrome).
 - E3 bef1295: tests/example-templates.test.js (12 tests) + picker tests. Chrome probe: all 10 examples selectable, no JS errors; blank templates insert Texto / Código de barras / QR in their language. Screenshots: C:/Users/danielvl/AppData/Local/Temp/ui/tpl-<id>.png.
 - E4 (docs commit): README Ejemplo combo and config.js row, CONTRIBUTING Examples bullet. node --test: 3523 pass, 0 fail.
+
+## Follow-up (feat/templates-only)
+User: remove the "Ejemplos completos" from the combo, rename the "Básicos" to "Plantillas" (the "En blanco" group stays).
+- [x] F1 `PB.examples` (app) = 3 blank + 3 templates (ids `basic-*` renamed `template-*`, names "Plantilla — TPCL (TEC)" ...; group `template`;
+      the picker group header "Plantillas"). The 4 full examples (spool-99x55, barcodes-code39-itf-code128, tspl-label-100x60,
+      zpl-label-100x60) move out of js/config.js to a test-only fixture (tests/helpers/legacy-examples.js) that tests/helpers/load.js appends
+      to PB.examples, so the ~24 test files that use them as sample labels keep working unchanged. The app starts with the first template
+      (TPCL) instead of the spool label. Tests that asserted the picker contents / counts / groups are updated; README / CONTRIBUTING updated.
+- F1 0829392: PB.examples = 3 blank + 3 templates (ids template-*, group template, picker "Plantillas"); the four complete examples moved to tests/helpers/legacy-examples.js (appended by tests/helpers/load.js); app starts with the first template. node --test: 3524 pass, 0 fail. Chrome probe: combo 2 groups (3+3), start = TPCL template (8 items), all 6 load with no JS errors. Screenshots: C:/Users/danielvl/AppData/Local/Temp/ui/tpl-start.png, tpl2-<id>.png.
