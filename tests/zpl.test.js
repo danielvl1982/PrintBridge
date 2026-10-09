@@ -213,11 +213,13 @@ test('^FW sets the default orientation (a missing parameter is ignored, an inval
   assert.equal(run('^XA^FWQ^XZ').model.diagnostics.length, 1);
   const initial = run('^XA^XZ').ctx;
   assert.equal(initial.orientation, 'N');
-  assert.deepEqual(initial.font, { name: 'A', height: 9, width: 5 });
-  assert.deepEqual(run('^XA^CF0,70,93^XZ').ctx.font, { name: '0', height: 70, width: 93 });
+  assert.deepEqual(initial.font, { name: 'A', height: 9, width: 5, explicit: false });
+  assert.deepEqual(run('^XA^CF0,70,93^XZ').ctx.font, { name: '0', height: 70, width: 93, explicit: true });
   // only the height: the width becomes proportional (null); no value at all: the previous ones stay
-  assert.deepEqual(run('^XA^CFD,40^XZ').ctx.font, { name: 'D', height: 40, width: null });
-  assert.deepEqual(run('^XA^CFD,40^CF^XZ').ctx.font, { name: 'D', height: 40, width: null });
+  assert.deepEqual(run('^XA^CFD,40^XZ').ctx.font, { name: 'D', height: 40, width: null, explicit: true });
+  assert.deepEqual(run('^XA^CFD,40^CF^XZ').ctx.font, { name: 'D', height: 40, width: null, explicit: true });
+  // a ^CF with only the font letter gives no sizes (Volume Two, page 63 is about ^CF with sizes)
+  assert.deepEqual(run('^XA^CFD^XZ').ctx.font, { name: 'D', height: 9, width: 5, explicit: false });
   assert.deepEqual(initial.by, { module: 2, ratio: 3, height: 10 });
   assert.deepEqual(run('^XA^BY3,2.5,50^XZ').ctx.by, { module: 3, ratio: 2.5, height: 50 });
   assert.deepEqual(run('^XA^BY4^XZ').ctx.by, { module: 4, ratio: 3, height: 10 });

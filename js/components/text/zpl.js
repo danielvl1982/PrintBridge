@@ -116,12 +116,13 @@
 
   /**
    * The cell of a font for the h / w asked (dots, null = not given): { bitmap, height, width, advance, hMult, wMult } in dots. Neither given
-   * means the last ^CF values when the font is the default one, else the standard matrix / the guide's 15 x 12; only one given makes the
+   * means the last ^CF values when the font is the default one or the ^CF gave sizes (Volume Two, page 63: another font then "will be magnified
+   * using values for the ^CF height and width parameters"), else the standard matrix / the guide's 15 x 12; only one given makes the
    * other proportional (same magnification for the bitmapped fonts, same dots for the scalable one). dpi picks the matrix table.
    */
   function cellOf(name, h, w, cf, dpi) {
     let [height, width] = [positive(h), positive(w)];
-    if (height === null && width === null && cf && cf.name === name) [height, width] = [positive(cf.height), positive(cf.width)];
+    if (height === null && width === null && cf && (cf.name === name || cf.explicit)) [height, width] = [positive(cf.height), positive(cf.width)];
     const matrix = fontsOf(dpi)[name];
     if (matrix) {
       const [cellH, cellW, gap] = matrix;

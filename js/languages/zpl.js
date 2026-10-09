@@ -443,10 +443,12 @@
           return;
         }
         const f = ctx.font;
+        // explicit: a ^CF gave sizes, so an ^A of another font without sizes uses them (Volume Two, page 63); the power-up default A 9 x 5 does not
         ctx.font = {
           name: name === null ? f.name : name,
           height: h !== null ? h : w !== null ? null : f.height,
           width: w !== null ? w : h !== null ? null : f.width,
+          explicit: Boolean(f.explicit) || h !== null || w !== null,
         };
       },
     },
@@ -529,7 +531,7 @@
       get ls() { return offsets.ls; },
       get lt() { return offsets.lt; },
       orientation: 'N',
-      font: { name: 'A', height: 9, width: 5 },
+      font: { name: 'A', height: 9, width: 5, explicit: false },
       by: { module: 2, ratio: 3, height: 10 },
       charset: 0,
       invert: false,

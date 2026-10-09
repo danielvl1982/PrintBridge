@@ -113,3 +113,21 @@ test('the font select lists A..H, P..V and 0 (no GS), the label shows the 203 dp
   assert.equal(zpl.updateItem(text, a, { font: 'V' }, { dpi: 203 }), '^XA^FO10,10^AVN,9,5^FDx^FS^XZ');
   assert.equal(zpl.updateItem(text, a, { font: 'GS' }, { dpi: 203 }), text);
 });
+
+// Volume Two, printed page 63: "If a ^CF command, with height and width parameters defined, is used to set the first font, any ^A commands (to select a
+// different font) that follow must have the height and width parameter filled in. If this is not done, the newly selected font will be magnified using values
+// for the ^CF height and width parameters." (the example: ^CFD,26,10 then ^AA without sizes is drawn larger than the 9 x 5 matrix). Volume One says a
+// missing size is the standard matrix, which stays true when no ^CF gave sizes (the power-up default is A 9 x 5).
+test('page 63: an ^A without sizes uses the sizes of an explicit ^CF even for another font (the bitmapped one as the nearest multiple); without a ^CF it is the standard matrix', () => {
+  const a = item('^CFD,26,10^FO50,50^AAN^FDx^FS', 254);
+  assert.deepEqual([a.native.font, a.native.hMult, a.native.wMult, a.font.size], ['A', 3, 2, 27]);
+  const scalable = item('^CFD,26,10^FO50,50^A0N^FDx^FS', 254);
+  assert.deepEqual([scalable.font.size, scalable.font.scaleX * scalable.font.size], [26, 10]);
+  // the font of the ^CF itself keeps working, and a ^A with its own sizes ignores the ^CF
+  assert.deepEqual([item('^CFD,26,10^FO50,50^FDx^FS', 254).native.hMult, item('^CFD,26,10^FO50,50^AAN,9,5^FDx^FS', 254).native.hMult], [1, 1]);
+  // only a height in the ^CF: the other font gets the proportional magnification of that height
+  assert.deepEqual([item('^CFD,36^FO50,50^AAN^FDx^FS', 254).native.hMult, item('^CFD,36^FO50,50^AAN^FDx^FS', 254).native.wMult], [4, 4]);
+  // no ^CF: the standard matrix of the font; the power-up default 9 x 5 is not an explicit ^CF
+  assert.deepEqual([item('^FO50,50^ABN^FDx^FS', 254).native.hMult, item('^FO50,50^AGN^FDx^FS', 254).native.hMult], [1, 1]);
+  assert.deepEqual([item('^FO50,50^A0N^FDx^FS', 254).font.size], [15]);
+});
