@@ -387,9 +387,10 @@ test('imageCommand: only the syntax of the 2003 guide is written (hex digits A-F
   }
 });
 
-test('imageCommand: a comma decimal is accepted, an empty or invalid position is 0, a negative one never goes below 0', () => {
+test('imageCommand: a comma decimal is accepted, an empty or invalid position is 0, a negative one is refused (V12)', () => {
   assert.match(zpl.imageCommand({ xMm: '2,5', yMm: '', ...M, dpi: 203 }), /^\^FO20,0\^GFA/);
-  assert.match(zpl.imageCommand({ xMm: 'abc', yMm: '-3', ...M, dpi: 203 }), /^\^FO0,0\^GFA/);
+  assert.match(zpl.imageCommand({ xMm: 'abc', yMm: '', ...M, dpi: 203 }), /^\^FO0,0\^GFA/);
+  assert.throws(() => zpl.imageCommand({ xMm: 'abc', yMm: '-3', ...M, dpi: 203 }), /posición Y/);
 });
 
 test('imageCommand: a bitmap over 99999 bytes throws an Error in Spanish; exactly 99999 is accepted', () => {

@@ -1064,14 +1064,19 @@
     const image = PB.slices.image.zpl;
     const bitmap = { w, h, data };
     if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    if (!data || data.length !== w * h) throw new Error(`los datos de la imagen no son de w×h puntos (${w}×${h})`);
     if (image.totalBytes(bitmap) > image.MAX_BYTES) {
-      throw new Error(`${w}×${h} puntos supera el máximo de ^GF (${image.MAX_BYTES} bytes de imagen)`);
+      throw new Error(`${w}×${h} puntos supera el máximo de ^GF (bytes de imagen 1..${image.MAX_BYTES}: total, bytes enviados y bytes por fila)`);
     }
-    const dots = mm => {
+    // ^FO takes 0..32000 dots (vol 1 5907+): a position outside it is refused, never moved silently
+    const dots = (mm, name) => {
       const tenths = units.fromMm(mm);
-      return Number.isFinite(tenths) ? Math.max(0, roundDots(tenths / units.dotSize(dpi))) : 0;
+      if (!Number.isFinite(tenths)) return 0;
+      const value = roundDots(tenths / units.dotSize(dpi));
+      if (value < 0 || value > zplEdit.COORD_MAX) throw new Error(`la posición ${name} (${value} puntos) debe estar en ${rangeText(COORD_RANGE)} puntos (^FO)`);
+      return value;
     };
-    return image.graphicField(dots(xMm), dots(yMm), bitmap);
+    return image.graphicField(dots(xMm, 'X'), dots(yMm, 'Y'), bitmap);
   }
 
   // UTF-8 (the default): see the note on ^CI in the header. The ^GF data is ASCII hexadecimal, so the file stays plain text.

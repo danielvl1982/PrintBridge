@@ -38,7 +38,7 @@ ZPL (manuals: docs/zpl vol 1 and 2)
 - [x] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
 - [x] V10 ZPL text: `^A`, `^CF`, `^FB`, `^FW`, `^SN`, `^FN`, character sizes per resolution
 - [x] V11 ZPL barcodes (`^B*`, `^BY`), `^BQ` QR, `^BX` Data Matrix
-- [ ] V12 ZPL images (`^GF`, `~DG`)
+- [x] V12 ZPL images (`^GF`, `~DG`)
 Cross cutting
 - [ ] V13 Conversions: every value converted TPCL / TSPL / ZPL lands valid in the target (clamp / snap + one aviso); matrix of tests per pair
 - [ ] V14 Close: README (validation rules and their sources), conversion matrix doc, full `node --test`, Chrome probe of the panels for the three
@@ -322,7 +322,29 @@ Vol 2 has no barcode command pages, only that table. All linear commands share o
 Other changes: `PB.languages` ZPL helpers gain `limited` and `rangeText` (shared with the slices); `byValues` (js/languages/zpl.js) now returns the nearest valid value, so the panel, the move / describe engines and the parser agree on what a bad ^BY means.
 Expectation changes in existing tests: tests/zpl-barcodes.test.js (^BY99 is drawn as module 10; a non numeric ^BY still changes nothing), tests/zpl-2d.test.js (a ^BQ magnification of 0 or 11 is drawn as 1 or 10 instead of the default).
 
+### V12 ZPL images (`^GF`)
+Manuals: ZPL II Programming Guide vol 1 (2003; text lines of pdftotext -layout: ^GF 6389-6480, ~DG 5211+, ^FO 5907+, ^FT 6021+) and vol 2 (2005; B64 / Z64 at 4900+, "Alternative Data Compression Scheme" printed pages 52-53). The app reads and writes only `^GF`;
+`~DG`, `~DY`, `^IM`, `^IL`, `^XG` are reported once as images stored in the printer (the data is not in the stream) and not validated. Vol 2 has no ^GF page of its own, so every range is vol 1's.
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `^GF` a (compression) | A ASCII hex, B binary, C compressed binary, default A (V1 6400+); B64 / Z64 replace the hex data (V2 4915+) | n/a | always A / same | invalid letter warned with "A, B o C", B / C and Z64 reported as not drawable, B64 read (already) / unchanged |
+| `^GF` b (bytes sent) | 1..99999, "out-of-range values are set to the nearest limit", should match c in ASCII (V1 6410+) | n/a | = total / same | clamped + warning with the range, mismatch with c warned (already) / unchanged |
+| `^GF` c (total) | 1..99999, = width x height in bytes; ignored command when missing (V1 6430+) | n/a | rows x bytes per row (always consistent) / same | clamped + warning (already); missing or a non whole number: message without the range / the message states 1..99999 |
+| `^GF` d (bytes per row) | 1..99999, c / d = the rows | n/a | ceil(w / 8), whole bytes / same | as c; a total that is not a multiple of d warned (already) |
+| `^GF` image size | b, c, d up to 99999 bytes, so up to 99999 bytes of image (printer memory is not given) | the overlay refused above 99999 bytes (already) / the error names 1..99999 for total, bytes sent and bytes per row | not written, one warning (already) / unchanged | n/a |
+| `^FO` / `^FT` x,y of the image | 0..32000 (V1 5907+, 6021+) | position input 0..999.9 mm (TPCL-driven, inside the ZPL range at both resolutions) / unchanged | negative or above 32000 silently clamped by `toDots` (only the negative side) / limited to 0..32000 with one warning (the `^FT` corner included) | V9 (warning, nearest dot) already covers the field origin |
+| Overlay insert position | as above | no limit error / refused with a Spanish error naming `0..32000` | a negative position became 0 silently and one above 32000 was written / refused, never moved | n/a |
+| Overlay insert data | w x h dots | n/a | accepted data of another length / refused with an error (same hook as TSPL) | n/a |
+| Data (ASCII hex) | two hex digits per byte; data after the count ignored; `,` pads the row with 00; a `^` or `~` aborts the download (V1 6440+) | n/a | plain hex with the comma (already) | missing data padded with white, excess ignored, invalid characters ignored, each warned (already); compression letters of V2 read (already) |
+
+Other changes: the image slice reads `fitCoord`, `roundDots`, `exactDots` from the ZPL helpers (no TPCL / TSPL file is shared); `PB.languages` ZPL `imageCommand` now checks position and data length like the TSPL hook.
+Expectation changes in existing tests: tests/zpl-image.test.js (`imageCommand` with a negative position throws instead of writing 0).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V12 `~DG` / `~DB` / `~DY` / `^IM` / `^IL` / `^XG` store or recall images in the printer: the viewer cannot draw them and does not validate their parameters (`~DG` t and w would be 1..99999 like ^GF). No local manual gives a maximum image size by printer memory, so only the 99999 bytes of ^GF apply.
+- V12 Whether a printer accepts the run-length compression and `:B64:` data inside `^GF` is documented for `~DG` / `~DB` only (V2 pages 52 and 112 list ^GF "with ASCII hex" among the commands): it is read, written back only for an image read compressed; Z64 and the B64 CRC are not read / checked.
+- V12 The conversion in js/app.js still refuses a picture over 9999 dots on either side (the TPCL limit) before the language check, although ^GF allows up to 99999 bytes (js/app.js is outside this task's surface).
 - V11 `^BY` height: vol 1 prints "2.0 to 3.0" (a typo) and vol 2's XML table 1..9999; 32000 is used because every bar code command says "1 to 32000, default set by ^BY". `^BU` says 1..9999 (as `^B5` and `^BF`, which are not modelled): 32000 is applied to all.
 - V11 `^BX` module h: "1 to the width of the label" (printer dependent): 9999 is kept as the viewer's limit; the title of f says "0 to 6" while the values list 1..6 (1..6 used); the aspect ratio (8th parameter) and `^BX` quality 200 escape sequences beyond `__` are of later guides and not validated.
 - V11 `^BQ` capacity per level and mode (versions 1..40) is not applied to the data (only the 3072 characters of ^FD, V10); the mixed mode counts (code number, divisions, parity) and the manual character modes are read, not validated. `^BQ` model 1 is drawn as model 2 (existing info).
@@ -392,3 +414,4 @@ Expectation changes in existing tests: tests/zpl-barcodes.test.js (^BY99 is draw
 - V9 (route: delegated writer, one writer, direct; RED first: 16 of the 23 new tests failed on the old code): ZPL label setup and shapes (tests/zpl-label-validation.test.js, 23 tests). Verification: `node --test` 4191 tests, 4190 pass, 0 fail, 1 skipped (was 4168 / 4167 before; +23 new). Commit: see `git log` (fix: validate ZPL label setup and shapes against the manuals).
 - V10 (route: delegated writer, one writer, direct; RED first: 17 of the 21 new tests failed on the old code): ZPL text (tests/zpl-text-validation.test.js, 21 tests). Verification: `node --test` 4212 tests, 4211 pass, 0 fail, 1 skipped (was 4191 / 4190 before; +21 new). Commit: see `git log` (fix: validate ZPL text values against the manuals).
 - V11 (route: delegated writer, one writer, direct; RED first: 13 of the 16 new tests failed on the old code): ZPL barcodes, QR and Data Matrix (tests/zpl-barcode-validation.test.js, 16 tests). Verification: `node --test` 4228 tests, 4227 pass, 0 fail, 1 skipped (was 4212 / 4211 before; +16 new). Commit: see `git log` (fix: validate ZPL barcode, QR and Data Matrix values against the manuals).
+- V12 (route: delegated writer, one writer, direct; RED first: 8 of the 17 new tests failed on the old code): ZPL images (tests/zpl-image-validation.test.js, 17 tests). Verification: `node --test` 4245 tests, 4244 pass, 0 fail, 1 skipped (was 4228 / 4227 before; +17 new). Commit: see `git log` (fix: validate ZPL image values against the manuals).
