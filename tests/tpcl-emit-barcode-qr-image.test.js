@@ -306,7 +306,7 @@ for (const example of tpclExamples) {
       const out = emit(first, dpi);
       const second = tpcl.parse(out.text, { dpi });
       assert.deepEqual(levels(second.diagnostics, 'error', 'warning'), []);
-      assert.ok(first.items.length > 0);
+      if (example.group !== 'blank') assert.ok(first.items.length > 0); // a blank template has the header only
       assert.deepEqual(neutral(second), neutral(first));
       assert.deepEqual([second.size.width, second.size.height, second.size.pitch], [first.size.width, first.size.height, first.size.pitch]);
       // Only the known info diagnostics: the default {XS} (and the AX note when the size is outside the catalog)

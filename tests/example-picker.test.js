@@ -76,3 +76,69 @@ test('the placeholder or an unknown value loads nothing', () => {
     assert.equal(select.value, '');
   });
 });
+
+// example-templates T2: the combo is grouped with <optgroup>s from the optional `group` of each example.
+/** Like withPicker but with the given examples; also exposes the flat list of options (the ones inside groups too). */
+function withGroupedPicker(examples, fn) {
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: tag => fakeElement(tag) } });
+  try {
+    const select = fakeElement('select');
+    const picked = [];
+    PB.ui.createExamplePicker(select, examples, { onPick: example => picked.push(example) });
+    const options = select.children.flatMap(node => (node.tagName === 'OPTGROUP' ? node.children : [node]));
+    fn({ select, picked, options });
+  } finally {
+    if (saved) Object.defineProperty(globalThis, 'document', saved); else delete globalThis.document;
+  }
+}
+
+const GROUPED = [
+  { id: 'f1', name: 'Full 1', group: 'full' },
+  { id: 'x1', name: 'No group' },
+  { id: 'b1', name: 'Blank 1', group: 'blank' },
+  { id: 's1', name: 'Basic 1', group: 'basic' },
+  { id: 'b2', name: 'Blank 2', group: 'blank' },
+];
+
+test('examples with a group are listed under one optgroup per group, in the fixed order En blanco, Básicos, Ejemplos completos', () => {
+  withGroupedPicker(GROUPED, ({ select }) => {
+    const groups = select.children.filter(node => node.tagName === 'OPTGROUP');
+    assert.deepEqual(groups.map(g => g.label), ['En blanco', 'Básicos', 'Ejemplos completos']);
+    assert.deepEqual(groups.map(g => g.children.map(o => o.value)), [['b1', 'b2'], ['s1'], ['f1']]);
+  });
+});
+
+test('the placeholder stays first and an example without group goes last, outside any optgroup', () => {
+  withGroupedPicker(GROUPED, ({ select }) => {
+    assert.equal(select.children[0].tagName, 'OPTION');
+    assert.equal(select.children[0].disabled, true);
+    const last = select.children[select.children.length - 1];
+    assert.equal(last.tagName, 'OPTION');
+    assert.deepEqual([last.value, last.textContent], ['x1', 'No group']);
+  });
+});
+
+test('a group with no examples gets no optgroup', () => {
+  withGroupedPicker([{ id: 's1', name: 'Basic 1', group: 'basic' }], ({ select }) => {
+    assert.deepEqual(select.children.filter(n => n.tagName === 'OPTGROUP').map(g => g.label), ['Básicos']);
+  });
+});
+
+test('picking an example from inside a group loads it and returns to the placeholder', () => {
+  withGroupedPicker(GROUPED, ({ select, picked }) => {
+    select.pick('b2');
+    assert.deepEqual(picked, [GROUPED[4]]);
+    assert.equal(select.value, '');
+  });
+});
+
+test('the shipped examples: blank, basic and full groups, the four existing ones still listed', () => {
+  const shipped = PB.examples;
+  withGroupedPicker(shipped, ({ select, options }) => {
+    const groups = select.children.filter(node => node.tagName === 'OPTGROUP');
+    assert.deepEqual(groups.map(g => [g.label, g.children.length]), [['En blanco', 3], ['Básicos', 3], ['Ejemplos completos', 4]]);
+    assert.equal(options.length, shipped.length + 1);
+    assert.equal(select.children[select.children.length - 1].tagName, 'OPTGROUP');
+  });
+});

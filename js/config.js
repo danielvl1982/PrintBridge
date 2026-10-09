@@ -33,14 +33,19 @@
 /**
  * Example labels that can be loaded from the viewer.
  * Each example carries the language it is written in (language, key of PB.languages), its source code (source)
- * and the values of its variables so that it is drawn with real data.
+ * and the values of its variables so that it is drawn with real data. The optional group ('blank' | 'basic' | 'full')
+ * decides the section of the Ejemplo combo it is listed in.
  */
 (function (PB) {
   'use strict';
 
+  /** Test values of the three basic examples (they share the same variables). */
+  const BASIC_VALUES = Object.freeze({ PRODUCTO: 'Tornillo M8 x 40', LOTE: 'L2026-0412', CANTIDAD: '250 uds', CODIGO: '100001200001' });
+
   PB.examples = Object.freeze([
     {
       id: 'spool-99x55',
+      group: 'full',
       name: 'Etiqueta de bobina — ejemplo',
       language: 'tpcl',
       values: {
@@ -87,6 +92,7 @@
     },
     {
       id: 'barcodes-code39-itf-code128',
+      group: 'full',
       name: 'Códigos de barras — Code39, ITF y Code128',
       language: 'tpcl',
       values: { CODE39: 'SAMPLE-001', ITF: '00010001', CODE128: '100001@200001' },
@@ -109,6 +115,7 @@
     },
     {
       id: 'tspl-label-100x60',
+      group: 'full',
       name: 'Etiqueta TSPL (TSC) — ejemplo 100×60 a 203 dpi',
       language: 'tspl',
       values: {},
@@ -131,6 +138,7 @@ PRINT 1,1`,
     },
     {
       id: 'zpl-label-100x60',
+      group: 'full',
       name: 'Etiqueta ZPL (Zebra) — ejemplo 100×60 a 203 dpi',
       language: 'zpl',
       values: { PRODUCTO: 'Muestra 100', LOTE: '200001' },
@@ -147,6 +155,120 @@ PRINT 1,1`,
 ^FO30,350^AEN,28,15^FDOCR-B^FS
 ^FO740,40^A0R,40,40^FDGIRADO^FS
 ^FO400,300^A0N,50,50^FR^FDINVERTIDO^FS
+^XZ`,
+    },
+    // Blank templates: only the header (language and 100 x 60 mm label), no items; the palette then inserts that language's commands
+    {
+      id: 'blank-tpcl',
+      group: 'blank',
+      name: 'En blanco — TPCL (TEC)',
+      language: 'tpcl',
+      values: {},
+      // D = pitch, width, height in 0.1 mm: 63 mm pitch (60 mm + 3 mm gap), 100 x 60 mm
+      source: `{D0630,1000,0600|}
+{AX;+010,+000,+00|}
+{C|}
+
+{XS;I,0001,0002C4100|}`,
+    },
+    {
+      id: 'blank-tspl',
+      group: 'blank',
+      name: 'En blanco — TSPL (TSC)',
+      language: 'tspl',
+      values: {},
+      source: `SIZE 100 mm,60 mm
+GAP 3 mm,0 mm
+DIRECTION 1
+REFERENCE 0,0
+CLS
+PRINT 1,1`,
+    },
+    {
+      id: 'blank-zpl',
+      group: 'blank',
+      name: 'En blanco — ZPL (Zebra)',
+      language: 'zpl',
+      values: {},
+      source: `^XA
+^PW800
+^LL480
+^XZ`,
+    },
+    // Basic examples: the same label (frame, title, three variable lines, line, Code128 and QR) in the three languages, 100 x 60 mm
+    // at 203 dpi (800 x 480 dots). Written in TSPL, converted with PB.convert and reviewed by hand; ASCII only.
+    {
+      id: 'basic-tpcl',
+      group: 'basic',
+      name: 'Básico — TPCL (TEC)',
+      language: 'tpcl',
+      values: BASIC_VALUES,
+      source: `{D0630,1000,0600|}
+{AX;+010,+000,+00|}
+{C|}
+
+{LC;0025,0013,0976,0588,1,04|}
+
+{PV00;0050,0070,0050,0040,B,00,B|}
+{RV00;ETIQUETA BASICA|}
+
+{PC00;0050,0143,10,09,N,00,B|}
+{RC00;Producto: #PRODUCTO#|}
+{PC01;0050,0193,10,09,N,00,B|}
+{RC01;Lote: #LOTE#|}
+{PC02;0050,0243,10,09,N,00,B|}
+{RC02;Cant: #CANTIDAD#|}
+
+{LC;0025,0271,0976,0271,0,03|}
+
+{XB00;0050,0300,9,0,02,0,0150,0,000,1,00|}
+{RB00;#CODIGO#|}
+
+{XB01;0726,0313,T,L,06,A,0,M2|}
+{RB01;https://example.com/#CODIGO#|}
+
+{XS;I,0001,0002C4100|}`,
+    },
+    {
+      id: 'basic-tspl',
+      group: 'basic',
+      name: 'Básico — TSPL (TSC)',
+      language: 'tspl',
+      values: BASIC_VALUES,
+      source: `SIZE 100 mm,60 mm
+GAP 3 mm,0 mm
+DIRECTION 1
+REFERENCE 0,0
+CLS
+BOX 20,10,780,470,4
+TEXT 40,30,"4",0,1,1,"ETIQUETA BASICA"
+TEXT 40,95,"3",0,1,1,"Producto: #PRODUCTO#"
+TEXT 40,135,"3",0,1,1,"Lote: #LOTE#"
+TEXT 40,175,"3",0,1,1,"Cant: #CANTIDAD#"
+BAR 20,215,760,3
+BARCODE 40,240,"128",120,1,0,2,2,"#CODIGO#"
+QRCODE 580,250,L,6,A,0,"https://example.com/#CODIGO#"
+PRINT 1,1`,
+    },
+    {
+      id: 'basic-zpl',
+      group: 'basic',
+      name: 'Básico — ZPL (Zebra)',
+      language: 'zpl',
+      values: BASIC_VALUES,
+      source: `^XA
+^PW800
+^LL480
+^FX Frame, title, three lines with variables, a line, a Code128 bar code and a QR
+^FO18,8^GB764,464,4^FS
+^FT40,56^A0N,32,40^FDETIQUETA BASICA^FS
+^FT40,114^A0N,24,27^FDProducto: #PRODUCTO#^FS
+^FT40,154^A0N,24,27^FDLote: #LOTE#^FS
+^FT40,194^A0N,24,27^FDCant: #CANTIDAD#^FS
+^FO20,215^GB760,3,3^FS
+^BY2
+^FO40,240^BCN,120,Y,N,N^FD#CODIGO#^FS
+^FO580,250^BQN,2,6^FDLA,https://example.com/#CODIGO#^FS
 ^XZ`,
     },
   ]);
