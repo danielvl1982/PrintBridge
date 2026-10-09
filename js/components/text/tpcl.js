@@ -451,7 +451,9 @@
       const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
       const rot = rotationCode(ctx, item.rotation);
-      const data = safeData(ctx, item.data);
+      // TPCL has no text block (none of its manuals): a block is written as one line, its breaks as spaces, with one warning
+      if (item.block) ctx.once('tpcl-text-block', () => diag.warning('Hay bloques de texto (BLOCK de TSPL, ^FB de ZPL): TPCL no tiene bloque de texto, se escriben como una línea de texto sin ajuste de línea'));
+      const data = safeData(ctx, item.block ? String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, ' ') : item.data);
       const choice = bitmapChoice({ ...font, size, scaleX });
       const attribute = attributeText(item.attribute, ctx);
       if (item.reverse) ctx.once('tpcl-text-reverse', () => diag.warning('Hay textos con impresión inversa (^FR de ZPL): TPCL no la tiene en el texto (su atributo de fondo negro es otra cosa), se escriben normales'));

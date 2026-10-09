@@ -248,3 +248,120 @@ test('a ZPL block renders wrapped in the preview', () => {
   assert.ok(model.items[0].block);
   assert.ok(/<tspan /.test(svgOf(model)));
 });
+
+// ---- emit (B2)
+
+const emit = (id, model, dpi = 203) => PB.languages.emit(id, model, { dpi });
+const levelsOf = (r, ...wanted) => r.diagnostics.filter(d => wanted.includes(d.level)).map(d => d.text);
+const convert = (src, to, from, dpi = 203) => PB.convert.run(src, to, { dpi, sourceId: from });
+
+test('TSPL emit: a block writes BLOCK with width, height = lines * pitch, space and align', () => {
+  const src = 'SIZE 100 mm,60 mm\r\nGAP 3 mm,0 mm\r\nBLOCK 10,20,400,220,"2",0,1,1,2,2,"Hello world"\r\nPRINT 1,1\r\n';
+  const out = emit('tspl', tspl.parse(src, { dpi: 203 }));
+  assert.match(out.text, /^BLOCK 10,20,400,220,"2",0,1,1,2,2,"Hello world"$/m);
+  assert.deepEqual(levelsOf(out, 'warning', 'info'), []);
+});
+
+test('TSPL emit: omitted optional arguments stay omitted; right aligned without a space writes 0 then 3; the breaks are \\[R]', () => {
+  const plain = emit('tspl', tspl.parse('BLOCK 10,20,400,200,"2",0,1,1,"a\\[R]b"', { dpi: 203 }));
+  assert.ok(plain.text.includes('BLOCK 10,20,400,200,"2",0,1,1,"a\\[R]b"'), plain.text);
+  const right = emit('tspl', tspl.parse('BLOCK 10,20,400,200,"2",0,1,1,0,3,"a"', { dpi: 203 }));
+  assert.match(right.text, /^BLOCK 10,20,400,200,"2",0,1,1,0,3,"a"$/m);
+});
+
+test('TSPL emit: a block without lines gets the height the wrapped text needs; justify is written left with an info', () => {
+  const model = tspl.parse('BLOCK 0,0,96,100,"1",0,1,1,"aaaa bbbb cccc"', { dpi: 203 });
+  delete model.items[0].block.lines;
+  model.items[0].block.align = 'justify';
+  const out = emit('tspl', model);
+  // 12 characters per line: 2 lines of 12 dots
+  assert.match(out.text, /^BLOCK 0,0,96,24,"1",0,1,1,"aaaa bbbb cccc"$/m);
+  assert.ok(levelsOf(out, 'info').some(t => /justificado/.test(t)));
+});
+
+test('TSPL emit: a text with a line break and no block still reports the break; a block keeps its fit argument', () => {
+  const line = tspl.parse('TEXT 10,20,"2",0,1,1,"a"', { dpi: 203 });
+  line.items[0].data = 'a\nb';
+  assert.ok(levelsOf(emit('tspl', line), 'warning').some(t => /saltos de línea/.test(t)));
+  const fit = emit('tspl', tspl.parse('BLOCK 10,20,400,200,"2",0,1,1,0,1,1,"a"', { dpi: 203 }));
+  assert.match(fit.text, /^BLOCK 10,20,400,200,"2",0,1,1,0,1,1,"a"$/m);
+});
+
+test('TSPL BLOCK round trips through its own emit (model equal), with scalable and rotated fonts', () => {
+  for (const cmd of ['BLOCK 10,20,400,200,"2",0,1,1,"Hello world foo bar"', 'BLOCK 30,40,300,150,"0",90,8,10,4,2,"abc def\\[R]ghi"', 'BLOCK 5,5,500,300,"3",180,2,2,0,3,"x"']) {
+    const a = one(tspl, cmd);
+    const out = emit('tspl', { language: 'tspl', size: { width: 1000, height: 600, native: {} }, items: [a], diagnostics: [] });
+    const b = one(tspl, out.text.split('\r\n').find(l => l.startsWith('BLOCK')));
+    assert.deepEqual([b.block.lines, b.block.align, b.data], [a.block.lines, a.block.align, a.data], cmd);
+    near(b.block.width, a.block.width);
+    near(b.block.lineSpace, a.block.lineSpace);
+    near(b.x, a.x);
+    near(b.y, a.y);
+  }
+});
+
+test('ZPL emit: a block writes ^FB before the data with \\& for the breaks; ^FO stays ^FO and ^FT stays ^FT', () => {
+  const fo = emit('zpl', zpl.parse('^XA^PW800^LL400^FO50,100^A0N,30,30^FB400,3,5,C,20^FDone\\&two^FS^XZ', { dpi: 203 }));
+  assert.ok(fo.text.includes('^FO50,100^A0N,30,30^FB400,3,5,C,20^FDone\\&two^FS'), fo.text);
+  assert.deepEqual(levelsOf(fo, 'warning', 'info'), []);
+  const ft = emit('zpl', zpl.parse('^XA^FT50,100^A0N,30,30^FB400,3,0,R^FDhi^FS^XZ', { dpi: 203 }));
+  assert.ok(ft.text.includes('^FT50,100^A0N,30,30^FB400,3,0,R^FDhi^FS'), ft.text);
+});
+
+test('ZPL emit: from another language a block is placed by its first baseline (^FT writes the last line one)', () => {
+  const model = tspl.parse('BLOCK 100,100,400,60,"3",0,1,1,0,2,"Hello world"', { dpi: 203 });
+  const out = emit('zpl', model);
+  const back = one(zpl, out.text, { dpi: 203 });
+  near(back.x, model.items[0].x, 0.7);
+  near(back.y, model.items[0].y, 0.7);
+  assert.deepEqual([back.block.lines, back.block.align], [model.items[0].block.lines, 'center']);
+  near(back.block.width, model.items[0].block.width, 0.7);
+});
+
+test('ZPL emit: justify is written J, a block without lines gets the wrapped count, a counter is written as plain data with an info', () => {
+  const model = zpl.parse('^XA^FO50,100^A0N,30,30^FB300,2,0,J^FDaaa bbb ccc ddd eee^FS^XZ', { dpi: 203 });
+  delete model.items[0].block.lines;
+  const out = emit('zpl', model);
+  assert.match(out.text, /\^FB300,\d+,0,J/);
+  const withCounter = zpl.parse('^XA^FO50,100^A0N,30,30^FB300,2,0,J^FD0001^FS^XZ', { dpi: 203 });
+  withCounter.items[0].counter = { step: 1 };
+  const r = emit('zpl', withCounter);
+  assert.ok(!/\^SN/.test(r.text));
+  assert.ok(levelsOf(r, 'info').some(t => /contador/.test(t)));
+});
+
+test('TPCL emit: a block is one line of text with ONE warning that TPCL has no text block; the breaks become spaces', () => {
+  const model = zpl.parse('^XA^FO50,100^A0N,30,30^FB300,3,0,L^FDone\\&two^FS^XZ', { dpi: 203 });
+  model.items.push({ ...zpl.parse('^XA^FO50,300^A0N,30,30^FB300,3,0,L^FDthree^FS^XZ', { dpi: 203 }).items[0] });
+  const out = emit('tpcl', model);
+  const warnings = levelsOf(out, 'warning').filter(t => /bloque/.test(t));
+  assert.equal(warnings.length, 1);
+  assert.match(warnings[0], /TPCL no tiene bloque de texto/);
+  assert.match(out.text, /one two/);
+  assert.ok(!/saltos de línea/.test(levelsOf(out, 'warning').join('|')));
+  const back = PB.languages.get('tpcl').parse(out.text, { dpi: 203 });
+  assert.ok(back.items.every(i => i.block === undefined));
+});
+
+test('TSPL <-> ZPL carry the block: width, lines, alignment, line space and the breaks', () => {
+  const tsplSrc = 'SIZE 100 mm,60 mm\r\nBLOCK 40,60,300,100,"3",0,1,1,4,2,"alpha beta\\[R]gamma delta epsilon"\r\nPRINT 1,1\r\n';
+  const a = tspl.parse(tsplSrc, { dpi: 203 }).items[0];
+  const z = convert(tsplSrc, 'zpl', 'tspl');
+  const b = zpl.parse(z.text, { dpi: 203 }).items[0];
+  assert.equal(b.data, a.data);
+  assert.equal(b.block.lines, a.block.lines);
+  assert.equal(b.block.align, 'center');
+  near(b.block.width, a.block.width, 0.7);
+  near(b.block.lineSpace, a.block.lineSpace, 0.7);
+  const back = convert(z.text, 'tspl', 'zpl');
+  const c = tspl.parse(back.text, { dpi: 203 }).items[0];
+  assert.equal(c.data, a.data);
+  assert.equal(c.block.lines, a.block.lines);
+  assert.equal(c.block.align, 'center');
+  near(c.block.width, a.block.width, 0.7);
+});
+
+test('a block converted to TPCL warns once and reads back as a line', () => {
+  const r = convert('SIZE 100 mm,60 mm\r\nBLOCK 40,60,300,100,"3",0,1,1,"alpha beta"\r\nPRINT 1,1\r\n', 'tpcl', 'tspl');
+  assert.equal(r.diagnostics.filter(d => /TPCL no tiene bloque de texto/.test(d.text)).length, 1);
+});

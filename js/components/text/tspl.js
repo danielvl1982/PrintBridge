@@ -15,7 +15,7 @@
  * printer increments it per label); an unassigned counter, a mix ("x"+@1) and a BLOCK content keep the literal text.
  * Origin: TEXT x,y is the top-left corner of the character cell (TSC manual) while the model draws from the baseline, so the reader adds the
  * ascent (ASCENT / SCALABLE_ASCENT of the height, whole dots, on the side the letters stand to) and emit takes it off.
- * Emit (the inverse): `emit(item, ctx)` writes a TEXT command. A mono font whose size and width are whole multiples of a
+ * Emit (the inverse): `emit(item, ctx)` writes a TEXT command, or BLOCK for an item with a block (height = lines * pitch, see emitBlock). A mono font whose size and width are whole multiples of a
  * built-in bitmap font becomes that font "1".."8"; anything else becomes the scalable font "0" with POINT sizes (the
  * exact inverse of fontOf), with one info that the TSPL fonts differ from the source font when family, weight or style
  * cannot be represented.
@@ -173,11 +173,41 @@
       // The model keeps the baseline origin; TEXT writes the top-left corner of the character cell
       const shift = baselineShift(degrees, size, units.dotSize(ctx.dpi), !choice);
       const [x, y] = [roundDots(exactDots(ctx, (item.x || 0) - shift.x)), roundDots(exactDots(ctx, (item.y || 0) - shift.y))];
+      if (item.block) return emitBlock(item, ctx, { x, y, name, xmul, ymul, degrees, choice });
       const data = safeData(ctx, item.data);
       // A counter writes SET COUNTER and the start value before the command, which then prints "@n"
       const counter = counterSetup(ctx, item, data);
       const line = `TEXT ${x},${y},"${name}",${degrees},${xmul},${ymul},${counter ? counter.ref : quoted(data)}`;
       return counter ? [...counter.lines, line] : line;
+    }
+
+    /**
+     * BLOCK x,y,width,height,"font",rotation,x-mul,y-mul,[space,][align,][fit,]"content" for an item with a block. The font, the origin and
+     * the multipliers are the ones of TEXT (the caller worked them out). width = the block width in dots; height = lines * pitch, where the
+     * pitch is the character height of the WRITTEN font plus the space (the inverse of the reader: floor(height / pitch) = lines), and lines is
+     * the block's, or what the wrapped text needs (at least 1) when it has none; space = the extra line space in dots, align 0 (left; 1 when the
+     * source said 1), 2 center, 3 right (TSPL has no justification: written left, one info) and fit as it was read. Optional arguments are
+     * positional, so one is only written when it or a later one is needed. The line breaks of the data are \[R]. A counter is not written
+     * (BLOCK content is literal): its start value is, with one info.
+     */
+    function emitBlock(item, ctx, { x, y, name, xmul, ymul, degrees, choice }) {
+      const b = item.block;
+      const dot = units.dotSize(ctx.dpi);
+      const writtenSize = choice ? BITMAP_FONTS[name][1] * ymul * dot : ymul * units.UNITS_PER_POINT;
+      const space = roundDots(exactDots(ctx, b.lineSpace || 0));
+      const pitch = Math.max(1, Math.round(writtenSize / dot)) + space;
+      const lines = Number.isInteger(b.lines) && b.lines > 0 ? b.lines : Math.max(1, PB.slices.text.wrapBlock(item.data, b, item.font).lines.length);
+      const width = Math.max(1, roundDots(exactDots(ctx, b.width)));
+      if (b.align === 'justify') ctx.once('tspl-block-justify', () => diag.info('Hay bloques de texto justificados, que BLOCK de TSPL no tiene: se escriben alineados a la izquierda'));
+      const native = item.native || {};
+      const align = b.align === 'center' ? 2 : b.align === 'right' ? 3 : native.align === 1 ? 1 : 0;
+      const fit = Number.isFinite(native.fit) ? native.fit : null;
+      const optional = fit !== null ? [space, align, fit] : align !== 0 ? [space, align] : space !== 0 ? [space] : [];
+      if (item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0) {
+        ctx.once('tspl-block-counter', () => diag.info('Hay contadores en bloques de texto, que BLOCK de TSPL no incrementa: se escribe el valor inicial'));
+      }
+      const data = String(item.data == null ? '' : item.data).replace(/\r\n|\r/g, '\n').split('\n').map(part => safeData(ctx, part)).join('\\[R]');
+      return `BLOCK ${[x, y, width, lines * pitch, `"${name}"`, degrees, xmul, ymul, ...optional, quoted(data)].join(',')}`;
     }
 
     /** Multiplier or point size: a positive number, 1 (with a warning) otherwise. */

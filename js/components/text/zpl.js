@@ -17,6 +17,13 @@
  *       of the baseline going down; inverted: down from the baseline, to the left; bottom-up: to the left, going up).
  *   ^FR: the colour of the output is the reverse of its background; ^LRY does the same for every later field (until ^LRN, see js/languages/zpl.js:
  *       the parser sets field.reverse for both and native.labelReverse for the second). ^FH: hex escapes in the data. ^FP: direction and gaps (vertical formatting).
+ *   ^FBa,b,c,d,e (page 150): a = width of the block in dots (0 or missing: the text does not print), b = maximum lines 1..9999 (default 1; "text
+ *       exceeding the maximum number of lines overwrites the last line": the viewer clips it), c = extra line space in dots (-9999..9999, default
+ *       0), d = L C R J (default L; "last line is left-justified if J is used"), e = hanging indent of the second and later lines (kept in
+ *       native, not drawn). "\&" in the data is a line break, "\\" a backslash (^CI13), "\*" a soft hyphen: only "\&" is read (it becomes "\n").
+ *       A word longer than a line is hyphenated by the printer (the viewer cuts it without a hyphen). ^FO: the block grows from top to bottom;
+ *       ^FT: "the baseline origin of the last possible line", so the first baseline is (lines - 1) pitches back (the pitch is the character height
+ *       plus c: an approximation, the guide gives no line height). ^SN with ^FB does not print. The model keeps it as item.block (see js/core/model.js).
  * ---- Volume Two (2005, local copy in docs/zpl): fonts ---------------------------------------------------------------------------
  *   Printed pages 61 (Table 10: intercharacter gap and baseline of A..H, "the baseline for font E is 23 dots down from the top of the matrix")
  *   and 64-65 (the matrices by printhead: 8 dots/mm = 203 dpi, 12 dots/mm = 300 dpi). BITMAP_FONTS holds them (see there). Fonts GS (SYMBOL),
@@ -33,7 +40,7 @@
  *   x, y = the baseline origin (what the renderer draws from): ^FT as written, ^FO converted with the baseline offset of the orientation.
  *   font.size = the character height in dots; font.scaleX stretches it to the width. native: { font, fontArg, orientationArg, height, width,
  *   hMult, wMult, origin: 'FO' | 'FT' | 'default', cell }. reverse: true for ^FR (ZPL specific, never the TPCL attribute W).
- * Emit (the inverse): ^FT with the baseline origin, or ^FO when the item came from a ^FO field; a mono model font whose size and width are
+ * Emit (the inverse): [^FB before the data for an item with a block,] ^FT with the baseline origin, or ^FO when the item came from a ^FO field; a mono model font whose size and width are
  * whole multiples of a bitmapped matrix becomes that font, anything else the scalable font 0, with one info when the family, weight or style
  * cannot be represented. Text attributes, alignment, spacing, bold and counters of other languages are reported and written without them.
  */
@@ -251,6 +258,34 @@
     }
 
     /**
+     * The ^FB parameters of an item with a block, in dots clamped to the guide's ranges: width (at least 1), lines (the block's, or what the
+     * wrapped text needs, at least 1), extra line space, justification letter and the hanging indent the item came with (native.fb).
+     */
+    function blockFields(ctx, item, cell) {
+      const b = item.block;
+      const lines = Number.isInteger(b.lines) && b.lines > 0 ? b.lines : Math.max(1, PB.slices.text.wrapBlock(item.data, b, item.font).lines.length);
+      const fb = item.native && item.native.fb;
+      return {
+        width: clamp(roundDots(exactDots(ctx, b.width)), 1, MAX_FB),
+        lines: clamp(lines, 1, MAX_FB),
+        space: clamp(roundDots(exactDots(ctx, b.lineSpace || 0)), -MAX_FB, MAX_FB),
+        letter: Object.keys(BLOCK_ALIGN).find(k => BLOCK_ALIGN[k] === b.align) || 'L',
+        indent: fb && Number.isInteger(fb.indent) ? clamp(fb.indent, 0, MAX_FB) : 0,
+      };
+    }
+
+    /**
+     * The data command of a block: the breaks are "\&" (the data is encoded for ^FH as usual). ^SN does not print inside a ^FB (guide), so a counter
+     * is written as its start value with one info.
+     */
+    function blockData(ctx, item) {
+      const counter = item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0;
+      if (counter) ctx.once('zpl-fb-counter', () => diag.info('Hay contadores en bloques de texto: ^SN no imprime dentro de ^FB, se escribe el valor inicial como texto'));
+      const data = String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, '\\&');
+      return dataCommands(ctx, counter ? { ...item, counter: undefined } : item, data);
+    }
+
+    /**
      * ^FO / ^FT x,y ^Afo,h,w [^FR] ^FD data ^FS. The font is the bitmapped one the model font matches (see bitmapChoice) or the scalable 0
      * with the size and width in dots. ^FT writes the baseline origin of the model; ^FO (items that came from a ^FO field) the top-left
      * of the text box, the inverse of the parser's conversion.
@@ -288,14 +323,20 @@
       const degrees = rotationDegrees(ctx, item.rotation);
       const baseline = { x: roundDots(exactDots(ctx, item.x || 0)), y: roundDots(exactDots(ctx, item.y || 0)) };
       const fromFo = item.native && (item.native.origin === 'FO' || item.native.origin === 'default');
+      const fb = item.block ? blockFields(ctx, item, cell) : null;
       let origin;
       if (fromFo) {
-        const off = baselineOffset(degrees, cell.height, lengthOf(item.data, cell.advance), name);
+        const off = baselineOffset(degrees, cell.height, fb ? fb.width : lengthOf(item.data, cell.advance), name);
         origin = `^FO${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
+      } else if (fb) {
+        // ^FT is the baseline of the last possible line: (lines - 1) pitches along the lines after the first baseline
+        const off = lastLineOffset(degrees, fb.lines, cell.height + fb.space);
+        origin = `^FT${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
       } else {
         origin = ft(ctx, item.x || 0, item.y || 0);
       }
-      return `${origin}^A${name}${orientationOf(degrees)},${cell.height},${cell.width}${item.reverse ? '^FR' : ''}${dataCommands(ctx, item)}^FS`;
+      const block = fb ? `^FB${fb.width},${fb.lines},${fb.space},${fb.letter}${fb.indent ? `,${fb.indent}` : ''}` : '';
+      return `${origin}^A${name}${orientationOf(degrees)},${cell.height},${cell.width}${block}${item.reverse ? '^FR' : ''}${fb ? blockData(ctx, item) : dataCommands(ctx, item)}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------
