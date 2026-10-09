@@ -276,10 +276,10 @@ test('describeItem lists font, height, width, rotation, content and reverse of a
   const [hello, world] = items;
   const withText = describe(hello, LABEL);
   assert.equal(withText.kind, 'text');
-  assert.deepEqual(withText.fields.map(f => f.key), ['font', 'height', 'width', 'rotation', 'content', 'reverse']);
-  assert.deepEqual(withText.fields.map(f => f.value), ['0', 40, 30, 0, 'Hello', false]);
+  assert.deepEqual(withText.fields.map(f => f.key), ['kind', 'font', 'height', 'width', 'rotation', 'content', 'reverse']);
+  assert.deepEqual(withText.fields.map(f => f.value), ['line', '0', 40, 30, 0, 'Hello', false]);
   assert.deepEqual(describe(hello), withText);
-  assert.deepEqual(describe(world, LABEL).fields.map(f => f.value), ['B', 22, 14, 90, 'World', true]);
+  assert.deepEqual(describe(world, LABEL).fields.map(f => f.value), ['line', 'B', 22, 14, 90, 'World', true]);
   assert.deepEqual(describe(world), describe(world, LABEL));
   const f = byKey(withText);
   assert.deepEqual([f.height.min, f.height.max, f.width.min, f.width.max], [0, 32000, 0, 32000]);
@@ -304,12 +304,12 @@ test('the font select lists the guide fonts with their cells, and keeps a font t
 
 test('a field with only data (default font) offers the content and the reverse print; a ^A without orientation or sizes offers only what it has', () => {
   const dflt = items[2];
-  assert.deepEqual(describe(dflt, LABEL).fields.map(f => [f.key, f.value]), [['content', 'Default'], ['reverse', false]]);
-  assert.deepEqual(describe(dflt).fields.map(f => f.key), ['content', 'reverse']);
+  assert.deepEqual(describe(dflt, LABEL).fields.map(f => [f.key, f.value]), [['kind', 'line'], ['content', 'Default'], ['reverse', false]]);
+  assert.deepEqual(describe(dflt).fields.map(f => f.key), ['kind', 'content', 'reverse']);
   const text = '^XA^FO10,10^A0,,^FDx^FS^XZ';
   const [bare] = parse(text).items;
-  assert.deepEqual(describe(bare, text).fields.map(f => f.key), ['font', 'content', 'reverse']);
-  assert.deepEqual(describe(bare).fields.map(f => f.key), ['font', 'content', 'reverse']);
+  assert.deepEqual(describe(bare, text).fields.map(f => f.key), ['kind', 'font', 'content', 'reverse']);
+  assert.deepEqual(describe(bare).fields.map(f => f.key), ['kind', 'font', 'content', 'reverse']);
 });
 
 test('updateItem writes only the targeted argument of the field', () => {

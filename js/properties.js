@@ -50,6 +50,8 @@
         for (const o of field.options || []) {
           select.append(Object.assign(document.createElement('option'), { value: o.value, textContent: o.label, selected: o.value === field.value }));
         }
+        // A choice with a single option (the Tipo of a TPCL text: only a line) has nothing to choose: shown, but disabled
+        if ((field.options || []).length === 1) select.disabled = true;
         return select;
       }
       const input = document.createElement('input');
@@ -83,6 +85,11 @@
         else onChange(field.key, value);
       });
       label.append(Object.assign(document.createElement('span'), { textContent: field.label }), input);
+      // An explanation of the field (field.note), under the control and as its tooltip
+      if (field.note) {
+        input.title = field.note;
+        label.append(Object.assign(document.createElement('small'), { className: 'props-note', textContent: field.note }));
+      }
       return label;
     }
 

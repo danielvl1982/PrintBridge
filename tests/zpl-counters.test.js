@@ -334,8 +334,8 @@ test('the 2D codes with ^SN offer no counter fields and keep editing their data'
 });
 
 test('the field lists of text and bar codes: the counter fields come after the content (and before the reverse print of the text)', () => {
-  assert.deepEqual(keys(wrap('^FO10,10^A0N,40,40^FD0042^FS')), ['font', 'height', 'width', 'rotation', 'content', 'counter', 'reverse']);
-  assert.deepEqual(keys(wrap('^FO10,10^FD0042^FS')), ['content', 'counter', 'reverse']);
+  assert.deepEqual(keys(wrap('^FO10,10^A0N,40,40^FD0042^FS')), ['kind', 'font', 'height', 'width', 'rotation', 'content', 'counter', 'reverse']);
+  assert.deepEqual(keys(wrap('^FO10,10^FD0042^FS')), ['kind', 'content', 'counter', 'reverse']);
   assert.deepEqual(keys(wrap(TEXT('^SN0042,1,Y'))), ['font', 'height', 'width', 'rotation', 'content', 'counter', 'zeros', 'reverse']);
   assert.deepEqual(keys(wrap(BARCODE('^FD0042'))).slice(-2), ['content', 'counter']);
   assert.deepEqual(keys(wrap(BARCODE('^SN0042,1,Y'))).slice(-3), ['content', 'counter', 'zeros']);

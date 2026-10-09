@@ -22,7 +22,7 @@ form of a text gets a **Tipo** select whose valid values depend on the language 
       into it (and `\&` line breaks of ZPL / `\["]`-style escapes of TSPL), documented in js/core/model.js.
 - [x] B2 Emit + conversion: TSPL BLOCK / ZPL ^FB written from a block; TPCL warns and writes one line; conversion matrix + cross-conversion
       cases for blocks; ZPL's "not implemented ^FB" diagnostics go away.
-- [ ] B3 Properties: the **Tipo** select (values per language), block fields, rewriting through the language edit engines (undo works).
+- [x] B3 Properties: the **Tipo** select (values per language), block fields, rewriting through the language edit engines (undo works).
 - [ ] B4 Tests, README (text block, limits, the wrap approximation), CONTRIBUTING, a template / palette check, Chrome probe.
 
 ## Acceptance
@@ -31,3 +31,4 @@ command, back to "Línea" removes the block; a TPCL text offers only "Línea de 
 
 ## Progress
 - B1 done (7202586): item.block in the neutral model (js/core/model.js), wrapBlock + tspans in the SVG renderer, TSPL BLOCK and ZPL ^FB readers.
+- B2 done (fbea11a): TSPL BLOCK / ZPL ^FB emit, TPCL one-line text with one warning, matrix + cross-conversion cases.

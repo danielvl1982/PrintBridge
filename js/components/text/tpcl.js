@@ -301,6 +301,16 @@
     return [field('boldH', 'Negrita horizontal', 'h'), field('boldV', 'Negrita vertical', 'v')];
   }
 
+  /**
+   * The Tipo select of a text: TPCL has no text block (not in any of its manuals), so the only value is the line. It is listed (the panel shows it
+   * disabled, with the note) so that the form is the same in the three languages, and it never writes anything.
+   */
+  const KIND_FIELD = Object.freeze({
+    key: 'kind', label: 'Tipo', type: 'select', group: 1, options: Object.freeze([{ value: 'line', label: 'Línea de texto' }]),
+    note: 'TPCL no tiene bloque de texto: un texto es siempre una línea',
+    read: () => 'line', model: () => 'line', write: () => null,
+  });
+
   const ALIGN_OPTIONS = Object.freeze([
     { value: 'left', label: 'Izquierda' }, { value: 'center', label: 'Centro' }, { value: 'right', label: 'Derecha' }, { value: 'equal', label: 'Espaciado igual' },
   ]);
@@ -573,6 +583,7 @@
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
           pattern: new RegExp(String.raw`^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + TAIL_SLOTS, 'd'),
           fields: [
+            KIND_FIELD,
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
             rotationField(5),
@@ -587,6 +598,7 @@
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
           pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + TAIL_SLOTS, 'd'),
           fields: [
+            KIND_FIELD,
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
             rotationField(5),

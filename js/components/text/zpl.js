@@ -220,6 +220,7 @@
     const {
       sourceOf, int, ROTATIONS, rotationOf, orientationOf, exactDots, roundDots, dataCommands, fo, ft,
       numberField, stringSelectField, contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, reverseField,
+      paramField, argEdit, flagEdits,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -435,8 +436,105 @@
     /** ^FR: the presence of the command, or the ^LRY state of the label (native.labelReverse): see reverseField in js/languages/zpl-edit.js. */
     const reverse = reverseField('reverse', 'Impresión inversa (^FR)');
     const contentOf = contentField('content', 'Contenido', item => item.data);
+    /** In a block the data holds its line breaks as "\&": the label says so. */
+    const blockContentOf = contentField('content', 'Contenido (\\& = salto de línea)', item => item.data.replace(/\n/g, '\\&'));
     /** Incremento and Ceros iniciales: the data command is ^FD or ^SN (see serialFields in js/languages/zpl-edit.js). */
     const counterFields = serialFields();
+
+    // ---- Tipo (line / block) and the block fields (^FB)
+
+    const KIND_OPTIONS = Object.freeze([{ value: 'line', label: 'Línea de texto' }, { value: 'block', label: 'Bloque de texto' }]);
+    const ALIGN_OPTIONS = Object.freeze([{ value: 'L', label: 'Izquierda' }, { value: 'C', label: 'Centro' }, { value: 'R', label: 'Derecha' }, { value: 'J', label: 'Justificado' }]);
+    /** A block made from a line is this many characters wide. */
+    const DEFAULT_BLOCK_CHARS = 20;
+    const INTEGER = /^[+-]?\d+$/;
+
+    /**
+     * Moves the ^FT origin of a field when it gains (sign 1) or loses (sign -1) its block, so that the first line stays where it was: ^FT is the baseline of
+     * the LAST line of a block (lastLineOffset gives the way back to the first one). `lines` and `space` (dots) are those of the block.
+     */
+    function moveFt(field, item, lines, space, sign, edits) {
+      const origin = field.find('FT');
+      const [ax, ay] = origin ? [origin.args[0], origin.args[1]] : [];
+      if (!ax || !ay || !INTEGER.test(ax.raw) || !INTEGER.test(ay.raw)) return;
+      const dot = units.dotSize(item.dpi || PB.config.resolutions[0]);
+      const off = lastLineOffset(item.rotation, lines, Math.max(1, Math.round(item.font.size / dot)) + space);
+      const [x, y] = [Math.max(0, Number(ax.raw) - sign * off.x), Math.max(0, Number(ay.raw) - sign * off.y)];
+      if (String(x) !== ax.raw) edits.push(argEdit(origin, 0, String(x)));
+      if (String(y) !== ay.raw) edits.push(argEdit(origin, 1, String(y)));
+    }
+
+    /**
+     * Line -> block: ^FB width, lines, 0, L is added after ^A (or after the origin when the field has only data); the width is DEFAULT_BLOCK_CHARS
+     * characters of the font and the lines are what the wrapped text needs, so the text keeps showing whole. Block -> line: ^FB goes (with its
+     * line if it sat alone) and the "\&" breaks of the data become spaces. An ^FT field keeps its first line where it was (moveFt).
+     */
+    function kindEdits(text, found, item, value, opts) {
+      const { field } = found;
+      const fb = field.find('FB');
+      const edits = [];
+      const dpi = (opts && opts.dpi) || PB.config.resolutions[0];
+      const dot = units.dotSize(dpi);
+      if (value === 'block' && !fb) {
+        const { advanceOf, wrapBlock } = PB.slices.text;
+        const width = clamp(Math.round(DEFAULT_BLOCK_CHARS * (item.font.size / dot) * advanceOf(item.font) * item.font.scaleX), 1, MAX_FB);
+        const lines = clamp(Math.max(1, wrapBlock(item.data, { width: width * dot, align: 'left' }, item.font).lines.length), 1, MAX_FB);
+        const anchor = field.find('A') || field.find(['FO', 'FT']);
+        const at = anchor ? anchor.end : field.cmds[0].start;
+        edits.push({ start: at, end: at, value: `^FB${width},${lines},0,L` });
+        moveFt(field, { ...item, dpi }, lines, 0, 1, edits);
+      } else if (value === 'line' && fb) {
+        flagEdits(text, field, { cmd: 'FB' }, false, edits);
+        for (const data of field.findAll(['FD', 'FV'])) {
+          const arg = data.args[0];
+          if (arg && /\\&/.test(arg.raw)) edits.push({ start: arg.start, end: arg.end, value: arg.raw.replace(/\\&/g, ' ') });
+        }
+        const native = item.native && item.native.fb;
+        const lines = native ? native.lines : item.block && item.block.lines ? item.block.lines : 1;
+        moveFt(field, { ...item, dpi }, lines, native ? native.space : 0, -1, edits);
+      }
+      return edits.length ? edits : null;
+    }
+
+    /** The Tipo select over the whole field (the field has ^FB or not): custom, see js/languages/zpl-edit.js. A counter (^SN) stays a line: it does not print in a block. */
+    const kindField = {
+      key: 'kind', label: 'Tipo', type: 'select', custom: true, options: KIND_OPTIONS,
+      model: item => (item.counter ? undefined : item.block ? 'block' : 'line'),
+      read(text, found) {
+        const data = found.field.find(['FD', 'FV', 'SN']);
+        return data && data.name === 'SN' ? undefined : found.field.has('FB') ? 'block' : 'line';
+      },
+      edits: (text, found, item, value, opts) => (value === 'block' || value === 'line' ? kindEdits(text, found, item, value, opts) : null),
+    };
+
+    /** One ^FB number: raw '' is the guide's default `def`; written clamped to min..max. */
+    const fbNumber = (key, label, index, def, min, max) => paramField({
+      key, label, type: 'number', cmd: 'FB', arg: index, min, max, step: 1,
+      read: raw => (raw === '' ? def : INTEGER.test(raw) ? Number(raw) : undefined),
+      write: v => (typeof v === 'number' && Number.isFinite(v) ? String(clamp(Math.round(v), min, max)) : null),
+      model: item => (item.native && item.native.fb ? item.native.fb[{ blockWidth: 'width', blockLines: 'lines', blockSpace: 'space' }[key]] : undefined),
+    });
+    const blockPanelFields = [
+      fbNumber('blockWidth', 'Ancho del bloque (puntos)', 0, 0, 1, MAX_FB),
+      fbNumber('blockLines', 'Líneas máx.', 1, 1, 1, MAX_FB),
+      fbNumber('blockSpace', 'Interlineado (puntos)', 2, 0, -MAX_FB, MAX_FB),
+      paramField({
+        key: 'blockAlign', label: 'Alineación', type: 'select', cmd: 'FB', arg: 3, options: ALIGN_OPTIONS,
+        read: raw => (raw === '' ? 'L' : ALIGN_OPTIONS.some(o => o.value === raw.toUpperCase()) ? raw.toUpperCase() : undefined),
+        write: v => (ALIGN_OPTIONS.some(o => o.value === v) ? v : null),
+        model: item => (item.native && item.native.fb ? item.native.fb.align : undefined),
+      }),
+    ];
+
+    /** A text field's shape: with ^A or only data, with ^FB or not (the block has its own fields and the content label of its breaks). */
+    const shapeOf = (withA, block) => ({
+      applies: (item, field) => item.kind === 'text' && (field ? field.has('A') === withA && field.has('FB') === block : item.ref === (withA ? 'A' : 'FD') && Boolean(item.block) === block),
+      fields: [
+        kindField, ...(block ? blockPanelFields : []),
+        ...(withA ? [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField] : []),
+        block ? blockContentOf : contentOf, ...counterFields, reverse,
+      ],
+    });
 
     return {
       // emit(item, ctx) -> the field of a text item
@@ -445,17 +543,8 @@
       build,
       // Move: the field origin (^FO / ^FT), which is what the default coordinates are
       coordinates: [{ applies: item => item.kind === 'text' }],
-      // Properties: a field with ^A (font, sizes, orientation), or a field with only data (default font)
-      editable: [
-        {
-          applies: (item, field) => item.kind === 'text' && (field ? field.has('A') : item.ref === 'A'),
-          fields: [fontField, sizeField('height', 'Alto (puntos, 0 = estándar)', 1), sizeField('width', 'Ancho (puntos, 0 = proporcional)', 2), rotationField, contentOf, ...counterFields, reverse],
-        },
-        {
-          applies: (item, field) => item.kind === 'text' && (field ? !field.has('A') : item.ref === 'FD'),
-          fields: [contentOf, ...counterFields, reverse],
-        },
-      ],
+      // Properties: the Tipo select first (line or block), the block fields (^FB), then a field with ^A (font, sizes, orientation), or with only data (default font)
+      editable: [shapeOf(true, true), shapeOf(true, false), shapeOf(false, true), shapeOf(false, false)],
       handlers: [
         {
           // ^Afo,h,w ... ^FD data ^FS: a text field

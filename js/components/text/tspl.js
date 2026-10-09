@@ -304,26 +304,127 @@
       };
     }
 
+    // ---------------------------------------------------------------------------------------------------------------
+    // Properties: the Tipo select (TEXT <-> BLOCK) and the block fields
+
+    const KIND_OPTIONS = Object.freeze([{ value: 'line', label: 'Línea de texto' }, { value: 'block', label: 'Bloque de texto' }]);
+    const ALIGN_OPTIONS = Object.freeze([{ value: 'left', label: 'Izquierda' }, { value: 'center', label: 'Centro' }, { value: 'right', label: 'Derecha' }]);
+    /** The align argument written for each alignment (0 = left: the default). */
+    const ALIGN_CODES = Object.freeze({ left: 0, center: 2, right: 3 });
+    /** Width of a block made from a line: this many characters of the font. */
+    const DEFAULT_BLOCK_CHARS = 20;
+    /** Largest block width (dots) and number of lines the panel writes (the manual gives no limit). */
+    const MAX_BLOCK_WIDTH = 9999;
+    const MAX_BLOCK_LINES = 999;
+
+    /** True when the content argument of a command is a counter ("@n"): such a text stays a line (BLOCK content is literal). */
+    const counterContent = cmd => COUNTER.test(cmd.args[cmd.args.length - 1].raw);
+    const isCounter = item => COUNTER.test(String(item.data)) || (item.native && item.native.counterN !== undefined);
+
+    /** The Tipo select. Not written by itself: the shape's `reemit` hook rewrites the command (reemitText). */
+    const kindField = {
+      key: 'kind', label: 'Tipo', type: 'select', arg: 0, options: KIND_OPTIONS, reemit: true,
+      model: item => (isCounter(item) ? undefined : item.ref === 'BLOCK' ? 'block' : 'line'),
+      read: (a, cmd) => (counterContent(cmd) ? undefined : cmd.name === 'BLOCK' ? 'block' : 'line'),
+      write: () => null,
+    };
+    /** Block width: the third argument, in dots. */
+    const widthField = numberField('blockWidth', 'Ancho del bloque (puntos)', 2, 1, MAX_BLOCK_WIDTH, item => item.native && item.native.width);
+    /** Maximum lines: the height argument holds lines * pitch, so this field is the block's `lines` and is written through the hook. */
+    const linesField = {
+      key: 'blockLines', label: 'Líneas máx.', type: 'number', arg: 3, min: 1, max: MAX_BLOCK_LINES, step: 1, reemit: true,
+      model: item => (item.block ? item.block.lines : undefined),
+      read: (a, cmd, ctx) => (ctx && ctx.item && ctx.item.block ? ctx.item.block.lines : undefined),
+      write: () => null,
+    };
+    /** Alignment: the align argument, which follows the optional space, so it is written through the hook (left, center, right: no justification). */
+    const alignField = {
+      key: 'blockAlign', label: 'Alineación', type: 'select', arg: 3, options: ALIGN_OPTIONS, reemit: true,
+      model: item => (item.block && item.block.align in ALIGN_CODES ? item.block.align : item.block ? 'left' : undefined),
+      read: (a, cmd) => { const kind = BLOCK_ALIGN[num(cmd.args.slice(8, -1)[1])]; return kind === 'center' || kind === 'right' ? kind : 'left'; },
+      write: () => null,
+    };
+
+    /** TEXT -> BLOCK: the same x, y, font, rotation, multipliers and content, a width of DEFAULT_BLOCK_CHARS characters and the lines the text needs. */
+    function blockFromText(cmd, item, dot) {
+      const raws = cmd.args.map(a => a.raw);
+      const [x, y, font, rotation, xmul, ymul] = raws;
+      const { advanceOf, wrapBlock } = PB.slices.text;
+      const width = Math.max(1, Math.round(DEFAULT_BLOCK_CHARS * (item.font.size / dot) * advanceOf(item.font) * item.font.scaleX));
+      const lines = Math.max(1, wrapBlock(item.data, { width: width * dot, align: 'left' }, item.font).lines.length);
+      const pitch = Math.max(1, Math.round(item.font.size / dot));
+      return `BLOCK ${[x, y, width, lines * pitch, font, rotation, xmul, ymul, raws[raws.length - 1]].join(',')}`;
+    }
+
+    /** BLOCK -> TEXT: x, y, font, rotation, multipliers and content stay; the width, height, space, align and fit go and the breaks become spaces. */
+    function textFromBlock(cmd) {
+      const raws = cmd.args.map(a => a.raw);
+      const [x, y, , , font, rotation, xmul, ymul] = raws;
+      return `TEXT ${[x, y, font, rotation, xmul, ymul, raws[raws.length - 1].replace(BLOCK_BREAK, ' ')].join(',')}`;
+    }
+
     /**
-     * Properties of a TEXT command (BLOCK is not editable: its layout and content stay as written). The multipliers are
-     * 1..10 for a bitmap font and POINT sizes (up to MAX_POINTS) for a scalable one, so there is one definition for each.
+     * Shape hook for the fields flagged `reemit` (see js/languages/tspl-edit.js): the edits [{ start, end, value }] of the command, or null to refuse.
+     *   kind: block / line rewrite the whole command (blockFromText, textFromBlock); the same kind changes nothing.
+     *   blockLines: the height argument = lines * pitch (character height of the font in dots + the space of the command).
+     *   blockAlign: the optional arguments after the multipliers become [space (0 when omitted), align, fit (if there was one)].
      */
-    const textShape = bitmap => {
+    function reemitText(cmd, item, changes, opts) {
+      const dot = units.dotSize((opts && opts.dpi) || PB.config.resolutions[0]);
+      if (Object.hasOwn(changes, 'kind')) {
+        if (changes.kind === 'block' && cmd.name === 'TEXT') return [{ start: cmd.start, end: cmd.end, value: blockFromText(cmd, item, dot) }];
+        if (changes.kind === 'line' && cmd.name === 'BLOCK') return [{ start: cmd.start, end: cmd.end, value: textFromBlock(cmd) }];
+        return changes.kind === 'block' || changes.kind === 'line' ? [] : null;
+      }
+      if (cmd.name !== 'BLOCK') return null;
+      if (Object.hasOwn(changes, 'blockLines')) {
+        const v = changes.blockLines;
+        if (typeof v !== 'number' || !Number.isFinite(v)) return null;
+        const space = item.native && Number.isFinite(item.native.space) ? item.native.space : 0;
+        const pitch = Math.max(1, Math.round(item.font.size / dot)) + space;
+        const height = cmd.args[3];
+        const value = String(Math.min(MAX_BLOCK_LINES, Math.max(1, Math.round(v))) * pitch);
+        return value === height.raw ? [] : [{ start: height.start, end: height.end, value }];
+      }
+      if (Object.hasOwn(changes, 'blockAlign')) {
+        const code = ALIGN_CODES[changes.blockAlign];
+        if (code === undefined) return null;
+        const optional = cmd.args.slice(8, -1);
+        if (!optional.length && code === 0) return [];
+        const list = [optional[0] ? optional[0].raw : '0', String(code), ...(optional[2] ? [optional[2].raw] : [])];
+        const [from, to] = [cmd.args[7].end, cmd.args[cmd.args.length - 1].start];
+        return [{ start: from, end: to, value: `,${list.join(',')},` }];
+      }
+      return null;
+    }
+
+    /**
+     * Properties of a TEXT or BLOCK command: the Tipo select first (a line or a block, written by reemitText); a block adds its width, maximum
+     * lines and alignment. The multipliers are 1..10 for a bitmap font and POINT sizes (up to MAX_POINTS) for a scalable one, so there is one
+     * definition for each; BLOCK has the same arguments two places later (its width and height come before the font).
+     */
+    const textShape = (bitmap, block) => {
       const max = bitmap ? MAX_MULTIPLIER : MAX_POINTS;
+      const [name, shift] = block ? ['BLOCK', 2] : ['TEXT', 0];
       return {
         applies: (item, cmd) => {
-          const isText = cmd ? cmd.name === 'TEXT' : item.ref === 'TEXT';
-          const font = cmd ? cmd.args[2] && cmd.args[2].value : item.native && item.native.font;
-          return isText && (String(font).toUpperCase() in BITMAP_FONTS) === bitmap;
+          const isShape = cmd ? cmd.name === name : item.ref === name;
+          const font = cmd ? cmd.args[2 + shift] && cmd.args[2 + shift].value : item.native && item.native.font;
+          return isShape && (String(font).toUpperCase() in BITMAP_FONTS) === bitmap;
         },
+        reemit: reemitText,
         fields: [
-          selectField('rotation', 'Rotación', 3, [0, 90, 180, 270], item => item.rotation),
-          numberField('xmul', bitmap ? 'Multiplicador X' : 'Tamaño X (pt)', 4, 1, max, item => item.native && item.native.xmul),
-          numberField('ymul', bitmap ? 'Multiplicador Y' : 'Tamaño Y (pt)', 5, 1, max, item => item.native && item.native.ymul),
-          // Font id (argument 2, a quoted string): the ids the viewer knows; any other id is listed as the current value
-          stringSelectField('font', 'Fuente', 2, FONT_OPTIONS, item => item.native && item.native.font),
-          // The content is argument 6, or 7 when an alignment argument precedes it; counters are left out
-          textField('content', 'Contenido', cmd => (cmd.args.length >= 8 ? 7 : 6), item => (COUNTER.test(String(item.data)) || (item.native && item.native.counterN !== undefined) ? undefined : item.data)),
+          kindField,
+          ...(block ? [widthField, linesField, alignField] : []),
+          selectField('rotation', 'Rotación', 3 + shift, [0, 90, 180, 270], item => item.rotation),
+          numberField('xmul', bitmap ? 'Multiplicador X' : 'Tamaño X (pt)', 4 + shift, 1, max, item => item.native && item.native.xmul),
+          numberField('ymul', bitmap ? 'Multiplicador Y' : 'Tamaño Y (pt)', 5 + shift, 1, max, item => item.native && item.native.ymul),
+          // Font id (a quoted string): the ids the viewer knows; any other id is listed as the current value
+          stringSelectField('font', 'Fuente', 2 + shift, FONT_OPTIONS, item => item.native && item.native.font),
+          // The content is the last argument (TEXT: argument 6, or 7 when an alignment argument precedes it); counters are left out. The content of
+          // a block shows its line breaks as written (\[R], \[L]), so they are never lost
+          textField('content', block ? 'Contenido (\\[R] = salto de línea)' : 'Contenido', cmd => cmd.args.length - 1,
+            item => (isCounter(item) ? undefined : block ? String(item.data).replace(/\n/g, '\\[R]') : item.data)),
         ],
       };
     };
@@ -338,8 +439,8 @@
       build,
       // Move: TEXT and BLOCK both start with x,y (arguments 0 and 1, dots); everything else of the command is left alone
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'TEXT' || cmd.name === 'BLOCK', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
-      // Properties: rotation, multipliers, font id and content of TEXT (counters keep their text)
-      editable: [textShape(true), textShape(false)],
+      // Properties: Tipo (TEXT / BLOCK), rotation, multipliers, font id and content of TEXT and BLOCK (counters keep their text), block width, lines and alignment
+      editable: [textShape(true, false), textShape(false, false), textShape(true, true), textShape(false, true)],
       handlers: [
         {
           // TEXT x,y,"font",rotation,x-mul,y-mul,[alignment,]"content": 8 arguments when the alignment is present

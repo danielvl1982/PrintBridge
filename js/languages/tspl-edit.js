@@ -9,8 +9,9 @@
  *     the first entry that applies is used; each field is a coordinate argument in dots, moved with the item.
  *   editable: [{ applies(item, cmd) -> bool, fields: [field] }] (describeItem without text calls applies(item, undefined):
  *     decide by item.kind then), field =
- *     { key, label, type: 'number' | 'select' | 'text', arg, min?, max?, step?, options?: [{ value, label }],
- *       read(arg, cmd) -> value | undefined, write(value) -> new raw text | null, model?(item, { dpi }) -> value }
+ *     { key, label, type: 'number' | 'select' | 'text', arg, min?, max?, step?, options?: [{ value, label }], note?,
+ *       read(arg, cmd, { item, dpi }) -> value | undefined, write(value) -> new raw text | null, model?(item, { dpi }) -> value }
+ *     note: a short text the panel shows under the control (the text block's Tipo).
  *     arg is an argument index, or a function (cmd) -> index when the position depends on the optional arguments.
  *     optional?: the value of a trailing argument when it is omitted (e.g. the BOX radius, 0): describeItem lists that value,
  *     updateItem appends the argument (",value" after the last one) for any other value and writes nothing for the default.
@@ -199,12 +200,12 @@
       for (const f of shape.fields) {
         let value;
         const a = found && argOf(f, found.cmd);
-        if (found) value = a ? f.read(a, found.cmd) : (isOmittedOptional(f, found.cmd) ? f.optional : undefined);
+        if (found) value = a ? f.read(a, found.cmd, { item, dpi }) : (isOmittedOptional(f, found.cmd) ? f.optional : undefined);
         else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step } = f;
+        const { key, label, type, min, max, step, note } = f;
         const options = f.optionsFor ? f.optionsFor(value, item, found ? found.cmd : undefined) : f.options;
-        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }) });
+        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }), ...(note && { note }) });
       }
       return { kind, fields };
     }
@@ -229,7 +230,7 @@
           if (value !== null && value !== String(f.optional) && last) edits.push({ start: last.end, end: last.end, value: `,${value}` });
           continue;
         }
-        if (!a || f.read(a, found.cmd) === undefined) continue;
+        if (!a || f.read(a, found.cmd, { item, dpi: opts && opts.dpi }) === undefined) continue;
         const value = f.write(changes[f.key]);
         if (value !== null && value !== a.raw) edits.push({ start: a.start, end: a.end, value });
       }

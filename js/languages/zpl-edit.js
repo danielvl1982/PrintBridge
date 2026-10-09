@@ -513,9 +513,9 @@
           else value = cmd && f.optional !== undefined && argIndex(f, cmd) === cmd.args.length ? f.optional : undefined;
         } else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step, maxLength } = f;
+        const { key, label, type, min, max, step, maxLength, note } = f;
         const options = f.optionsFor ? f.optionsFor(value, item, found ? found.field : undefined) : f.options;
-        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(maxLength !== undefined && { maxLength }), ...(options && { options }) });
+        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(maxLength !== undefined && { maxLength }), ...(options && { options }), ...(note && { note }) });
       }
       return { kind, fields };
     }
