@@ -27,7 +27,7 @@ For every command parameter the app handles, the three surfaces agree with the m
 TPCL (manuals: docs/tpcl)
 - [x] V1 TPCL label setup and shapes: `{D`, `{AX`, `{C`, `{XS`, `{LC` lines, boxes, `{XR` areas, ellipses
 - [x] V2 TPCL text: PC / PV (sizes, spacing, rotation, attribute, bold, counter, zero suppression, alignment, P5 block), RC / RV data
-- [ ] V3 TPCL barcodes (`{XB` types, widths, ratios, heights, check digits, data lengths and character sets), QR, Data Matrix
+- [x] V3 TPCL barcodes (`{XB` types, widths, ratios, heights, check digits, data lengths and character sets), QR, Data Matrix
 - [ ] V4 TPCL images (`{SG`)
 TSPL (manual: docs/tspl)
 - [ ] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
@@ -106,7 +106,45 @@ Expectation changes in existing tests: PV sizes in tests/update-item.test.js (20
 tests/cross-conversion.test.js documents one extra warning for tspl-label-100x60 -> tpcl and the text-size comparison floors a PV text at 20; tests/conversion-matrix.test.js accepts the PV size warning among the font
 diagnostics (and `font.size` / `font.width` as may-differ keys for the two example labels); the TSPL BLOCK-with-PV test tolerates the same warning.
 
+### V3 TPCL barcodes, QR, Data Matrix (`{XB`, `{RB`)
+Manuals: SV4 6.3.9 / 6.3.12 (text lines 2686+ / 4316+), R 6.3.10 / 6.3.13 (3479+ / 5699+), TS12 6.12 / 6.15 (3100+), x72 same family. Check digit table at R 3500+, widths examples at R 4540+, data lengths at R 5720+ and
+the per-type data tables of SV4 chapter 13 (10214+: EAN / UPC digit counts, already handled by the EAN encoder). The three editions agree on every range below except where noted.
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| Bar code number aa | exactly 2 digits 00..31, all forms (R 3490+, 4177+, 3855+) | no field | the 33rd XB was written `32` unreported (only the 100 limit was checked) / one warning past 31 | none / warning per command (digits, range) |
+| Type of check digit e | 1..5 (R 3530+); WPC 1..5, Code 93 / 128 1..3, Code 39 / ITF / MSI / 2 of 5 1..5, NW7 1 | select per type with the valid ones (already) | Code 128 was written with `0` (invalid) / written with `1` ("without attaching"; Code 128 always attaches it, R 4560+ note f) | unknown value read as unsupported / warning with 1..5 (Code 128 types 9 / A tolerate 0, see Open) |
+| 1-module width ff (generic form: WPC, Code 93, Code 128, UCC/EAN128, postal) | 01..15 dots (SV4 2760+, R 3540+, TS12 3150+) | module field 1..99 / 1..15 | clamped to 99 silently-ish (one generic warning) / clamped to 15 + one warning naming 01..15 | module 0 read as 2, 40 drawn as 40 / warning with the range, drawn as the nearest valid (15 or 1), native and panel keep what was written |
+| Bar / space widths ff gg hh ii jj (widths form: Code 39, ITF, MSI, NW7, 2 of 5) | 01..99 dots each; ii = 00 for Industrial 2 of 5, jj = 00 for MSI / ITF (R 3640+) | not exposed | narrow space, wide bar, wide space and gap could be written `00` / written 01..99 (one warning), the fixed fields always `00` (ITF / MSI gap used to be written as the item had it) with one warning when an ITF / MSI item carried a gap | 100, 000 or 1 digit silently / warning per field with the range and digit count, drawn as the nearest valid width, native keeps the digits |
+| Rotation k | 0..3 | select (already) | nearest quarter turn + warning (already) | anything else silently 0 / warning with 0..3 |
+| Height llll | 0000..1000 (0.1 mm), 4 digits; 0000 = not drawn (R 4600+) | number 1..9999 / 1..1000 | clamped to 9999 / clamped to 1000 + one warning | 1200 drawn as 1200, 0 silently 100, 3 digits silently / warning with the range, drawn as 1000; 0000 warns that the printer draws nothing (drawn with the default height) |
+| Increment mnnnnnnnnnn | sign + 10 digits 0000000000..9999999999 | -9999999999..9999999999 (V2) | clamped + warning (V2) | malformed token silently ignored (and read as the readable flag) / warning |
+| Guard bar ooo (WPC only) | 000..100 (0.1 mm), 3 digits | not exposed | clamped to 100 silently / one warning | 150 drawn as 150 / warning, drawn as 100 |
+| Readable p, zero suppression qq, start / stop r | p 0 / 1, qq 00..20, r T / P / N | checkbox, 0..20 (V2) | already valid | 2 -> false, 25 -> 20, X ignored silently / warning for each (incl. unknown optional tokens) |
+| Data string | max 126 characters for 1D codes, 2000 for QR / Data Matrix, the excess is discarded (R 5720+, SV4 4352+, TS12 4630+; SV4 inline `=` says 2048 for Data Matrix, RB 2000: 2000 used) | content field | any length / cut with one warning (data with variables is left alone) | any length / cut (what the printer prints) + warning; inline `=data` of the 1D and QR commands is now read (it was dropped) |
+| Data per type | EAN / UPC / Code 93 / NW7 / MSI / 2 of 5 digit counts and characters (SV4 ch. 13); Code 39 standard set; ITF digits; Code 128 ASCII | - | EAN / UPC / Code 93 / NW7 / MSI / 2 of 5 already reported / Code 39, ITF and Code 128 (non ASCII 0-127) reported once per symbology | drawing warnings of the encoders (already) |
+| QR 1-cell width ff | 00..52 dots; 00 = not drawn (SV4 3275+, R 4195+, TS12) | number 1..99 / 1..52 | clamped to 99 / clamped to 52 + one warning | 60 drawn as 60 / warning, drawn as 52; 00 warns that the printer draws nothing |
+| QR error correction e, mode g, rotation h, model Mi, mask Kj, connection Jkkllmm | e L / M / Q / H, g M / A, h 0..3, Mi 1 / 2, Kj 0..8, kk 01..16, ll 01..16, mm 00..FF | ecc select (already) | fixed `A,0,M2` (valid) | only ecc checked / warning for each (missing parameters, mode, rotation, model, mask, connection, unknown token) |
+| Data Matrix ECC type ee | 00..14 and 20 (SV4: 00..14 ignored, 20 = ECC200; R / TS12 list 00, 01, 04..14, 20) | not exposed | writes 20 (valid) | any value / warning outside 00..14 and 20 (the viewer still only draws ECC200, V-existing warning) |
+| Data Matrix cell ff, format ID gg | ff 00..99; gg 01..06 / 11..16 (R, TS12), "no function" (SV4); 00 is written (SV4) | number 1..99 (already) | clamped + warning (already), `00` | 100 drawn as 100 / warning, drawn as 99; format ID outside 00..06, 11..16 warns |
+| Data Matrix cells iii / jjj | 000..144; ECC200 even 10..144 square or the 6 rectangles, ECC000..140 odd 9..49; anything else = automatic | select of the table sizes (already) | only table sizes (already) | only the rectangles were reported / warning for any other value ("la impresora lo pone en automático"), rectangles keep their own message |
+| Data Matrix connection Jkkllmmmnnn | kk 01..16, ll 02..16, ID 1 and 2 001..254 | not exposed | never written | read, reported as unsupported / also warned when out of range |
+
+Other changes: shared helpers in `js/languages/tpcl.js` (`fitData`, `fitBarcodeData`, `rangeWarning`, `barcodeNumberWarning`, `BARCODE_DATA_MAX`, `MATRIX_DATA_MAX`) are passed to the slices; the generic-form
+parse checks apply to the WPC types, Code 93, Code 128, UCC/EAN-128 and the postal types only (PDF417, MicroPDF417, MaxiCode, CP code have other parameters and are not touched).
+Expectation changes in existing tests: Code 128 now writes check digit option `1` instead of `0` (tests/tpcl-emit-barcode-qr-image.test.js, tests/counter.test.js); module limit 15 (was 99), height limit 1000 (was 9999) and
+QR cell limit 52 (was 99) in tests/tpcl-emit-barcode-qr-image.test.js and tests/update-item.test.js; ITF fixtures in the emit tests carry digits (letters now warn); the update-item Code 128 fixture has the manual's digit counts
+and its short QR fixture is allowed its "faltan parámetros" warning.
+
 ## Open (manuals silent or contradictory; kept as is)
+- V3 The shipped example `template-tpcl` (js/config.js, outside this task's surface) writes check digit option `0` for Code 128, which is outside 1..5: the parse tolerates `0` for types 9 / A only so the example stays warning-free; change the example to `1` and drop the exception in V14.
+- V3 Data Matrix even sizes between 10 and 144 that ECC200 does not define (for example 28x28) are accepted without warning: the manual calls them valid, the viewer draws the smallest square that fits.
+- V3 QR manual mode (`g` = M) needs the data to carry a mode prefix; not checked. Model default (omitted `Mi` = Model 1) is not modelled: the emitter always writes `M2`.
+- V3 QR / Data Matrix capacity per ECC level and symbol size (R 5740+ tables) is not applied to the data; the Data Matrix 1558-codeword limit of the viewer is the only check.
+- V3 Counters: 40 digit limit of incremented data (R 4690+) and the combination rules of the ratio between narrow and wide elements (the manuals give examples only, no limit) are not checked.
+- V3 Types without a palette entry (PDF417, MicroPDF417, MaxiCode, CP code, GS1 DataBar, postal codes, UCC/EAN-128, MATRIX 2 of 5) are read as unknown and only reported as approximate drawings; their parameters are not validated.
+- V3 Check digit options 4 / 5 (price check digits of WPC, DBP modulus of ITF) are read as unsupported and never written.
+- V3 The `=data` / `;link` forms: inline data is now read for 1D and QR, link fields (`;01,02`) are not modelled (same as V2).
 - V1 `{D` 4th parameter (backing paper width, R 0300..1120, ignored by SV4): not validated, kept only while the size is unchanged.
 - V1 `{LC` radius: the manuals only fix 3 digits (0..999); no relation to the rectangle size is stated (the viewer limits the drawn radius to half the shorter side).
 - V1 `{LC` width: R allows 01..99 but SV4, TS12 and x72 say 1..9 only; the widest (99) is kept and written with 2 digits as before.
@@ -126,3 +164,4 @@ diagnostics (and `font.size` / `font.width` as may-differ keys for the two examp
 ## Progress
 - V1 (route: delegated writer, one writer, direct; RED first: 22 of the 32 new tests failed on the old code): TPCL label setup and shapes (tests/tpcl-label-setup.test.js, tests/tpcl-shapes-validation.test.js). Verification: `node --test` 4015 tests, 4014 pass, 0 fail, 1 skipped (was 3983 / 3982 before; +32 new). Commit: see `git log` (fix: validate TPCL label setup and shape values against the manuals).
 - V2 (route: delegated writer, one writer, direct; RED first: 31 of the 34 new tests failed on the old code): TPCL text (tests/tpcl-text-validation.test.js, 34 tests). Verification: `node --test` 4049 tests, 4048 pass, 0 fail, 1 skipped (was 4015 / 4014 before; +34 new). Commit: see `git log` (fix: validate TPCL text values against the manuals).
+- V3 (route: delegated writer, one writer, direct; RED first: 34 of the 35 new tests failed on the old code): TPCL barcodes, QR and Data Matrix (tests/tpcl-barcode-validation.test.js, 35 tests). Verification: `node --test` 4084 tests, 4083 pass, 0 fail, 1 skipped (was 4049 / 4048 before; +35 new). Commit: see `git log` (fix: validate TPCL barcode, QR and Data Matrix values against the manuals).

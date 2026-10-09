@@ -45,18 +45,18 @@ test('the barcode, qr and image slices expose a tpcl emitter through composeSlic
 // --- Barcode: generic 1D form (Code 128) ---
 
 test('code128 uses the generic XB form with type 9, module in dots, rotation digit, height and human readable flag', () => {
-  assert.deepEqual(body(model([barcode()])), ['{XB00;0050,0060,9,0,02,0,0080,0,000,1,00|}', '{RB00;ABC123|}']);
+  assert.deepEqual(body(model([barcode()])), ['{XB00;0050,0060,9,1,02,0,0080,0,000,1,00|}', '{RB00;ABC123|}']);
 });
 
 test('module and height conversion follows the resolution (module in dots, height in 0.1 mm)', () => {
-  assert.equal(body(model([barcode({ module: 3.8, height: 123 })]))[0], '{XB00;0050,0060,9,0,03,0,0123,0,000,1,00|}');
-  assert.equal(emit(model([barcode({ module: 3.8, height: 123 })]), 300).text.split('\n')[3], '{XB00;0050,0060,9,0,04,0,0123,0,000,1,00|}');
+  assert.equal(body(model([barcode({ module: 3.8, height: 123 })]))[0], '{XB00;0050,0060,9,1,03,0,0123,0,000,1,00|}');
+  assert.equal(emit(model([barcode({ module: 3.8, height: 123 })]), 300).text.split('\n')[3], '{XB00;0050,0060,9,1,04,0,0123,0,000,1,00|}');
 });
 
-test('the module is at least 1 dot and at most 99 (with a warning once)', () => {
+test('the module is at least 1 dot and at most 15 in the generic form (with a warning once)', () => {
   assert.equal(body(model([barcode({ module: 0.1 })]))[0].split(',')[4], '01');
   const out = emit(model([barcode({ module: 500 }), barcode({ module: 900 })]));
-  assert.ok(out.text.includes('XB00;0050,0060,9,0,99,'));
+  assert.ok(out.text.includes('XB00;0050,0060,9,1,15,'));
   assert.equal(levels(out.diagnostics, 'warning').length, 1);
 });
 
@@ -72,9 +72,9 @@ test('a rotation that is not a multiple of 90 goes to the nearest turn with one 
   assert.equal(levels(out.diagnostics, 'warning').length, 1);
 });
 
-test('the height is clamped to 1..9999', () => {
+test('the height is clamped to 1..1000', () => {
   assert.equal(body(model([barcode({ height: 0 })]))[0].split(',')[6], '0001');
-  assert.equal(body(model([barcode({ height: 123456 })]))[0].split(',')[6], '9999');
+  assert.equal(body(model([barcode({ height: 123456 })]))[0].split(',')[6], '1000');
 });
 
 // --- Barcode: wide/narrow form (Code 39, ITF) ---
@@ -111,10 +111,10 @@ test('code39/itf without explicit widths write the 3:1 ratio from the module, wi
 });
 
 test('a check option the TPCL form cannot express is written without check digit with a warning', () => {
-  const out = emit(model([barcode({ symbology: 'itf', ...widths({ interCharGap: 0 }), check: 'unsupported' })]));
+  const out = emit(model([barcode({ symbology: 'itf', data: '123456', ...widths({ interCharGap: 0 }), check: 'unsupported' })]));
   assert.equal(out.text.split('\n')[3].split(',')[3], '1');
   assert.ok(levels(out.diagnostics, 'warning').some(d => /itf/i.test(d.text) && /control/.test(d.text)));
-  const itfMod = emit(model([barcode({ symbology: 'itf', ...widths({ interCharGap: 0 }), check: 'mod43' })]));
+  const itfMod = emit(model([barcode({ symbology: 'itf', data: '123456', ...widths({ interCharGap: 0 }), check: 'mod43' })]));
   assert.equal(itfMod.text.split('\n')[3].split(',')[3], '1');
   assert.equal(levels(itfMod.diagnostics, 'warning').length, 1);
 });
@@ -143,7 +143,7 @@ test('#NAME# placeholders pass through and framing characters become spaces with
 });
 
 test('barcode without data still gets an empty RB', () => {
-  assert.deepEqual(body(model([barcode({ data: null })])), ['{XB00;0050,0060,9,0,02,0,0080,0,000,1,00|}', '{RB00;|}']);
+  assert.deepEqual(body(model([barcode({ data: null })])), ['{XB00;0050,0060,9,1,02,0,0080,0,000,1,00|}', '{RB00;|}']);
 });
 
 test('symbologies TPCL cannot express are skipped with a Spanish warning naming them', () => {
@@ -156,7 +156,7 @@ test('symbologies TPCL cannot express are skipped with a Spanish warning naming 
 
 test('the native.type of a barcode from TSPL is ignored: only neutral fields count', () => {
   const m = model([barcode({ native: { type: 'EAN128', module: 9 } })]);
-  assert.equal(body(m)[0], '{XB00;0050,0060,9,0,02,0,0080,0,000,1,00|}');
+  assert.equal(body(m)[0], '{XB00;0050,0060,9,1,02,0,0080,0,000,1,00|}');
 });
 
 test('TSPL barcodes emit as TPCL from their neutral fields', () => {
@@ -192,14 +192,14 @@ test('an unknown ecc is written as M with a warning', () => {
   assert.equal(levels(out.diagnostics, 'warning').length, 1);
 });
 
-test('the qr cell converts 0.1 mm to dots (203 and 300 dpi) and is clamped to 1..99 with a warning', () => {
+test('the qr cell converts 0.1 mm to dots (203 and 300 dpi) and is clamped to 1..52 with a warning', () => {
   assert.equal(body(model([qr({ cell: 5.0049 })]))[0].split(',')[4], '04');
   assert.equal(emit(model([qr({ cell: 5 })]), 300).text.split('\n')[3].split(',')[4], '06');
   const small = emit(model([qr({ cell: 0.1 })]));
   assert.equal(small.text.split('\n')[3].split(',')[4], '01');
   assert.equal(levels(small.diagnostics, 'warning').length, 1);
   const big = emit(model([qr({ cell: 5000 }), qr({ cell: 6000 })]));
-  assert.equal(big.text.split('\n')[3].split(',')[4], '99');
+  assert.equal(big.text.split('\n')[3].split(',')[4], '52');
   assert.equal(levels(big.diagnostics, 'warning').length, 1);
 });
 
@@ -269,7 +269,7 @@ test('buildSG keeps its output for existing callers', () => {
 test('emitted barcode, qr and image re-parse without errors or warnings', () => {
   const m = model([
     barcode(), barcode({ rotation: 90, humanReadable: false }), barcode({ symbology: 'code39', ...widths(), check: 'mod43' }),
-    barcode({ symbology: 'itf', ...widths({ interCharGap: 0 }) }), qr(), qr({ ecc: 'L', cell: 7.5 }), image(),
+    barcode({ symbology: 'itf', data: '123456', ...widths({ interCharGap: 0 }) }), qr(), qr({ ecc: 'L', cell: 7.5 }), image(),
   ]);
   const parsed = parseBack(m);
   assert.deepEqual(levels(parsed.diagnostics, 'error', 'warning'), []);

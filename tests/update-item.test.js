@@ -118,8 +118,9 @@ test('updateItem: PC keeps the literal text after =', () => {
 // ---- 1D barcode ----
 
 test('updateItem: generic barcode module, height, rotation and human readable', () => {
-  const { out, after, diagnostics } = edit(XB, { module: 4, height: 80, rotation: 90, humanReadable: false });
-  assert.equal(out, '{XB01;0100,0200,9,0,4,1,080,0,000,0,00|}');
+  // Fixture with the digit counts of the manual (the sloppy XB above is reported, see tests/tpcl-barcode-validation.test.js)
+  const { out, after, diagnostics } = edit('{XB01;0100,0200,9,0,02,0,0100,0,000,1,00|}', { module: 4, height: 80, rotation: 90, humanReadable: false });
+  assert.equal(out, '{XB01;0100,0200,9,0,04,1,0080,0,000,0,00|}');
   assert.deepEqual(diagnostics, []);
   assert.equal(after.rotation, 90);
   assert.equal(after.height, 80);
@@ -129,8 +130,8 @@ test('updateItem: generic barcode module, height, rotation and human readable', 
 
 test('updateItem: generic barcode keeps 2- and 4-digit widths and clamps', () => {
   assert.equal(edit(XB4, { module: 5, height: 120 }).out, '{XB03;0050,0350,9,0,05,0,0120,0,000,1,00|}');
-  assert.equal(edit(XB4, { module: 0, height: 99999 }).out, '{XB03;0050,0350,9,0,01,0,9999,0,000,1,00|}');
-  assert.equal(edit(XB4, { module: 500 }).out, '{XB03;0050,0350,9,0,99,0,0080,0,000,1,00|}');
+  assert.equal(edit(XB4, { module: 0, height: 99999 }).out, '{XB03;0050,0350,9,0,01,0,1000,0,000,1,00|}');
+  assert.equal(edit(XB4, { module: 500 }).out, '{XB03;0050,0350,9,0,15,0,0080,0,000,1,00|}');
 });
 
 test('updateItem: barcode rotation maps to the digits 0..3', () => {
@@ -170,14 +171,15 @@ test('updateItem: barcode with CR/LF between fields', () => {
 test('updateItem: QR cell and ecc', () => {
   const { out, after, diagnostics } = edit(QR, { cell: 8, ecc: 'L' });
   assert.equal(out, '{XB02;0100,0200,T,L,08|}');
-  assert.deepEqual(diagnostics, []);
+  // The short fixture has no mode / rotation: only that is reported
+  assert.deepEqual(diagnostics.filter(d => !/faltan parámetros/.test(d.text)), []);
   assert.equal(after.ecc, 'L');
   assert.equal(after.native.cell, 8);
 });
 
-test('updateItem: QR cell clamps to 1..99 and ecc must be a known level', () => {
+test('updateItem: QR cell clamps to 1..52 and ecc must be a known level', () => {
   assert.equal(edit(QR, { cell: 0 }).out, '{XB02;0100,0200,T,H,01|}');
-  assert.equal(edit(QR, { cell: 200 }).out, '{XB02;0100,0200,T,H,99|}');
+  assert.equal(edit(QR, { cell: 200 }).out, '{XB02;0100,0200,T,H,52|}');
   assert.equal(edit(QR, { ecc: 'Z' }).out, QR);
 });
 
@@ -272,7 +274,7 @@ test('describeItem: QR has cell and ecc options but no rotation', () => {
   assert.deepEqual(keys(d), ['cell', 'ecc']);
   assert.deepEqual([field(d, 'cell').value, field(d, 'ecc').value], [5, 'H']);
   assert.deepEqual(field(d, 'ecc').options.map(o => o.value), ['L', 'M', 'Q', 'H']);
-  assert.deepEqual([field(d, 'cell').min, field(d, 'cell').max], [1, 99]);
+  assert.deepEqual([field(d, 'cell').min, field(d, 'cell').max], [1, 52]);
 });
 
 test('describeItem: line and box fields and the rect select', () => {

@@ -130,12 +130,42 @@
   /** Longest data string of a PC / PV text (B-SV4 6.3.7, B-452-R 6.3.8, B-452-TS12 6.10: "Max. 255 digits", the excess is discarded). */
   const TEXT_DATA_MAX = 255;
 
-  /** Data of a text as the printer keeps it: cut to 255 characters, with a warning when something was discarded. */
-  function fitTextData(ctx, ref, data) {
+  /** Data of a field as the printer keeps it: cut to `max` characters, with a warning when something was discarded. */
+  function fitData(ctx, ref, data, max) {
     const value = data == null ? data : String(data);
-    if (value == null || value.length <= TEXT_DATA_MAX) return value;
-    ctx.report(diag.warning(`${ref}: datos de ${value.length} caracteres: la impresora descarta lo que pase de ${TEXT_DATA_MAX} (máximo del manual), se dibujan los ${TEXT_DATA_MAX} primeros`));
-    return value.slice(0, TEXT_DATA_MAX);
+    if (value == null || value.length <= max) return value;
+    ctx.report(diag.warning(`${ref}: datos de ${value.length} caracteres: la impresora descarta lo que pase de ${max} (máximo del manual), se dibujan los ${max} primeros`));
+    return value.slice(0, max);
+  }
+  const fitTextData = (ctx, ref, data) => fitData(ctx, ref, data, TEXT_DATA_MAX);
+
+  /**
+   * Longest data of a 1D barcode (B-SV4 6.3.12, B-452-R 6.3.13, B-452-TS12 6.15: "bar codes other than the above: 126 digits") and of
+   * QR / Data Matrix (2000), the excess is discarded. Data with variables is left alone: its value is not known here.
+   */
+  const BARCODE_DATA_MAX = 126;
+  const MATRIX_DATA_MAX = 2000;
+  function fitBarcodeData(ctx, ref, kind, data) {
+    if (data != null && PB.variables.namesIn(String(data)).length) return data;
+    return fitData(ctx, ref, data, kind === 'barcode' ? BARCODE_DATA_MAX : MATRIX_DATA_MAX);
+  }
+
+  /**
+   * Warning for a numeric parameter of a command as written (digits): outside min..max or without the `digits` the manual fixes.
+   * The range is shown with that many digits ("01..15"). A diagnostic or null.
+   */
+  function rangeWarning(ref, label, raw, min, max, digits = 1) {
+    const text = String(raw ?? '');
+    const shown = n => String(n).padStart(digits, '0');
+    if (/^\d+$/.test(text) && +text >= min && +text <= max && (digits === 1 || text.length === digits)) return null;
+    return diag.warning(`${ref}: ${label} "${text}" fuera de ${shown(min)}..${shown(max)}${digits > 1 ? ` (${digits} dígitos)` : ''}: la impresora puede no aceptarlo`);
+  }
+
+  /** Bar code number of an XB command: exactly 2 digits, 00..31 (B-SV4 6.3.9, B-452-R 6.3.10, B-452-TS12 6.12). A diagnostic or null. */
+  const BARCODE_NUMBER_MAX = 31;
+  function barcodeNumberWarning(ref, digits) {
+    if (/^\d{2}$/.test(digits) && +digits <= BARCODE_NUMBER_MAX) return null;
+    return diag.warning(`${ref}: número de código de barras "${digits}" fuera de 00..${BARCODE_NUMBER_MAX} (2 dígitos): la impresora puede no aceptarlo`);
   }
 
   const HANDLERS = [
@@ -178,7 +208,7 @@
         const target = DATA_TARGET[m[1]] + m[2];
         const field = ctx.fields[target];
         if (field && field.kind === 'text') field.data = fitTextData(ctx, target, m[3]);
-        else if (field) field.data = field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3];
+        else if (field) field.data = fitBarcodeData(ctx, target, field.kind, field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3]);
         else ctx.report(diag.error(`R${m[1]}${m[2]} no tiene un ${target} definido antes`));
       },
     },
@@ -387,6 +417,9 @@
   function allocId(ctx, namespace) {
     const id = ctx.ids.next(namespace);
     if (id.length > 2) ctx.once('tpcl-ids', () => diag.warning('Hay más de 100 campos del mismo tipo: los números de campo superan los 2 dígitos de TPCL'));
+    if (namespace === 'XB' && +id > BARCODE_NUMBER_MAX) {
+      ctx.once('tpcl-xb-number', () => diag.warning(`Hay más de ${BARCODE_NUMBER_MAX + 1} códigos de barras, QR o Data Matrix: sus números van de 00 a ${BARCODE_NUMBER_MAX} en TPCL, la impresora puede no aceptar los demás`));
+    }
     return id;
   }
 
@@ -493,7 +526,7 @@
   const SLICE_HELPERS = Object.freeze({
     sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder, coordDigitsWarning,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
-    wrap, safeData, coordText, allocId, fitTextData, TEXT_DATA_MAX,
+    wrap, safeData, coordText, allocId, fitTextData, TEXT_DATA_MAX, fitData, fitBarcodeData, BARCODE_DATA_MAX, MATRIX_DATA_MAX, barcodeNumberWarning, rangeWarning,
     COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
   });
 
