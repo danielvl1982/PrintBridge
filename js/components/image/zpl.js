@@ -1,17 +1,24 @@
 /**
  * Image slice, ZPL language (Zebra): the graphic field ^GF.
  *   ^FOx,y ^GFa,b,c,d,data ^FS     a = A | B | C, b = bytes sent, c = total bytes of the image, d = bytes per row, data
- * Source: ZPL II Programming Guide, Volume One (2003), local copy in docs/zpl (never committed). What it documents: the parameter layout above (a default A;
+ * Source: ZPL II Programming Guide, Volume One (2003) and Volume Two (2005), local copies in docs/zpl (never committed). Volume One documents: the parameter layout above (a default A;
  * b, c and d from 1 to 99999, "out-of-range values are set to the nearest limit", the command is ignored when c or d is missing; "for ASCII download b should
  * match c"; c / d = the rows); the ASCII data is two hex digits per image byte (1 = black, the leftmost dot is the highest bit; the guide's ~DG: four white dots
  * then four black = 0F), CR and LF may be inserted, "any numbers sent after count is satisfied are ignored" and "a comma in the data pads the current line with 00
  * (white space)"; B is binary and C is compressed binary (host side, Zebra's algorithm); the origin of an image is its bottom-left corner with ^FT.
- * NOT in the 2003 guide (it is in the later guides): the run-length COMPRESSION of the ASCII data. The viewer READS the scheme of the later guides
- * (NOT VERIFIED ON A PRINTER): a repeat count before a hex digit (G..Y = 1..19, g..z = 20..400 in steps of 20, the letters add up: gG = 21, at most 419 per
- * token), `,` fills the rest of the row with 0, `!` fills it with 1 and `:` repeats the previous row. By default it WRITES only what the guide documents: plain
- * hex where the trailing 00 bytes of a row become one comma. The full scheme is written back only for an image that was read compressed (native.compressed),
- * and then only when it is shorter (graphicCommand option `compress`).
- * Out of scope (one warning each, nothing drawn): ^GFB / ^GFC binary data (it cannot live in a text box), Z64 / B64 data (":Z64:...") and the images stored in
+ * Volume Two (printed pages 52-53, "Alternative Data Compression Scheme for ~DG and ~DB Commands"): the run-length COMPRESSION of the ASCII data: a repeat
+ * count before a hex digit (G..Y = 1..19, g..z = 20..400 in steps of 20, the counts add up: MvB = 327 B; at most 419 per token here), `,` fills the rest of
+ * the line with 0, `!` fills it with 1 and `:` repeats the previous line (the manual prints the g..z list as "ghIjklmnopq", a typo of g h i j k l m n o p q).
+ * The viewer READS all of it (tests/zpl-image.test.js pins the manual's examples). The manual states the scheme for ~DG and ~DB (page 53 repeats it for the
+ * ~DG download-time reduction); the ^GF text of Volume One only has the comma, and Volume Two has no ^GF reference. So what a printer does with the
+ * compression inside ^GF is NOT VERIFIED, and by default the emitter WRITES only what ^GF documents: plain hex where the trailing 00 bytes of a row become
+ * one comma. The full scheme is written back only for an image that was read compressed (native.compressed), and then only when it is shorter
+ * (graphicCommand option `compress`).
+ * B64 (pages 110-112): the data `:B64:encoded_data:crc` replaces the ASCII hex "in any download command", ^GF included: the image bytes in MIME Base64 (CR / LF
+ * allowed) plus four hex digits of CRC. It is READ (the CRC is not checked: the guide gives no algorithm; one info); never written (the CRC cannot be
+ * computed). Z64 (the same with the bytes LZ77 compressed first; the guide's example starts with "H4sI", a gzip header) is NOT read: it needs a synchronous
+ * inflate (deflate decoder, gzip or zlib header: the guide does not say) and the CRC algorithm; one warning, nothing drawn.
+ * Out of scope (one warning each, nothing drawn): ^GFB / ^GFC binary data (it cannot live in a text box), Z64 data and the images stored in
  * the printer (~DG, ~DY, ^IM, ^IL, ^XG: the data is not in the stream).
  *
  * The neutral image item has a bitmap { w, h, data } (flat 0/1, 1 = black): w = bytes per row * 8, h = total / bytes per row (a total that is not a multiple of
@@ -82,6 +89,33 @@
       count = 0;
     }
     if (count) invalid++;
+    return { nibbles, produced: pos, extra, invalid };
+  }
+
+  const BASE64 = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/';
+
+  /**
+   * Decodes the B64 data of a ^GF field (":B64:encoded_data:crc", Volume Two page 112) like decodeData: the Base64 bytes become nibbles (the high one first).
+   * CR, LF, blanks and "=" padding are ignored; any other character outside the alphabet counts in `invalid`; the CRC is not checked.
+   */
+  function decodeBase64Data(text, size, limit) {
+    const nibbles = new Uint8Array(size);
+    const body = /^:B64:([^:]*)/i.exec(text.trim());
+    let [pos, extra, invalid, bits, held] = [0, false, 0, 0, 0];
+    const put = byte => {
+      for (const v of [byte >> 4, byte & 15]) {
+        if (pos >= limit) { extra = true; return; }
+        nibbles[pos++] = v;
+      }
+    };
+    for (const ch of body ? body[1] : '') {
+      if (ch === '=' || ch === ' ' || ch === '\t' || ch === '\r' || ch === '\n') continue;
+      const v = BASE64.indexOf(ch);
+      if (v < 0) { invalid++; continue; }
+      held = (held << 6) | v;
+      bits += 6;
+      if (bits >= 8) { bits -= 8; put((held >> bits) & 255); held &= (1 << bits) - 1; }
+    }
     return { nibbles, produced: pos, extra, invalid };
   }
 
@@ -211,15 +245,18 @@
       }
       const dataArg = cmd.args[4];
       const text = dataArg ? dataArg.value : '';
-      if (/^:(Z64|B64):/i.test(text.trim())) {
-        ctx.once('zpl-gf-z64', () => diag.warning('^GF con datos Z64 / B64 (guías posteriores) no soportados: solo se admiten los datos ASCII hexadecimales, no se dibujan'));
+      const encoding = /^:(Z64|B64):/i.exec(text.trim());
+      const b64 = Boolean(encoding) && encoding[1].toUpperCase() === 'B64';
+      if (encoding && !b64) {
+        ctx.once('zpl-gf-z64', () => diag.warning('^GF con datos Z64 (LZ77 + Base64) no soportados: solo se admiten los datos ASCII hexadecimales y B64, no se dibujan'));
         return;
       }
-      if (sent !== total) ctx.report(diag.warning(`^GF: los bytes enviados (${sent}) y el total (${total}) deben coincidir en ASCII, se usa el total`));
+      if (b64) ctx.once('zpl-gf-b64', () => diag.info('^GF con datos B64: se leen como bytes de la imagen; el CRC no se comprueba (la guía no indica el algoritmo)'));
+      if (sent !== total && !b64) ctx.report(diag.warning(`^GF: los bytes enviados (${sent}) y el total (${total}) deben coincidir en ASCII, se usa el total`));
       const rows = Math.ceil(total / bytesPerRow);
       if (total % bytesPerRow !== 0) ctx.report(diag.warning(`^GF: el total (${total}) no es múltiplo de los bytes por fila (${bytesPerRow}), la última fila se rellena con blanco`));
       const rowNibbles = bytesPerRow * 2;
-      const decoded = decodeData(text, rowNibbles, total * 2, rows * rowNibbles);
+      const decoded = b64 ? decodeBase64Data(text, rows * rowNibbles, total * 2) : decodeData(text, rowNibbles, total * 2, rows * rowNibbles);
       if (decoded.invalid) ctx.report(diag.warning(`^GF: ${decoded.invalid} caracteres o códigos de los datos no válidos, se ignoran`));
       if (decoded.produced < total * 2) {
         ctx.report(diag.warning(`^GF: datos incompletos (${Math.floor(decoded.produced / 2)} de ${total} bytes), se rellena con blanco`));
@@ -240,7 +277,7 @@
         kind: 'image', ref: 'GF', source,
         x: o.x, y: o.kind === 'FT' ? o.y - height : o.y, width, height,
         bitmap: { w, h, data: bits },
-        native: { format, total, bytesPerRow, compressed: /[G-Zg-z!:]/.test(text), origin: o.kind },
+        native: { format, total, bytesPerRow, compressed: !b64 && /[G-Zg-z!:]/.test(text), origin: o.kind },
         data: null,
       });
     }
@@ -291,6 +328,7 @@
 
   // The codec is exposed for the language hook and the tests
   zpl.decodeData = decodeData;
+  zpl.decodeBase64Data = decodeBase64Data;
   zpl.compressRows = compressRows;
   zpl.hexRows = hexRows;
   zpl.graphicCommand = graphicCommand;

@@ -8,9 +8,11 @@ const { loadApp } = require('./helpers/load');
 // image; d = bytes per row (c / d = the rows); the ASCII data is two hex digits per byte, CR and LF may be inserted, "a comma in the data pads the current line
 // with 00", data after the count is satisfied is ignored; the origin of an image is its bottom-left corner with ^FT. The guide's only example is
 // ^FO100,100^GFA,8000,8000,80,ASCII data (no data to use as a vector); ~DG says that the first four dots white and the next four black are 0F (1 = black).
-// NOT in the 2003 guide (it is in the later ZPL guides; not verified on a printer): the run-length COMPRESSION of the ASCII data, which these tests pin as the
-// viewer's model: a repeat count before a hex digit (G..Y = 1..19, g..z = 20..400 in steps of 20, the two kinds add up: gG = 21), `,` fills the rest of the row
-// with 0, `!` fills it with 1, `:` repeats the previous row. All parses use 254 dpi, where one dot is exactly 0.1 mm.
+// NOT in the 2003 guide but in Volume Two (2005, printed page 52, "Alternative Data Compression Scheme for ~DG and ~DB"): the run-length COMPRESSION of the
+// ASCII data: a repeat count before a hex digit (G..Y = 1..19, g..z = 20..400 in steps of 20, the counts add up: gG = 21), `,` fills the rest of the row
+// with 0, `!` fills it with 1, `:` repeats the previous row; and (pages 110-112) the B64 / Z64 encodings `:id:data:crc`. The manual documents the scheme for
+// ~DG and ~DB, not for ^GF (whose own text only has the comma), so what it does for ^GF is still not verified on a printer. All parses use 254 dpi, where one
+// dot is exactly 0.1 mm.
 const PB = loadApp();
 const zpl = PB.languages.get('zpl');
 const tpcl = PB.languages.get('tpcl');
@@ -227,8 +229,8 @@ test('parse ^GF: binary (B) and compressed binary (C) data cannot be read from a
   assert.match(loud(model.diagnostics)[0].text, /datos binarios no soportados/);
 });
 
-test('parse ^GFA: Z64 / B64 data (a later guide) is not supported: one warning, nothing is drawn', () => {
-  const model = parse(BASE('^FO0,0^GFA,8,8,1,:Z64:eJwBAAD//wAAAAE=:1234^FS^FO0,0^GFA,8,8,1,:B64:AAAA:1234^FS'));
+test('parse ^GFA: Z64 data (LZ77 + Base64, Volume Two page 110) is not supported: one warning, nothing is drawn', () => {
+  const model = parse(BASE('^FO0,0^GFA,8,8,1,:Z64:eJwBAAD//wAAAAE=:1234^FS^FO0,0^GFA,8,8,1,:Z64:H4sIAAAAAAAAA2NgAAIAAAAA//8DAA==:5678^FS'));
   assert.equal(model.items.length, 0);
   assert.equal(loud(model.diagnostics).length, 1);
   assert.match(loud(model.diagnostics)[0].text, /Z64/);
@@ -511,4 +513,70 @@ test('conversion to ZPL: an image without a bitmap (preview only) warns once, li
   const out = PB.languages.emit('zpl', overlay, { dpi: 203 });
   assert.equal(loud(out.diagnostics).length, 1);
   assert.match(loud(out.diagnostics)[0].text, /sin bitmap/);
+});
+
+// ---------------------------------------------------------------------------------------------------------------
+// Volume Two, printed pages 52-53 and 110-112: the compression scheme as the manual writes it, and B64
+
+test('manual page 52: the examples of the guide (M6 = 7 sixes, hB = 40 B, MvB and vMB = 327 B, the order of the counts does not matter)', () => {
+  const nibbles = (text, rowNibbles = 400) => {
+    const r = slice.decodeData(text, rowNibbles, rowNibbles);
+    return { text: Array.from(r.nibbles.slice(0, r.produced), n => n.toString(16).toUpperCase()).join(''), invalid: r.invalid, extra: r.extra };
+  };
+  assert.deepEqual(nibbles('M6', 7), { text: '6666666', invalid: 0, extra: false });
+  assert.equal(nibbles('hB', 40).text, 'B'.repeat(40));
+  assert.equal(nibbles('MvB').text, 'B'.repeat(327));
+  assert.equal(nibbles('vMB').text, 'B'.repeat(327));
+});
+
+test('manual page 52: G..Y are 1..19 and g..z are 20..400 (g h i j k l m n o p q r s t u v w x y z), every letter', () => {
+  const small = 'GHIJKLMNOPQRSTUVWXY';
+  const large = 'ghijklmnopqrstuvwxyz';
+  const count = ch => slice.decodeData(ch + '1', 400, 400).produced;
+  [...small].forEach((ch, i) => assert.equal(count(ch), i + 1, ch));
+  [...large].forEach((ch, i) => assert.equal(count(ch), 20 * (i + 1), ch));
+});
+
+test('manual page 52: a comma fills the line with 0, an exclamation mark with 1 and a colon repeats the previous line (several per image, mixed)', () => {
+  // 3 bytes per row, 4 rows: "AB" + zeros, a row of ones, the same row again, a row of zeros
+  assert.equal(decoded('AB,!:,', 3, 4), 'AB0000' + 'FFFFFF' + 'FFFFFF' + '000000');
+});
+
+test('manual page 53: the reduction of ~DG ("if the HEX string ends in an even number of zeros a single comma replaces ALL of them") reads as the plain data', () => {
+  assert.deepEqual(rowsOf(one('^FO0,0^GFA,4,4,2,FF,80,^FS').bitmap), rowsOf(one('^FO0,0^GFA,4,4,2,FF008000^FS').bitmap));
+});
+
+test('B64 (manual page 112, :B64:encoded_data:crc): the data is the image bytes in Base64; the CRC is not checked (no algorithm in the guide) and one info says so', () => {
+  const model = parse(BASE('^FO0,0^GFA,4,4,2,:B64:/8CAAA==:1234^FS'));
+  assert.equal(model.items.length, 1);
+  assert.deepEqual(rowsOf(model.items[0].bitmap), ['1111111111000000', '1000000000000000']);
+  assert.deepEqual(model.items[0].native.compressed, false);
+  assert.deepEqual(model.diagnostics.map(d => d.level), ['info']);
+  assert.match(model.diagnostics[0].text, /B64.*CRC/);
+  // the same image in plain hex gives the same dots
+  assert.deepEqual(rowsOf(model.items[0].bitmap), rowsOf(one('^FO0,0^GFA,4,4,2,FFC08000^FS').bitmap));
+  // line breaks are allowed in the Base64 (page 111), the info is given once, and the image is written back as plain hex
+  const wrapped = parse(BASE('^FO0,0^GFA,4,4,2,:B64:/8C\r\nAAA==:1234^FS^FO0,10^GFA,4,4,2,:B64:/8CAAA==:1234^FS'));
+  assert.equal(wrapped.items.length, 2);
+  assert.equal(wrapped.diagnostics.length, 1);
+  assert.deepEqual(emitLines(wrapped.items), ['^FO0,0^GFA,4,4,2,FFC080,^FS', '^FO0,10^GFA,4,4,2,FFC080,^FS']);
+});
+
+test('B64: short data is padded with white and reported, extra data is ignored and reported, a character outside Base64 is reported', () => {
+  const short = parse(BASE('^FO0,0^GFA,4,4,2,:B64:/w==:1234^FS'));
+  assert.deepEqual(rowsOf(short.items[0].bitmap), ['1111111100000000', '0000000000000000']);
+  assert.ok(loud(short.diagnostics).some(d => /incompletos/.test(d.text)));
+  const long = parse(BASE('^FO0,0^GFA,1,1,1,:B64:/8CAAA==:1234^FS'));
+  assert.deepEqual(rowsOf(long.items[0].bitmap), ['11111111']);
+  assert.ok(loud(long.diagnostics).some(d => /sobran/.test(d.text)));
+  const bad = parse(BASE('^FO0,0^GFA,1,1,1,:B64:/#w==:1234^FS'));
+  assert.deepEqual(rowsOf(bad.items[0].bitmap), ['11111111']);
+  assert.ok(loud(bad.diagnostics).some(d => /no válid/.test(d.text)));
+});
+
+test('what the emitter writes by default stays the documented comma: the compression is only for images read compressed (the manual documents it for ~DG / ~DB, not ^GF)', () => {
+  const bm = banner(64, 20);
+  const plain = emitLines([imageItem(bm)])[0];
+  assert.doesNotMatch(plain.replace(/^\^FO0,0\^GFA,\d+,\d+,\d+,/, '').replace(/\^FS$/, ''), /[G-Zg-z!:]/);
+  assert.equal(slice.graphicCommand(bm), plain.replace(/^\^FO0,0/, '').replace(/\^FS$/, ''));
 });
