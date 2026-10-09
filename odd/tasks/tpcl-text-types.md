@@ -39,6 +39,7 @@ Branch: `feat/tpcl-text-types`. Strategy: single PR (the two changes together, u
 ## Manual findings
 - B-452-TS12 (es, 2001): `5aaaabbbcc`, aaaa 0050..1057, bbb 010..500 "unidades de 0,1 mm", cc 01..99. B-SV4 (2004) and B-452-R (2012): aaaa 0050..1040, bbb 010..500 "in 1 mm units" (the unit conflict is unresolved: 0.1 mm is used and flagged everywhere). The figure of B-452-R p. 6-33 draws "Line feed spacing" as the gap between two lines of the block, whose first line starts at the designated origin: read as the extra line space (pitch = character height + bbb).
 - The manuals do not say whether a line breaks at spaces or at characters: the shared word wrap (character-break fallback) is used. The ignored-alignment rule is for the rotation codes 01 / 12 / 23 / 30 (fonts U, V, W, X, v, w only), NOT for 00 / 11 / 22 / 33, so a rotated block (90, 180, 270 in the model) keeps its P5.
+- Printer test (user, 2026-10-09, TEC): a `PC ...,P5aaaabbbcc` text breaks into lines in the printer. The first try failed because of a stray space in a hand-typed example (`P50600010 03`), not because of the command; the unit of `bbb` was not reported and stays unverified.
 - B-452-R: the PV outline font has Po 1..4 only (no automatic line feed), and its optional parameters have no bold (J).
 
 ## Decisions taken without the user (open for review)
