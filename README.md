@@ -242,9 +242,9 @@ increment beyond 10 digits (ZPL `^SN` allows 12) is clamped with one warning; th
 (or a ZPL `^GF`) whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet inserted in the code is not part of the conversion;
 the TPCL format ID and connection setting of a Data Matrix are not converted. The detail of each ZPL feature is in *ZPL support*.
 
-**Open question, text origin:** TPCL, TSPL and ZPL do not place a text the same way (TPCL gives the origin of the text, ZPL `^FO` the top-left of the field and `^FT` the baseline,
-TSPL `TEXT` the top-left according to its manual although the viewer draws it from the baseline). The conversion keeps the origin the viewer reads, so a text lines up in the viewer
-in all three languages, but on a printer a TSPL text may come out about one font height away from the same text in ZPL. Check it with a test print.
+**Text origin:** TPCL, TSPL and ZPL do not place a text the same way (TPCL gives the origin of the text, ZPL `^FO` the top-left of the field and `^FT` the baseline, TSPL `TEXT` the top-left
+of the character cell). The viewer draws every text from its baseline, so it reads a TSPL `TEXT` y as the top edge plus the ascent (80% of the character height, whole dots) and writes it back
+without it: a ZPL `^FO30,25` becomes `TEXT 30,25`. The 80% is an approximation that has not been checked on a printer: check it with a test print.
 
 ## TPCL support (Toshiba TEC)
 
@@ -318,7 +318,7 @@ Based on the ZPL II Programming Guide, Volume One (2003). Everything is read, dr
 The language is detected from the text (no selector): a label with a `^XA` format, or at least two ZPL commands (`^FO`, `^FD`, `^PW`...), is read as ZPL (TPCL and TSPL are tried first). Files with the `.zpl` extension are accepted by **Abrir archivo…** and by dragging; **Descargar** writes `.zpl` (UTF-8).
 
 - **Size:** `^PW` (width) and `^LL` (length) in dots, shown in the **Formato** row rounded to 0.1 mm. ZPL has no **Paso**. Writing the size from the **Formato** row rewrites or adds `^PW` / `^LL` right after the first `^XA`, keeping the line ending of the file. Sizes are whole dots, so a catalogue size such as 100×60 mm may come back as 100.0×60.1 mm: the **Tamaño etiqueta** combo still marks the standard size, because a ZPL size matches it within one dot (TPCL and TSPL keep the exact match).
-- **Resolution:** coordinates are dots, so the **Resolución** selector (203 or 300 dpi) must match the printer: the same label is drawn smaller at 300 dpi. Zebra printers also exist at other resolutions (the guide mentions 600 dpi heads), which the selector does not offer: whether to add 600 dpi is an open decision.
+- **Resolution:** coordinates are dots, so the **Resolución** selector (203 or 300 dpi) must match the printer: the same label is drawn smaller at 300 dpi. Zebra printers also exist at other resolutions (the guide mentions 600 dpi heads), which the selector does not offer on purpose: there is no 600 dpi printer to test with.
 - **Setup read:** `^LH`, `^LS` and `^LT` move every later field, `^FW` (default orientation), `^CF` (default font), `^BY` and `^CI` are kept for the components. `^POI` (label printed rotated 180°) is reported and not applied. Printer configuration commands (`^MM`, `^MN`, `^MT`, `^PR`, `~SD`, `^MD`, `^PQ`...) are recognised and not drawn (one information message per label); a command the viewer does not know is one warning each.
 - **Several formats** (`^XA` ... `^XZ`) in one file: the viewer shows the first one and says how many there are.
 - **Fields:** a field is `^FO` / `^FT` ... `^FS`; `^FD` data may carry `^` and `~` through the `^FH` hex escapes (`_5E`, `_7E`). `^CC` / `^CT` / `^CD` prefix and delimiter changes are read. `^FO` is the top-left corner and `^FT` the origin of the baseline (text), the base of the bars (barcodes) or the bottom-left corner (shapes, images, 2D symbols); the orientation `N R I B` is 0 / 90 / 180 / 270° clockwise and `^FW` is the default.
