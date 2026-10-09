@@ -722,14 +722,18 @@
    */
   function imageCommand({ xMm, yMm, w, h, data, dpi }) {
     const image = PB.slices.image.tspl;
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    if (!data || data.length !== w * h) throw new Error(`los datos de la imagen no son de w×h puntos (${w}×${h})`);
     if (Math.ceil(w / 8) > image.MAX_WIDTH_BYTES || h > image.MAX_HEIGHT) {
-      throw new Error(`${w}×${h} puntos supera el máximo de BITMAP (${image.MAX_WIDTH_BYTES * 8}×${image.MAX_HEIGHT})`);
+      throw new Error(`${w}×${h} puntos supera el máximo de BITMAP (ancho 1..${image.MAX_WIDTH_BYTES} bytes = ${image.MAX_WIDTH_BYTES * 8} puntos, alto 1..${image.MAX_HEIGHT})`);
     }
-    const dots = mm => {
+    const dots = (mm, name) => {
       const units = PB.units.fromMm(mm);
-      return Number.isFinite(units) ? Math.max(0, Math.round(units / PB.units.dotSize(dpi))) : 0;
+      if (!Number.isFinite(units)) return 0;
+      if (units < 0) throw new Error(`la posición ${name} no puede ser negativa (BITMAP la escribe en puntos desde 0)`);
+      return Math.round(units / PB.units.dotSize(dpi));
     };
-    return image.bitmapCommand(dots(xMm), dots(yMm), { w, h, data }).replace(/\r/g, CR_PLACEHOLDER);
+    return image.bitmapCommand(dots(xMm, 'X'), dots(yMm, 'Y'), { w, h, data }).replace(/\r/g, CR_PLACEHOLDER);
   }
 
   /** Tokenizer and driver, exposed for the slices' tests and the app. */

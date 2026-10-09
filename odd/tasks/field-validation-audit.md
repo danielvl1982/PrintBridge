@@ -33,7 +33,7 @@ TSPL (manual: docs/tspl)
 - [x] V5 TSPL label setup and shapes: `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SPEED`, `DENSITY`, `LINE`/`BAR`, `BOX`, `ELLIPSE`, `CIRCLE`, `ERASE`, `REVERSE`
 - [x] V6 TSPL text: `TEXT`, `BLOCK`, fonts, multipliers, rotation, `SET COUNTER` / `@` variables
 - [x] V7 TSPL barcodes, `QRCODE`, `DMATRIX`
-- [ ] V8 TSPL images (`BITMAP`)
+- [x] V8 TSPL images (`BITMAP`)
 ZPL (manuals: docs/zpl vol 1 and 2)
 - [ ] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
 - [ ] V10 ZPL text: `^A`, `^CF`, `^FB`, `^FW`, `^SN`, `^FN`, character sizes per resolution
@@ -228,7 +228,25 @@ Manual: B-442/443 (docs/tspl); `BARCODE` at text lines 735-840 (type list 700-76
 Other changes: `PB.languages` TSPL helpers gain `counterRefsWarning` (every `@n` of a content argument through `counterNumberWarning`, used by the three slices); Code 39 / ITF / Code 128 data checks of the emit use the same encoders as the other symbologies (no TPCL code shared).
 Expectation changes in existing tests: tests/qr-tspl.test.js (an unknown optional parameter such as Q9 is now reported); new file tests/tspl-barcode-validation.test.js.
 
+### V8 TSPL images (`BITMAP`)
+Manual: B-442/443 (docs/tspl); `BITMAP` at text lines 848-872 (`BITMAP X, Y, width, height, mode, bitmap data`, example `BITMAP 100,100,10,1,2,1111111111`). `PUTPCX` (1148+) and `DOWNLOAD` (1507+) name files stored in the printer; `PUTBMP` / `PUTPNG` are not in the local manual. The !B / !J commands (1452+) belong to the Windows driver and are not read.
+The manual fixes only the mode; X, Y, width and height have no range (width "in bytes", height "in dot").
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| X, Y | dots, no range (856-861) | position input of the overlay, no limit / unchanged | the overlay insert moved a negative position to 0 silently; the emit of an item at a negative position wrote a negative X / Y / insert refused with an error naming the position; emit writes 0 and warns once | read as written (unchanged; negative values drawn there) |
+| width | bytes, no range (864); the code keeps 1..1250 bytes (10000 dots) | no limit in the panel (the insert states the limit) / unchanged | skipped with a size warning (already) / insert error names the range | 0, negative or fractional gave the generic "valores no válidos o sin datos"; over 1250 "supera el máximo" without the range / warning names "ancho en bytes 1..1250, alto en puntos 1..9999", whole numbers |
+| height | dots, no range (865); the code keeps 1..9999 | as width | as width | as width |
+| mode | 0 overwrite, 1 OR, 2 XOR (866-869) | n/a | always 0 (valid) | 3, -1, 7 or 1.5 refused as "no válidos" (the image vanished) / one warning "0, 1 o 2", drawn as overwrite, `native.mode` keeps the value; a non numeric mode is still refused, with the modes in the message; 1 and 2 keep the existing info (drawn as overwrite) |
+| bitmap data | width x height bytes (870) | n/a | payload always rows x ceil(w / 8) bytes (valid); the overlay insert accepted data of another length and a size of 0 or a fraction / insert refuses both with a Spanish error | truncated data warned already (padded with white) |
+| `PUTBMP`, `PUTPCX`, `PUTPNG`, `DOWNLOAD` | file in the printer memory, not in the stream | - | never written | `PUT*` warned as not drawable (already); `DOWNLOAD` is not read by the viewer (unchanged) |
+
+Other changes: none outside the image slice and `imageCommand` (the TSPL equivalent of the TPCL insert check from V4: position, size, data length, limits).
+Expectation changes in existing tests: none (new file tests/tspl-image-validation.test.js, 13 tests).
+
 ## Open (manuals silent or contradictory; kept as is)
+- V8 The local manual gives no range for BITMAP X, Y, width or height: 1..1250 bytes and 1..9999 dots are the code's safety limits (what a malformed header may allocate), not manual values. A negative position is refused / written as 0 without a manual statement; TSC v3.0 may define more.
+- V8 Modes 1 (OR) and 2 (XOR) are valid but drawn as overwrite (items are independent in the model); `DOWNLOAD`, `PUTBMP`, `PUTPNG` and files stored in the printer are not drawn. The TPCL / ZPL images converted to TSPL use the same emit (size limit and negative position are reported once).
 - V7 The ratio table of BARCODE (narrow : wide 1:1, 1:2, 1:3, 2:5 per type) is garbled in the extraction and gives no limit; the ratio of Code 39 / ITF / NW7 / 93 is not validated (the emit snaps to 1:2, 2:5 or 1:3 as before).
 - V7 Height, narrow and wide have no maximum in the local manual; the 9999 / 10 limits of the properties panel are conveniences. Human readable 2 and 3, the alignment argument, 39S / ITF14 / EAN14 and 128M / EAN128 details are v3.0 only.
 - V7 QRCODE is v3.0 only: cell 1..10, model 1 / 2, mask 0..8 and justification 1..9 are the ranges the code already had, not verified against a manual; X and L (area, length) are not validated. The viewer ignores the rotation of QR codes.
@@ -277,3 +295,4 @@ Expectation changes in existing tests: tests/qr-tspl.test.js (an unknown optiona
 - V5 (route: delegated writer, one writer, direct; RED first: 20 of the 23 new tests failed on the old code): TSPL label setup and shapes (tests/tspl-label-validation.test.js, 23 tests). Verification: `node --test` 4123 tests, 4122 pass, 0 fail, 1 skipped (was 4100 / 4099 before; +23 new). Commit: see `git log` (fix: validate TSPL label setup and shape values against the manual).
 - V6 (route: delegated writer, one writer, direct; RED first: 11 of the 17 new tests failed on the old code): TSPL text (tests/tspl-text-validation.test.js, 17 tests). Verification: `node --test` 4140 tests, 4139 pass, 0 fail, 1 skipped (was 4123 / 4122 before; +17 new). Commit: see `git log` (fix: validate TSPL text values against the manual).
 - V7 (route: delegated writer, one writer, direct; RED first: 12 of the 15 new tests failed on the old code): TSPL barcodes, QRCODE and DMATRIX (tests/tspl-barcode-validation.test.js, 15 tests). Verification: `node --test` 4155 tests, 4154 pass, 0 fail, 1 skipped (was 4140 / 4139 before; +15 new). Commit: see `git log` (fix: validate TSPL barcode, QR and Data Matrix values against the manual).
+- V8 (route: delegated writer, one writer, direct; RED first: 9 of the 13 new tests failed on the old code): TSPL images (tests/tspl-image-validation.test.js, 13 tests). Verification: `node --test` 4168 tests, 4167 pass, 0 fail, 1 skipped (was 4155 / 4154 before; +13 new). Commit: see `git log` (fix: validate TSPL image values against the manual).

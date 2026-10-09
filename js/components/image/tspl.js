@@ -22,9 +22,13 @@
 
   const { diagnostics: diag } = PB;
 
-  /** Limits that keep a malformed header from allocating a huge bitmap. */
+  /**
+   * Limits that keep a malformed header from allocating a huge bitmap. The B-442/443 manual (BITMAP, text line 848) gives no range for
+   * width, height or position; only the mode is fixed (0 overwrite, 1 OR, 2 XOR).
+   */
   const MAX_WIDTH_BYTES = 1250;
   const MAX_HEIGHT = 9999;
+  const RANGE = `ancho en bytes 1..${MAX_WIDTH_BYTES}, alto en puntos 1..${MAX_HEIGHT}`;
 
   /** Bytes per row of a bitmap w dots wide. */
   const widthBytes = w => Math.ceil(w / 8);
@@ -51,7 +55,7 @@
   }
 
   function tspl(helpers) {
-    const { sourceOf, int, exactDots, roundDots } = helpers;
+    const { sourceOf, int, num, exactDots, roundDots } = helpers;
 
     /** BITMAP command of an image with a bitmap; overlay images (no bitmap) and invalid bitmaps are skipped with a warning. */
     function emit(item, ctx) {
@@ -69,7 +73,11 @@
         ctx.once('tspl-image-size', () => diag.warning(`Hay imágenes que superan el máximo de BITMAP (${MAX_WIDTH_BYTES * 8}×${MAX_HEIGHT} puntos): no se exportan`));
         return [];
       }
-      const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
+      const [rawX, rawY] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
+      const [x, y] = [Math.max(0, rawX), Math.max(0, rawY)];
+      if (x !== rawX || y !== rawY) {
+        ctx.once('tspl-image-position', () => diag.warning('Hay imágenes con posición negativa: BITMAP no admite coordenadas negativas, se escriben en 0'));
+      }
       return [bitmapCommand(x, y, bm)];
     }
 
@@ -83,23 +91,31 @@
           // BITMAP x,y,widthBytes,heightDots,mode,<binary>
           pattern: /^BITMAP\b/i,
           handle(m, cmd, ctx) {
-            const [px, py, widthBytes, height, mode] = cmd.args.slice(0, 5).map(int);
-            if (cmd.args.length < 5 || cmd.data === undefined || [px, py, widthBytes, height, mode].includes(null) ||
-                widthBytes < 1 || height < 1 || ![0, 1, 2].includes(mode)) {
-              ctx.report(diag.warning(`BITMAP con valores no válidos o sin datos: ${cmd.raw.slice(0, 40)}`));
+            const [px, py, widthBytes, height] = cmd.args.slice(0, 4).map(int);
+            const writtenMode = cmd.args.length > 4 ? num(cmd.args[4]) : null;
+            if (cmd.args.length >= 5 && (widthBytes === null || height === null || widthBytes < 1 || height < 1)) {
+              ctx.report(diag.warning(`BITMAP con ancho o alto no válido (${RANGE}, números enteros), no se dibuja: ${cmd.raw.slice(0, 40)}`));
+              return;
+            }
+            if (cmd.args.length < 5 || cmd.data === undefined || [px, py].includes(null) || writtenMode === null) {
+              ctx.report(diag.warning(`BITMAP con valores no válidos o sin datos (x, y, ancho, alto y modo 0, 1 o 2): ${cmd.raw.slice(0, 40)}`));
               return;
             }
             if (widthBytes > MAX_WIDTH_BYTES || height > MAX_HEIGHT) {
-              ctx.report(diag.warning(`BITMAP de ${widthBytes * 8}×${height} puntos supera el máximo admitido, no se dibuja`));
+              ctx.report(diag.warning(`BITMAP de ${widthBytes * 8}×${height} puntos supera el máximo admitido (${RANGE}), no se dibuja`));
               return;
             }
+            // Graphic modes are 0 overwrite, 1 OR, 2 XOR (manual, BITMAP): any other value is read as written and drawn as overwrite
+            const mode = writtenMode;
+            const known = [0, 1, 2].includes(mode);
+            if (!known) ctx.report(diag.warning(`BITMAP: modo "${cmd.args[4].value}" fuera de 0, 1 o 2 (0 sobrescribir, 1 OR, 2 XOR): se dibuja como sobrescritura`));
             const w = widthBytes * 8;
             const expected = widthBytes * height;
             if (cmd.data.length < expected) {
               ctx.report(diag.warning(
                 `BITMAP: datos incompletos (${cmd.data.length} de ${expected} bytes); el archivo puede haberse corrompido al leerlo como texto y quizá deba cargarse como binario. Se rellena con blanco`));
             }
-            if (mode !== 0 && !ctx.tsplBitmapModeNoted) {
+            if (known && mode !== 0 && !ctx.tsplBitmapModeNoted) {
               ctx.tsplBitmapModeNoted = true;
               ctx.report(diag.info(`modo ${mode === 1 ? 'OR' : 'XOR'} de BITMAP no soportado, se dibuja como sobrescritura`));
             }
