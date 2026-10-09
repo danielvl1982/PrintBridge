@@ -221,14 +221,19 @@
     };
   }
 
+  /** Options of the magnification selects: the valid values (tenths) with their label in Spanish ("0,5×", "1×", "9,5×"). */
+  const MAGNIFICATION_OPTIONS = Object.freeze(MAGNIFICATIONS.map(tenths => Object.freeze({ value: tenths, label: `${String(tenths / 10).replace('.', ',')}×` })));
+
   /**
-   * Magnification field of a PC text (tenths): the token is written whole (`exact`) and only ever as a valid one (the nearest valid
-   * magnification to the value). The value read is the token's, in tenths ("1" = 10, "09" = 9, "14" = 14).
+   * Magnification select of a PC text over the horizontal / vertical token (written whole: `exact`; a number is snapped to the nearest valid magnification, so only a valid token is ever written). The value is the
+   * token's valid magnification in tenths ("1" = 10, "09" = 9, "15" = 15); a token outside the valid set (the printer prints nothing for it)
+   * is its own value, listed as an extra last option "… (no válido)" so it shows, and choosing it again writes nothing.
    */
   function magnificationField(key, label, group) {
     return {
-      key, label, type: 'number', min: MAGNIFICATIONS[0], max: MAGNIFICATIONS[MAGNIFICATIONS.length - 1], step: 1, group, exact: true,
-      read: raw => (/^\d+$/.test(raw) ? tenthsOf(raw) : undefined),
+      key, label, type: 'select', group, exact: true, options: MAGNIFICATION_OPTIONS,
+      optionsFor: value => (MAGNIFICATIONS.includes(value) ? MAGNIFICATION_OPTIONS : [...MAGNIFICATION_OPTIONS, { value, label: `${value} (no válido)` }]),
+      read: raw => (isValidMagnification(raw) ? tenthsOf(raw) : /^\d+$/.test(raw) ? raw : undefined),
       write: v => (typeof v === 'number' && Number.isFinite(v) ? magnificationToken(v) : null),
     };
   }
@@ -876,7 +881,7 @@
             ...alignFields(9),
           ],
         },
-        { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
+        { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (valid values only)
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
           pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + PC_TAIL_SLOTS, 'd'),
           reemit,
@@ -884,8 +889,8 @@
             fontTypeField,
             bitmapKindField,
             ...blockFields(10),
-            magnificationField('hMag', 'Ampliación horizontal (×0,1)', 1),
-            magnificationField('vMag', 'Ampliación vertical (×0,1)', 2),
+            magnificationField('hMag', 'Ampliación horizontal', 1),
+            magnificationField('vMag', 'Ampliación vertical', 2),
             rotationField(5),
             fontField(3, BITMAP_FONT_OPTIONS),
             spacingField(4, 'PC'),

@@ -247,7 +247,7 @@ test('describeItem: PC magnifications come from the text; without text only rota
   const d = tpcl.describeItem(item, '{PC001;0100,0200,15,05,A,11,B|}');
   assert.deepEqual(keys(d), ['fontType', 'kind', 'hMag', 'vMag', 'rotation', 'font', 'spacing', 'attribute', 'boldH', 'boldV', 'counter', 'zeroSuppress', 'align']);
   assert.deepEqual(d.fields.map(f => f.value), ['bitmap', 'line', 15, 5, 90, 'A', 0, 'black', 0, 0, 0, 0, 'left']);
-  assert.deepEqual([field(d, 'hMag').min, field(d, 'hMag').max], [5, 95]);
+  assert.deepEqual([field(d, 'hMag').type, field(d, 'hMag').options.length], ['select', 23]);
   assert.deepEqual(keys(tpcl.describeItem(item)), ['fontType', 'kind', 'rotation', 'spacing', 'attribute', 'boldH', 'boldV', 'counter', 'zeroSuppress', 'align']);
 });
 
