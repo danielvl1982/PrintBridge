@@ -5,8 +5,8 @@ const { loadUpTo } = require('./helpers/load');
 // Z2: the ZPL text slice (js/components/text/zpl.js): ^A fonts, ^CF / ^FW defaults, ^FO vs ^FT origins, ^FD / ^FV data with ^FH escapes,
 // ^FR reverse print, emit, editing, palette, the example label and the conversions through the shared pipeline.
 // All parses use 254 dpi, where one dot is exactly 0.1 mm, so dots and model units are the same number.
-// The font matrices (cell height x width and gap of the bitmapped fonts) and the baseline of ^FO are NOT in the 2003 guide (Volume One);
-// they are the viewer's simulation, not verified on a printer: the numbers below are the ones js/components/text/zpl.js documents.
+// The font matrices (cell height x width and gap of the bitmapped fonts) and the baseline of ^FO are in Volume Two (2005, Table 10 and the
+// matrix tables: see tests/zpl-fonts.test.js for the per-resolution ones); what the manual does not give is the simulation of the viewer.
 const PB = loadUpTo('js/ui.js');
 const zpl = PB.languages.get('zpl');
 const DPI = 254;
@@ -26,11 +26,11 @@ test('the text slice registers a zpl factory next to tpcl and tspl, and ZPL offe
   assert.deepEqual(zpl.componentTemplates().map(c => [c.kind, c.label]).slice(0, 1), [['text', 'Texto']]);
 });
 
-test('^FO is the top-left of the text box: the neutral origin is the baseline, one ascent (0.8 of the height) below it', () => {
+test('^FO is the top-left of the text box: the neutral origin is the baseline, one ascent (3/4 of the height for font 0) below it', () => {
   const item = one('^FO100,50^A0N,40,30^FDHello^FS');
   assert.equal(item.kind, 'text');
   assert.equal(item.data, 'Hello');
-  assert.deepEqual([item.x, item.y, item.rotation], [100, 82, 0]);
+  assert.deepEqual([item.x, item.y, item.rotation], [100, 80, 0]);
   assert.deepEqual(item.font, { size: 40, scaleX: 0.75, family: 'sans', weight: 700, style: 'normal' });
   assert.deepEqual([item.native.origin, item.native.font, item.native.height, item.native.width], ['FO', '0', 40, 30]);
 });
@@ -41,12 +41,12 @@ test('^FT is the baseline origin: the neutral origin is the coordinate as writte
 });
 
 test('orientations N / R / I / B are 0 / 90 / 180 / 270 clockwise; ^FO keeps the top-left of the rotated box', () => {
-  // height 40: ascent 32, descent 8; scalable text "Hi" is 2 x 20 = 40 dots long (half the width per character)
+  // height 40: ascent 30, descent 10; scalable text "Hi" is 2 x 20 = 40 dots long (half the width per character)
   const at = o => one(`^FO100,50^A0${o},40,40^FDHi^FS`);
-  assert.deepEqual([at('N').rotation, at('N').x, at('N').y], [0, 100, 82]);
-  assert.deepEqual([at('R').rotation, at('R').x, at('R').y], [90, 108, 50]);
-  assert.deepEqual([at('I').rotation, at('I').x, at('I').y], [180, 140, 58]);
-  assert.deepEqual([at('B').rotation, at('B').x, at('B').y], [270, 132, 90]);
+  assert.deepEqual([at('N').rotation, at('N').x, at('N').y], [0, 100, 80]);
+  assert.deepEqual([at('R').rotation, at('R').x, at('R').y], [90, 110, 50]);
+  assert.deepEqual([at('I').rotation, at('I').x, at('I').y], [180, 140, 60]);
+  assert.deepEqual([at('B').rotation, at('B').x, at('B').y], [270, 130, 90]);
   // ^FT does not move with the rotation
   for (const [o, r] of [['N', 0], ['R', 90], ['I', 180], ['B', 270]]) {
     const item = one(`^FT100,200^A0${o},40,40^FDHi^FS`);
@@ -79,17 +79,17 @@ test('font 0 is scalable (sans bold in the viewer): width 0 or omitted follows t
   assert.deepEqual([d.font.size, d.font.scaleX], [15, 0.8]);
 });
 
-test('a font the viewer has no matrix for (P..V, GS, 1..9, downloaded) is drawn like a scalable sans one, with one info', () => {
-  const model = parse('^XA^FT10,50^APN,30,30^FDx^FS^FT10,90^APN,30,30^FDy^FS^FT10,130^A5N,30,30^FDz^FS^XZ');
-  assert.deepEqual(model.items.map(i => [i.font.size, i.font.family, i.font.weight, i.native.font]), [[30, 'sans', 400, 'P'], [30, 'sans', 400, 'P'], [30, 'sans', 400, '5']]);
-  assert.deepEqual(model.diagnostics.map(d => [d.level, /fuente "P"/.test(d.text), /fuente "5"/.test(d.text)]), [['info', true, false], ['info', false, true]]);
+test('a font the viewer has no matrix for (GS, 1..9, downloaded) is drawn like a scalable sans one, with one info', () => {
+  const model = parse('^XA^FT10,50^AZN,30,30^FDx^FS^FT10,90^AZN,30,30^FDy^FS^FT10,130^A5N,30,30^FDz^FS^XZ');
+  assert.deepEqual(model.items.map(i => [i.font.size, i.font.family, i.font.weight, i.native.font]), [[30, 'sans', 400, 'Z'], [30, 'sans', 400, 'Z'], [30, 'sans', 400, '5']]);
+  assert.deepEqual(model.diagnostics.map(d => [d.level, /fuente "Z"/.test(d.text), /fuente "5"/.test(d.text)]), [['info', true, false], ['info', false, true]]);
 });
 
 test('the default font ^CF applies to a field with only data (and to ^A without sizes of the same font); ^CF with only a height is proportional', () => {
   const model = parse('^XA^CF0,40,30^FO10,10^FDDefault^FS^FO10,60^A0N^FDsame^FS^XZ');
   assert.deepEqual(model.diagnostics, []);
   const [d, s] = model.items;
-  assert.deepEqual([d.ref, d.data, d.font.size, d.font.scaleX, d.y, d.native.font], ['FD', 'Default', 40, 0.75, 42, '0']);
+  assert.deepEqual([d.ref, d.data, d.font.size, d.font.scaleX, d.y, d.native.font], ['FD', 'Default', 40, 0.75, 40, '0']);
   assert.deepEqual([s.ref, s.font.size, s.font.scaleX], ['A', 40, 0.75]);
   const proportional = one('^CFD,36^FO10,10^FDx^FS');
   assert.deepEqual([proportional.font.size, proportional.native.hMult, proportional.native.wMult], [36, 2, 2]);
@@ -289,16 +289,16 @@ test('describeItem lists font, height, width, rotation, content and reverse of a
 
 test('the font select lists the guide fonts with their cells, and keeps a font the file has that is not in the list', () => {
   const options = byKey(describe(items[0], LABEL)).font.options;
-  assert.deepEqual(options.map(o => o.value), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', '0']);
+  assert.deepEqual(options.map(o => o.value), ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H', 'P', 'Q', 'R', 'S', 'T', 'U', 'V', '0']);
   assert.match(options.find(o => o.value === 'A').label, /^A · 9×5 puntos/);
   assert.match(options.find(o => o.value === 'E').label, /OCR-B/);
   assert.match(options.find(o => o.value === 'H').label, /OCR-A/);
   assert.match(options.find(o => o.value === '0').label, /Escalable/);
-  const text = '^XA^FO10,10^APN,30,30^FDx^FS^XZ';
+  const text = '^XA^FO10,10^AZN,30,30^FDx^FS^XZ';
   const [p] = parse(text).items;
   const font = byKey(describe(p, text)).font;
-  assert.equal(font.value, 'P');
-  assert.deepEqual(font.options.map(o => o.value).slice(-1), ['P']);
+  assert.equal(font.value, 'Z');
+  assert.deepEqual(font.options.map(o => o.value).slice(-1), ['Z']);
 });
 
 test('a field with only data (default font) offers the content and the reverse print; a ^A without orientation or sizes offers only what it has', () => {
