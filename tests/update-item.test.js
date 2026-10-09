@@ -98,14 +98,16 @@ test('updateItem: edits the right command when several share the text', () => {
 // ---- text PC ----
 
 test('updateItem: PC magnifications and rotation', () => {
-  const { out, after, diagnostics } = edit(PC, { hMag: 12, vMag: 3, rotation: 90 });
-  assert.equal(out, '{PC001;0100,0200,12,03,A,11,B|}');
+  const { out, after, diagnostics } = edit(PC, { hMag: 15, vMag: 5, rotation: 90 });
+  assert.equal(out, '{PC001;0100,0200,15,05,A,11,B|}');
   assert.deepEqual(diagnostics, []);
   assert.equal(after.rotation, 90);
 });
 
-test('updateItem: PC magnification clamps to 1..99 and keeps 2 digits', () => {
-  assert.equal(edit(PC, { hMag: 0, vMag: 500 }).out, '{PC001;0100,0200,01,99,A,00,B|}');
+test('updateItem: PC magnification snaps to the nearest valid one (05..09, then 1..9.5 in steps of 0.5), always two digits', () => {
+  assert.equal(edit(PC, { hMag: 0, vMag: 500 }).out, '{PC001;0100,0200,05,95,A,00,B|}');
+  assert.equal(edit(PC, { hMag: 12, vMag: 3 }).out, '{PC001;0100,0200,10,05,A,00,B|}');
+  assert.equal(edit(PC, { hMag: 14, vMag: 19 }).out, '{PC001;0100,0200,15,20,A,00,B|}');
 });
 
 test('updateItem: PC keeps the literal text after =', () => {
@@ -241,11 +243,11 @@ test('describeItem: reads current values from the model when no text is given', 
 });
 
 test('describeItem: PC magnifications come from the text; without text only rotation', () => {
-  const item = tpcl.parse('{PC001;0100,0200,12,03,A,11,B|}').items[0];
-  const d = tpcl.describeItem(item, '{PC001;0100,0200,12,03,A,11,B|}');
+  const item = tpcl.parse('{PC001;0100,0200,15,05,A,11,B|}').items[0];
+  const d = tpcl.describeItem(item, '{PC001;0100,0200,15,05,A,11,B|}');
   assert.deepEqual(keys(d), ['fontType', 'kind', 'hMag', 'vMag', 'rotation', 'font', 'spacing', 'attribute', 'boldH', 'boldV', 'counter', 'zeroSuppress', 'align']);
-  assert.deepEqual(d.fields.map(f => f.value), ['bitmap', 'line', 12, 3, 90, 'A', 0, 'black', 0, 0, 0, 0, 'left']);
-  assert.deepEqual([field(d, 'hMag').min, field(d, 'hMag').max], [1, 99]);
+  assert.deepEqual(d.fields.map(f => f.value), ['bitmap', 'line', 15, 5, 90, 'A', 0, 'black', 0, 0, 0, 0, 'left']);
+  assert.deepEqual([field(d, 'hMag').type, field(d, 'hMag').options.length], ['select', 23]);
   assert.deepEqual(keys(tpcl.describeItem(item)), ['fontType', 'kind', 'rotation', 'spacing', 'attribute', 'boldH', 'boldV', 'counter', 'zeroSuppress', 'align']);
 });
 

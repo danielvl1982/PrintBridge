@@ -42,7 +42,7 @@ from scratch with the TPCL template label.
 | `js/ui.js` | Screen panels |
 | `js/convert-panel.js` | The "Convertir a…" panel (target, output, fidelity warnings, Copiar, Descargar) |
 | `js/print-panel.js` | The "Impresión" panel (agent status, printer, copies, Imprimir, agent address) that talks to the local print agent |
-| `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `uninstall.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
+| `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
 | `tests/` | Automated tests (`node --test` from the project root), including the TPCL / TSPL / ZPL conversion matrix (`tests/conversion-matrix.test.js`) |
@@ -152,7 +152,15 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       and the line breaks become spaces). A counter text (TSPL `@n`, ZPL `^SN`) stays a line: a block does not print it. In TPCL a line becomes `P5` (20 characters wide, line feed spacing 010, the lines the text needs) in the place of any alignment (`P2`...`P4`: a block has none) and the block fields are **Ancho del área (0,1 mm)**, **Líneas** and **Interlineado (0,1 mm)**; a `PC` text with a rotation code `01` / `12` / `23` / `30` (which the viewer does not support) only offers the line, because the printer ignores the block with them. In TSPL and ZPL a block adds **Ancho del bloque (puntos)**, **Líneas máx.**, **Alineación**
       (Izquierda, Centro, Derecha; ZPL also Justificado) and, in ZPL only, **Interlineado (puntos)** (extra space between lines, may be negative). In its **Contenido** a line break is `\&` in ZPL and `\[R]` in TSPL.
       An `^FT` field keeps its first line where it was when it becomes a block. TSPL has no line count: **Líneas máx.** writes `height = lines * line pitch` (character height of the font + space).
-    - **Tipo de fuente (TPCL texts):** a radio **Mapa de bits (PC)** / **Vectorial (PV)**. Choosing the other one rewrites the command in one edit (**Ctrl+Z** undoes it) and renames its `RC` / `RV` data command to match: a `PC` becomes a `PV` with the outline font `B`, width = size x horizontal stretch and height = size (0.1 mm), a `PV` becomes the nearest sans bold `PC` font (`J`, `K`, `M`) with whole magnifications. Position, rotation, attribute, character spacing, counter, zero suppression, alignment, the other optional parameters and the inline `=data` stay; the number of the command stays unless it is taken by the other type (then the next free one is used). What only `PC` has, the bold (`J`) and the block (`P5`), is dropped going to `PV` (the text becomes a line); the note under the radio says so before the change. The spacing is clamped to the 2 digits of `PC` (+-99) coming back. The **Fuente** select then lists the fonts of the chosen type. The palette text is a `PV` (+ `RV`).
+    - **Tipo de fuente (TPCL texts):** a radio **Mapa de bits (PC)** / **Vectorial (PV)**. Choosing the other one rewrites the command in one edit (**Ctrl+Z** undoes it) and renames its `RC` / `RV` data command to match: a `PC` becomes a `PV` with the outline font `B`, width = size x horizontal stretch and height = size (0.1 mm), a `PV` becomes the nearest sans bold `PC` font (`J`, `K`, `M`) with the valid magnifications nearest to its size (see **Ampliación** below). Position, rotation, attribute, character spacing, counter, zero suppression, alignment, the other optional parameters and the inline `=data` stay; the number of the command stays unless it is taken by the other type (then the next free one is used). What only `PC` has, the bold (`J`) and the block (`P5`), is dropped going to `PV` (the text becomes a line); the note under the radio says so before the change. The spacing is clamped to the 2 digits of `PC` (+-99) coming back. The **Fuente** select then lists the fonts of the chosen type. The palette text is a `PV` (+ `RV`).
+    - **Ampliación horizontal / vertical (TPCL `PC` texts):** a select of the magnifications the printer accepts: **0,5×** to **0,9×** and **1×** to **9,5×** in steps of 0,5. The `PC` command takes
+      one digit `1`..`9` (whole), or two digits: `05`..`09` (0,5..0,9) and, from 1 up, `10`, `15`, `20` ... `95` (second digit 0 or 5); anything else (`01`..`04`, `11`..`14`, `16`..`19`,
+      `21` ...) is not valid and **the printer prints nothing for that field** (checked in the manuals B-SV4 2004, B-452-R 2012 and B-452-TS12 ES 2001, `PC` parameters d and e; not in
+      the printer, except that `09,09` prints and `14,19` does not). The viewer always writes two digits (`10` is 1,0, `20` is 2,0, `05`, `15`), as the TEC reference labels do; a single digit is still accepted when reading and means a whole number. A token already in the code that is not valid
+      is drawn with the nearest valid magnification, reported with a warning (one per text) and shown in the select as an extra option **… (no válido)**, so it is visible and can be
+      corrected; nothing rewrites it until you pick a value. Everything the viewer writes (the panel, **Tipo de fuente**, the conversion from TSPL / ZPL) only uses valid magnifications.
+      Converting a text from TSPL / ZPL looks for the font and valid magnifications that reproduce its size exactly (nearest to 1,0 first); when none does (for example 28 pt = H at 2,8,
+      which the printer would not print) the text is written with the outline font `PV` instead, and a text block (`P5`) of such a text becomes a line with the usual warning.
     - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
       end point and thickness (the fields each command has).
     - **Radio (esquinas redondeadas):** rectangles only (TPCL `LC` type 1, TSPL `BOX`): the corner radius, 0..999 in 0.1 mm for TPCL and in dots for TSPL, drawn clamped to half of the shorter side. A value above 0 adds the optional token at the end of the command; 0 keeps an existing token and writes nothing for an absent one. The TSPL radius argument comes from the TSPL2 manual and is not verified on a printer.
@@ -265,7 +273,11 @@ The browser cannot write RAW data to a USB label printer, so the **Imprimir** bu
 It needs Windows and [Node.js](https://nodejs.org) LTS, has no dependencies and only listens on `127.0.0.1`.
 
 1. Install the printers in Windows as usual (the driver can be a generic one: the data is sent RAW, exactly as in the editor).
-2. Run `agent\start.bat` to try it, or `powershell -ExecutionPolicy Bypass -File agent\install.ps1` so it starts by itself at every logon (`uninstall.ps1` removes it).
+2. In a PowerShell window run this one command: it downloads the agent into `%LOCALAPPDATA%\PrintBridge` and starts it in the background (run it again to update).
+   ```powershell
+   irm https://raw.githubusercontent.com/danielvl1982/PrintBridge/main/agent/install.ps1 | iex
+   ```
+   To start it at every logon too, add `-Autostart`; to remove it, add `-Uninstall` (see the [agent README](agent/README.md#install)). `agent\start.bat` runs it by hand in a console.
 3. In the app, open the **Impresión** panel: it shows "Agente conectado", the printers of the PC (the Windows default one is preselected, and the last one you chose is remembered), the **Copias** and **Imprimir**.
    **Agente** is the address of the agent (default `http://127.0.0.1:9631`) and **Reintentar** checks it again.
 
@@ -280,7 +292,7 @@ The language is detected from the text (`{…|}` commands). What the viewer draw
 
 | Command | What it is |
 |---|---|
-| `PC` / `RC` | Texts (printer fonts A–T, with magnification, rotation, attribute, alignment or automatic line feed block `P5aaaabbbcc`, spacing and bold) |
+| `PC` / `RC` | Texts (printer fonts A–T, with magnification (valid values only: `1`..`9`, `05`..`09`, `10`, `15` ... `95`), rotation, attribute, alignment or automatic line feed block `P5aaaabbbcc`, spacing and bold) |
 | `PV` / `RV` | Texts with an outline font (height and width in 0.1 mm; same attribute, alignment and spacing options) |
 | `XB` / `RB` type `T` | QR code (generated for real) |
 | `XB` / `RB` type `Q` | Data Matrix (generated for real: ECC200 with ASCII encodation and square symbols only; `XBnn;x,y,Q,<ECC>,<cell width in dots>,<format ID>,<rotation 0..3>[,Ciiijjj][,Jkkllmmmnnn]`). ECC type `20` is drawn; `00`-`14` (ECC 000-140, which the manual says the printer ignores) are reported and drawn as a hatched box. Cell width `00` draws nothing (as the printer). The format ID is ignored (kept as written, `00` when exported). `Ciiijjj` (number of cells, even, `000` = automatic) forces one of the 24 square sizes; the manual's rectangular codes (18 x 8 ... 48 x 16) are reported and drawn as the smallest square that fits. The connection setting `J...` is reported and not drawn. Rotation turns the symbol around its origin. See limitations |

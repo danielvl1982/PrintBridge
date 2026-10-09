@@ -121,8 +121,9 @@ test('PV -> PC: the nearest bitmap font (sans bold) with magnifications; the pos
 test('PV -> PC: a size that is not a whole magnification of a font gets the closest one; width and height are independent', () => {
   const [item] = itemsOf(set('{PV01;0100,0200,0120,0080,B,00,B=a|}', { fontType: 'bitmap' }));
   assert.equal(item.ref, 'PC01');
-  assert.ok(Math.abs(item.font.size - 80) / 80 < 0.06, `size ${item.font.size}`);
-  assert.ok(Math.abs(item.font.size * item.font.scaleX - 120) / 120 < 0.06, `width ${item.font.size * item.font.scaleX}`);
+  // the magnifications are 0.5 steps from 1 (K 14 pt at 1.5 x 2.5 here), so the closest one is not as close as with tenths
+  assert.ok(Math.abs(item.font.size - 80) / 80 < 0.08, `size ${item.font.size}`);
+  assert.ok(Math.abs(item.font.size * item.font.scaleX - 120) / 120 < 0.08, `width ${item.font.size * item.font.scaleX}`);
   assert.equal(item.font.family, 'sans');
   assert.equal(item.font.weight, 700);
 });

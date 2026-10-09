@@ -152,8 +152,8 @@ test('content: describeItem without text uses the item data; the field comes las
 
 test('content: several changes at once all apply, whatever their positions', () => {
   const text = '{PC001;0100,0200,05,05,A,00,B=HOLA|}\n{LC;0100,0200,0500,0600,0,02|}';
-  const out = tpcl.updateItem(text, itemsOf(text)[0], { content: 'ADIOS MUNDO', rotation: 90, hMag: 12, vMag: 3 }, { dpi: 203 });
-  assert.equal(out, '{PC001;0100,0200,12,03,A,11,B=ADIOS MUNDO|}\n{LC;0100,0200,0500,0600,0,02|}');
+  const out = tpcl.updateItem(text, itemsOf(text)[0], { content: 'ADIOS MUNDO', rotation: 90, hMag: 15, vMag: 3 }, { dpi: 203 });
+  assert.equal(out, '{PC001;0100,0200,15,05,A,11,B=ADIOS MUNDO|}\n{LC;0100,0200,0500,0600,0,02|}');
   const rc = tpcl.updateItem(PC_RC, itemsOf(PC_RC)[0], { rotation: 180, content: 'X', hMag: 7 }, { dpi: 203 });
   assert.equal(rc, '{PC001;0100,0200,07,05,A,22,B|}\n{RC001;X|}');
   const xb = tpcl.updateItem(XB_128, itemsOf(XB_128)[0], { content: 'Q', height: 120, humanReadable: false }, { dpi: 203 });
