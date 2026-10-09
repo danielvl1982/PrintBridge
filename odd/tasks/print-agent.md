@@ -1,6 +1,6 @@
 # Print agent (printing from the app)
 
-Status: IMPLEMENTED, NOT VERIFIED ON A REAL PRINTER (started 2026-10-09 on branch `feat/print-agent`; design agreed with the user the same day). Create the Engram mirror
+Status: DONE AND VERIFIED ON REAL PRINTERS (user confirmed on 2026-10-09 that it works; more features may come in the future) (started 2026-10-09 on branch `feat/print-agent`; design agreed with the user the same day). Create the Engram mirror
 `odd/print-agent/tasks` before the first write. Until now the optional backlog only mentioned a "local print agent" without a document.
 
 ## Objective
