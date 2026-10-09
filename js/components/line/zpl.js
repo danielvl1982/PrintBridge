@@ -212,8 +212,10 @@
 
     const whole = (v, fallback, min, max) => (typeof v === 'number' && Number.isFinite(v) ? clamp(Math.round(v), min, max) : fallback);
 
+    const TOO_LONG = `Hay líneas o cajas de más de ${MAX_BOX} puntos de largo: ZPL (^GB / ^GD) admite hasta ${MAX_BOX}, se ajustan al máximo`;
+
     return {
-      MAX_BOX, MAX_ROUND, MIN_DIAGONAL, MIN_ROUND_SIZE, MIN_ROUND_THICKNESS, COLOR_OPTIONS, ORIENTATION_OPTIONS, ROUNDING_OPTIONS,
+      MAX_BOX, TOO_LONG, MAX_ROUND, MIN_DIAGONAL, MIN_ROUND_SIZE, MIN_ROUND_THICKNESS, COLOR_OPTIONS, ORIENTATION_OPTIONS, ROUNDING_OPTIONS,
       readDots, readColor, readRounding, appearance, origin, base, radiusFor, degreeOf, thickness, place, gb, fr,
       colorField, reverse, roundingField, boxValues, group, whole, clamp, longer, shorter, boxEdits,
     };
@@ -276,6 +278,7 @@
           return [];
         }
         const border = Math.min(span, t.dots);
+        if (span > MAX_BOX) ctx.once('zpl-shape-size', () => diag.warning(S.TOO_LONG));
         const length = bound(Math.max(span, border), border, MAX_BOX);
         const [w, h] = horizontal ? [length, t.dots] : [t.dots, length];
         const left = horizontal ? Math.min(x1, x2) : (x1 + x2) / 2 - t.exact / 2;
@@ -284,6 +287,7 @@
       }
       const sizes = [Math.abs(dx), Math.abs(dy)].map(v => roundDots(v));
       if (sizes.some(v => v < MIN_DIAGONAL)) ctx.once('zpl-gd-min', () => diag.warning(`Hay líneas diagonales de menos de ${MIN_DIAGONAL} puntos de ancho o alto: ZPL (^GD) admite de ${MIN_DIAGONAL} a ${MAX_BOX}, se ajustan`));
+      if (sizes.some(v => v > MAX_BOX)) ctx.once('zpl-shape-size', () => diag.warning(S.TOO_LONG));
       const [w, h] = sizes.map(v => bound(v, MIN_DIAGONAL, MAX_BOX));
       const leaning = dx * dy < 0 ? 'R' : 'L';
       const args = [w, h, t.dots];

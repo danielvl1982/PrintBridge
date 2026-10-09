@@ -119,8 +119,8 @@ test('updateItem: PC keeps the literal text after =', () => {
 
 test('updateItem: generic barcode module, height, rotation and human readable', () => {
   // Fixture with the digit counts of the manual (the sloppy XB above is reported, see tests/tpcl-barcode-validation.test.js)
-  const { out, after, diagnostics } = edit('{XB01;0100,0200,9,0,02,0,0100,0,000,1,00|}', { module: 4, height: 80, rotation: 90, humanReadable: false });
-  assert.equal(out, '{XB01;0100,0200,9,0,04,1,0080,0,000,0,00|}');
+  const { out, after, diagnostics } = edit('{XB01;0100,0200,9,1,02,0,0100,0,000,1,00|}', { module: 4, height: 80, rotation: 90, humanReadable: false });
+  assert.equal(out, '{XB01;0100,0200,9,1,04,1,0080,0,000,0,00|}');
   assert.deepEqual(diagnostics, []);
   assert.equal(after.rotation, 90);
   assert.equal(after.height, 80);

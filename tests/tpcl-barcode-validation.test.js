@@ -87,8 +87,9 @@ test('parse: check digit option 1..5 is valid, anything else warns with the rang
   assert.deepEqual(warnings(widthsForm('3,3,02,02,06,06,02,0,0100,1')), []);
   assert.match(warnings(widthsForm('3,6,02,02,06,06,02,0,0100,1'))[0], /dígito de control "6" fuera de 1\.\.5/);
   assert.match(warnings(generic('5,0,02,0,0080,0,000,1,00'))[0], /dígito de control "0" fuera de 1\.\.5/);
-  // The shipped Code 128 example writes 0 (see Open in odd/tasks/field-validation-audit.md): tolerated for types 9 and A only
-  assert.deepEqual(warnings(generic('9,0,02,0,0080,0,000,1,00')), []);
+  // Code 128 (types 9 and A) takes the same 1..5 as every other generic type: 0 is no longer tolerated (the shipped example now writes 1)
+  assert.match(warnings(generic('9,0,02,0,0080,0,000,1,00'))[0], /dígito de control "0" fuera de 1..5/);
+  assert.deepEqual(warnings(generic('9,1,02,0,0080,0,000,1,00')), []);
 });
 
 test('parse: rotation 0..3 only', () => {

@@ -367,8 +367,18 @@
     refresh();
   }
 
-  /** Largest width or height (dots) of an SG command: its fields have 4 digits. */
-  const MAX_SG_DOTS = 9999;
+  /** Largest width or height (dots) of a picture whose label language declares no `imageSizeProblem` (the SG limit of TPCL: 4 digits). */
+  const MAX_DEFAULT_DOTS = 9999;
+
+  /** The language the picture would be written in: the label's own, TPCL when it is not recognized (as insertImage does). */
+  const imageLanguage = () => languages.detect(editor.text()) || languages.get('tpcl');
+
+  /** Why a w x h dots picture cannot be written in the label's language (its own limits: SG, BITMAP, ^GF), or null. */
+  function imageSizeProblem(w, h) {
+    const language = imageLanguage();
+    if (typeof language.imageSizeProblem === 'function') return language.imageSizeProblem(w, h);
+    return w > MAX_DEFAULT_DOTS || h > MAX_DEFAULT_DOTS ? `${w}×${h} puntos supera el máximo de ${MAX_DEFAULT_DOTS}` : null;
+  }
 
   /** The bytes of the label in the editor as Descargar writes them (PB.convert.toBytes in the label's own language) with the assigned variables replaced; throws a Spanish Error when there is nothing to print. */
   function labelBytes() {
@@ -427,7 +437,8 @@
     const { converted, href } = state.image;
     const { w, h, threshold, key } = conversionParams();
     if (converted && converted.bitmap && converted.key === key) return Promise.resolve(converted.bitmap);
-    if (w > MAX_SG_DOTS || h > MAX_SG_DOTS) return Promise.reject(new Error(`${w}×${h} puntos supera el máximo de ${MAX_SG_DOTS}`));
+    const problem = imageSizeProblem(w, h);
+    if (problem) return Promise.reject(new Error(problem));
     return rasterize(href, w, h, threshold).then(data => ({ w, h, data }));
   }
 

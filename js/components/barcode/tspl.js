@@ -186,7 +186,7 @@
      */
     function emit(item, ctx) {
       if (!EMITTABLE.includes(item.symbology)) {
-        ctx.report(diag.warning(`Código de barras ${item.symbology}: sin equivalente en TSPL, no se exporta`));
+        ctx.once(`tspl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TSPL, no se exporta`));
         return [];
       }
       let type;

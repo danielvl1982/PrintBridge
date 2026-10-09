@@ -1056,6 +1056,14 @@
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.zpl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CONFIG_NAMES });
 
+  /** Why a w x h dots picture cannot be a ^GF command (1..99999 bytes of image), or null when it fits. */
+  function imageSizeProblem(w, h) {
+    const image = PB.slices.image.zpl;
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) return `${w}×${h} puntos no es un tamaño de imagen válido`;
+    if (image.totalBytes({ w, h }) > image.MAX_BYTES) return `${w}×${h} puntos supera el máximo de ^GF (bytes de imagen 1..${image.MAX_BYTES}: total, bytes enviados y bytes por fila)`;
+    return null;
+  }
+
   /**
    * ^FO..^GFA..^FS for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral bitmap, 1 = black; dpi), ready for
    * insertCommand. A bitmap over the 99999 bytes of ^GF is refused with an error (the app shows it as the reason the image was not inserted).
@@ -1063,11 +1071,9 @@
   function imageCommand({ xMm, yMm, w, h, data, dpi }) {
     const image = PB.slices.image.zpl;
     const bitmap = { w, h, data };
-    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    const problem = imageSizeProblem(w, h);
+    if (problem) throw new Error(problem);
     if (!data || data.length !== w * h) throw new Error(`los datos de la imagen no son de w×h puntos (${w}×${h})`);
-    if (image.totalBytes(bitmap) > image.MAX_BYTES) {
-      throw new Error(`${w}×${h} puntos supera el máximo de ^GF (bytes de imagen 1..${image.MAX_BYTES}: total, bytes enviados y bytes por fila)`);
-    }
     // ^FO takes 0..32000 dots (vol 1 5907+): a position outside it is refused, never moved silently
     const dots = (mm, name) => {
       const tenths = units.fromMm(mm);
@@ -1082,7 +1088,7 @@
   // UTF-8 (the default): see the note on ^CI in the header. The ^GF data is ASCII hexadecimal, so the file stays plain text.
   PB.languages.register({
     id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize, fitSize, sizeLimits: SIZE_LIMITS, sizeLimitsFor,
-    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    insertCommand, insertImage: true, imageCommand, imageSizeProblem, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

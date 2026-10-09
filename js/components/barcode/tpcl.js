@@ -218,7 +218,7 @@
      */
     function emit(item, ctx) {
       if (!TYPE_CODES[item.symbology]) {
-        ctx.report(diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
+        ctx.once(`tpcl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
         return [];
       }
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
@@ -495,8 +495,7 @@
             if (checked) {
               [
                 barcodeNumberWarning(ref, m[1]),
-                // The shipped Code 128 example writes 0 here (the manual says 1..5; Code 128 always attaches its check character): tolerated, see Open
-                m[4] === '9' || m[4] === 'A' ? (p[0] === '0' ? null : rangeWarning(ref, 'tipo de dígito de control', p[0], 1, 5)) : rangeWarning(ref, 'tipo de dígito de control', p[0], 1, 5),
+                rangeWarning(ref, 'tipo de dígito de control', p[0], 1, 5),
                 rangeWarning(ref, 'módulo', p[1], 1, MAX_MODULE, 2),
                 rangeWarning(ref, 'rotación', p[2], 0, 3),
                 ...heightProblems(ref, p[3]),

@@ -88,7 +88,13 @@
   const CR_PLACEHOLDER = String.fromCharCode(0xE00D);
 
   /** Bytes of a BITMAP: each source char is one byte (the app reads files as text, see the note in commands()). */
-  const toBytes = text => String.fromCharCode(...Array.from(text, ch => (ch === CR_PLACEHOLDER ? 0x0D : ch.charCodeAt(0) & 0xFF)));
+  const toBytes = text => {
+    // In chunks: spreading a whole payload into String.fromCharCode overflows the call stack for a bitmap of a few hundred KB
+    const codes = Array.from(text, ch => (ch === CR_PLACEHOLDER ? 0x0D : ch.charCodeAt(0) & 0xFF));
+    let out = '';
+    for (let i = 0; i < codes.length; i += 8192) out += String.fromCharCode(...codes.slice(i, i + 8192));
+    return out;
+  };
 
   /**
    * Walks the commands of the text, one per non-empty line (CR, LF or CRLF), with their position:
@@ -715,6 +721,16 @@
     return slice && slice.hooks.build ? slice.hooks.build(text, point, options || {}) : text;
   }
 
+  /** Why a w x h dots picture cannot be a BITMAP command (width 1..1250 bytes, height 1..9999), or null when it fits. */
+  function imageSizeProblem(w, h) {
+    const image = PB.slices.image.tspl;
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) return `${w}×${h} puntos no es un tamaño de imagen válido`;
+    if (Math.ceil(w / 8) > image.MAX_WIDTH_BYTES || h > image.MAX_HEIGHT) {
+      return `${w}×${h} puntos supera el máximo de BITMAP (ancho 1..${image.MAX_WIDTH_BYTES} bytes = ${image.MAX_WIDTH_BYTES * 8} puntos, alto 1..${image.MAX_HEIGHT})`;
+    }
+    return null;
+  }
+
   /**
    * BITMAP command for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral
    * bitmap, 1 = black; dpi), ready for insertCommand. The editor holds a 0x0D payload byte as CR_PLACEHOLDER (a
@@ -722,11 +738,9 @@
    */
   function imageCommand({ xMm, yMm, w, h, data, dpi }) {
     const image = PB.slices.image.tspl;
-    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
+    const problem = imageSizeProblem(w, h);
+    if (problem) throw new Error(problem);
     if (!data || data.length !== w * h) throw new Error(`los datos de la imagen no son de w×h puntos (${w}×${h})`);
-    if (Math.ceil(w / 8) > image.MAX_WIDTH_BYTES || h > image.MAX_HEIGHT) {
-      throw new Error(`${w}×${h} puntos supera el máximo de BITMAP (ancho 1..${image.MAX_WIDTH_BYTES} bytes = ${image.MAX_WIDTH_BYTES * 8} puntos, alto 1..${image.MAX_HEIGHT})`);
-    }
     const dots = (mm, name) => {
       const units = PB.units.fromMm(mm);
       if (!Number.isFinite(units)) return 0;
@@ -741,6 +755,6 @@
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize, fitSize, sizeLimits: { gap: [...GAP_LIMITS] },
-    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem, updateItem,
+    insertCommand, insertImage: true, imageCommand, imageSizeProblem, moveItem: EDITING.moveItem, describeItem, updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
