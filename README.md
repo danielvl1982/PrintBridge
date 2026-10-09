@@ -265,7 +265,7 @@ The browser cannot write RAW data to a USB label printer, so the **Imprimir** bu
 It needs Windows and [Node.js](https://nodejs.org) LTS, has no dependencies and only listens on `127.0.0.1`.
 
 1. Install the printers in Windows as usual (the driver can be a generic one: the data is sent RAW, exactly as in the editor).
-2. Run `agentstart.bat` to try it, or `powershell -ExecutionPolicy Bypass -File agentinstall.ps1` so it starts by itself at every logon (`uninstall.ps1` removes it).
+2. Run `agent\start.bat` to try it, or `powershell -ExecutionPolicy Bypass -File agent\install.ps1` so it starts by itself at every logon (`uninstall.ps1` removes it).
 3. In the app, open the **Impresión** panel: it shows "Agente conectado", the printers of the PC (the Windows default one is preselected, and the last one you chose is remembered), the **Copias** and **Imprimir**.
    **Agente** is the address of the agent (default `http://127.0.0.1:9631`) and **Reintentar** checks it again.
 
