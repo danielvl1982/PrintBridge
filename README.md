@@ -115,7 +115,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
     target dots (e.g. about 400 px wide for 50 mm at 203 dpi), because enlarging blurs the edges before the threshold.
   - Format: x/y in 0.1 mm, width/height in printer dots, mode `0` (overwrite), data in **nibble** form (4 dots per
     character `0`..`?`, rows padded to a multiple of 8 dots). The viewer also reads mode `4` (OR) and `x`/`y` in dots
-    (`D` suffix); other SG data modes (hex, BMP, PCX, TOPIX) are reported and not drawn. Width and height are limited to 9999 dots.
+    (`D` suffix); other SG data modes (hex, BMP, PCX, TOPIX) are reported and not drawn. Width is limited to 1..9999 dots, height to 1..99999 and the dot data to 512 KB (see *Validation of values*).
   - **Not verified on a printer:** the SG layout comes from the Toshiba B-SX4T manual, not from a B-EX4 or a real
     printer, and the `{SG…|}` framing is inferred. Test the first print before relying on it.
 - **Quitar imagen:** removes the preview image. The image takes part in the overlap and outside-the-label warnings.
@@ -261,7 +261,9 @@ The positions of the items are carried through the neutral model, so they are ex
 Notes: a TPCL field has 4 digits and 2-digit ids, and coordinates are rounded between 0.1 mm and dots (values beyond the field are clamped with a warning); a TPCL
 increment beyond 10 digits (ZPL `^SN` allows 12) is clamped with one warning; the TPCL `{XS;…|}` trailer is a default taken from the reference spool; a TSPL `BITMAP`
 (or a ZPL `^GF`) whose width is not a multiple of 8 dots gains white padding columns; a preview image that is not yet inserted in the code is not part of the conversion;
-the TPCL format ID and connection setting of a Data Matrix are not converted. The detail of each ZPL feature is in *ZPL support*.
+the TPCL format ID and connection setting of a Data Matrix are not converted.
+
+**What a conversion adjusts** (each adjustment is reported once in the conversion warnings, so the result is valid in the target; ranges in *Validation of values*): a value beyond the target's range is clamped (positions, sizes, thicknesses, radius, module and cell widths, bar code and text heights, counters and increments, data longer than the target allows); a size the target cannot write is snapped (TPCL `PC` magnification, ZPL bitmapped font multiples, ZPL rounding degree, TSPL bar code ratio); a pitch becomes a `GAP` (up to 25.4 mm) and the other way round; a bar code symbology or an image the target cannot write (or that exceeds its limits: TPCL 9999 dots wide, TSPL 1250 bytes wide, ZPL 99999 bytes) is skipped with a warning; a line or box longer than 32000 dots in ZPL is limited. The converted text is read back by the target parser without a range warning. The detail of each ZPL feature is in *ZPL support*.
 
 **Text origin:** TPCL, TSPL and ZPL do not place a text the same way (TPCL gives the origin of the text, ZPL `^FO` the top-left of the field and `^FT` the baseline, TSPL `TEXT` the top-left
 of the character cell). The viewer draws every text from its baseline, so it reads a TSPL `TEXT` y as the top edge plus the ascent (75% of the height for the scalable fonts, as the ZPL font 0 in Volume Two; 80% for the bitmap fonts; whole dots) and writes it back
@@ -505,6 +507,60 @@ Nothing in the ZPL support or in the conversions has been tried on a printer. Be
 - **Counters and variables:** what `n` = 0 does, the zero suppression of mixed text (the indexed digits are settled, the replacement by spaces of the suppressed zeros is only drawn for numeric values), `^SN` on 2D codes and with `^FN`, the quoted prompt `^FN n"prompt"`, `^FN` with 2D codes. Volume Two says a stored format is recalled with `^FN` data merged in, but that is not simulated.
 - **Files:** UTF-8 (the guides tie characters above ASCII to `^CI` and the printer font and do not mention UTF-8; Volume Two says the standard Zebra character set is Code Page 850 above 20 hex, so UTF-8 bytes above ASCII are not what a printer expects by default).
 - **Not in either manual:** the origin (`^FT`) and the quiet zone of QR and Data Matrix, the geometry of the shapes (the thickness grows inward, when a border is solid, the `^FT` origin of `^GD` / `^GC` / `^GE`, `^FR` on a white shape; Volume Two only says that `^GB` draws boxes and lines), the `^FO` box of rotated bars, the ECC 200 range, the QR mixed mode and the Data Matrix encodation: Volume Two has no command reference and adds nothing.
+
+## Validation of values
+
+Every value the app handles was checked against the manuals in `docs/` (see [docs/README.md](docs/README.md); the PDFs are local and git-ignored). The same ranges apply on three surfaces:
+
+1. **Properties panel:** a number field has `min` / `max` from the language's range, a select only offers valid options, and a typed value that is out of range is clamped (or snapped) with a notice instead of being written.
+2. **Emit and conversion:** nothing is written out of range. A value that has to be adjusted is clamped or snapped and reported **once** in **Avisos** (or in the conversion warnings), with the valid range. A conversion between languages goes through the same emit, so it lands valid in the target (tested for the six pairs at 203 and 300 dpi).
+3. **Typed or pasted code:** a value out of range is read as written (the code is never rewritten, the panel shows what is written), drawn as the nearest valid one, and reported with a warning that says what the printer will do and the valid range.
+
+**When the manuals disagree** the widest value supported by at least one manual of the family is used (for example the TPCL block width: 1040 in the English manuals, 1057 in the Spanish one, so 1057). When the manuals are silent nothing is invented: the current behavior is kept and listed under *Not validated / unverified* below.
+
+### TPCL (B-SV4 2004, B-452-R 2012, B-452-TS12 ES 2001, B-x72 ES 2001)
+
+| Family | Valid range |
+|---|---|
+| `{D` | pitch 0100..9999 (4 or 5 digits), width 0100..1080 (4 digits), length 0060..9970; the pitch is raised to the length, and a gap under 2 mm is reported. The Formato row limits the width to 10..108 mm and the length to 6..997 mm |
+| `{AX`, `{XS`, `{LC`, `{XR` | feed / cut 000..500, correction 00..99 (copied only if valid); `{XS` count 0001..9999, sensor 0..5, ribbon 0..2; `LC` type 0..3 (dashed types are drawn continuous, with an information), width 1..99, radius 3 digits; X 4 digits, Y 4 or 5 digits, clamped to 0..9999 |
+| Command numbers | `PC` / `PV` 00..99 (at most 100 texts), `XB` 00..31 (at most 32 codes); the extra ones are reported |
+| `PC` / `PV` text | `PV` width and height 0020..0850; spacing +-99 (`PC`) / +-512 (`PV`); attribute margins 01..99; bold 00..16; zero suppression 00..20; counter increment +-9999999999; alignment width 0050..1057; `P5` 0050..1057 / 010..500 / 01..99; data at most 255 characters (cut and reported) |
+| `XB` barcodes | check digit option 1..5 (Code 128 always 1, "attached"); module (1-module width) 01..15; bar / space widths 01..99; height 0000..1000 (0.1 mm); guard bar 000..100; data at most 126 characters (2000 for QR / Data Matrix) |
+| `XB` QR / Data Matrix | QR cell 00..52 dots (00 draws nothing), level L / M / Q / H, model 1 / 2, mask 0..8; Data Matrix cell 00..99, ECC 00..14 and 20 (only 20 is drawn), size 000..144 |
+| `SG` | X 4 digits, Y 4 or 5 digits, width 1..9999 dots, height 1..99999 dots, at most 512 KB of dot data; data modes 0..7 (0 and 4 are drawn) |
+
+### TSPL (B-442 / B-443 interface manual; TSC TSPL/TSPL2 v3.0 is not available locally)
+
+| Family | Valid range |
+|---|---|
+| Setup | `SIZE` greater than 0; `GAP` m 0..25.4 mm (1 inch) and n up to the label height; `BLINE` and `OFFSET` 0..25.4 mm (reported only); `DENSITY` 0..15; `DIRECTION` 0 or 1; `FEED` and `PRINT` 1..65535 |
+| Shapes | `BAR`, `BOX`, `ERASE`, `REVERSE` measures at least 1 dot, corners in any order; ellipse and circle sizes at least 1; a negative position of an ellipse or area is clamped to 0 (reported) |
+| `TEXT` | fonts 1..5 plus the v3.0 ids (0, 6..8, `ROMAN.TTF`), rotation 0 / 90 / 180 / 270, bitmap multipliers 1..10 (the local manual says 1..8), counters `@0`..`@49`, `SET COUNTER` step +-999999999 |
+| `BARCODE` | nine symbologies; rotation as above; narrow and wide at least 1 dot (wide snapped to the manual ratios); human readable 0 / 1 (2 and 3 are v3.0); data checked per symbology |
+| `QRCODE`, `DMATRIX` | level L / M / Q / H, cell 1..10 (v3.0), module at least 1, the 10..144 table of sizes |
+| `BITMAP` | mode 0 / 1 / 2 (1 and 2 are drawn as overwrite), width 1..1250 bytes, height 1..9999 dots, data of exactly width x height bytes |
+
+### ZPL (ZPL II Programming Guide vol. 1, 2003, and vol. 2, 2005)
+
+| Family | Valid range |
+|---|---|
+| Setup | `^PW` 2..32000 dots, `^LL` 1..32000 (the Formato maximum follows the dpi); `^LH` 0..32000; `^LS` +-9999; `^LT` +-120; `^CI` 0..24; `^PQ`, `^MD` (+-30), `^PR`, `^PM`, `^PO` are checked only in typed code |
+| Fields | `^FO` / `^FT` 0..32000 for every item; data at most 3072 characters (`^FD`, `^FV`, `^FB`, `^SN`, `^FN`); `^FN` 0..9999; `^SN` 12 digits |
+| Shapes | `^GB` thickness 1..32000, rounding 0..8; `^GC` / `^GE` 3..4095, thickness 2..4095; `^GD` 3..32000 |
+| `^A`, `^CF`, `^FB` | scalable fonts 0 or 10..32000 dots; bitmapped fonts only whole multiples 1..10 of the matrix at the document dpi; `^FB` width 1..9999, lines 1..9999, line space -9999..9999 |
+| Barcodes | `^BY` module 1..10, ratio 2.0..3.0 (steps of 0.1), height 1..32000; `^B*` height 1..32000; Y / N flags |
+| `^BQ`, `^BX` | QR magnification 1..10; Data Matrix module 1..9999, quality 0 / 50 / 80 / 100 / 140 / 200 (only 200 is drawn), ECC 200 sizes even 10..144 |
+| `^GF` | bytes sent, total and bytes per row 1..99999 (an image is at most 99999 bytes) |
+
+### Not validated / unverified
+
+The manuals are silent, contradictory, or the command is not modelled; the behavior is kept as it was. A panel limit marked "convenience" is the viewer's, not the printer's.
+
+- **TPCL:** the `{D` backing paper parameter and the model tables of the manuals; items outside the print area; check digit `Mm` / `Mk` (read, never drawn or written); link fields `;ss`; `PV` fonts E..J and TrueType; `PC` fonts beyond A..T; the 40-digit counter data and 32 counters rule; the character code table; QR / Data Matrix capacity per level and size; PDF417, MicroPDF417, MaxiCode, GS1 DataBar and postal codes (drawn approximately, parameters not checked); `{SG0;` and the hex, BMP, PCX and TOPIX modes (not drawn); the issue speed set, which depends on the model.
+- **TSPL:** everything only TSC v3.0 defines is checked as "is a number": `BLOCK`, `QRCODE` ranges, `DIRECTION` mirror, `SHIFT`, `ELLIPSE`, `CIRCLE`, the `BOX` radius, fonts 0 / 6..8, the `TEXT` alignment; `SIZE` has no maximum; the limits of height, narrow, wide, measures and positions (9999 / 10) and the 200 pt scalable size are conveniences; `SPEED` depends on the model; the narrow : wide ratio table is garbled in the local manual; CR / LF in `TEXT` become spaces; data ending in a backslash cannot be read back by the viewer (the printer is not affected); `PUTBMP`, `PUTPCX`, `PUTPNG` and `DOWNLOAD` are not drawn.
+- **ZPL:** `^PW` above the printhead width and `^LL` by memory are not warned (32000 is the viewer's limit); `^GC` / `^GE` thickness 1 (the guide's default) is accepted in typed code; `^LT` per platform; the `^FO` justification and `^FT` without values; `^BY` height (typo in vol. 1; 1..9999 in vol. 2; 32000 is used); the `^BX` module upper bound; `^BQ` capacity per level and version; Code 39 / 93 full ASCII; `^A@`, `^FP`, `^FC`, `^SF`; the 600 dpi heads; stored images and formats (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`, `^DF`, `^XF`); compression and B64 / Z64 data inside `^GF` (documented for `~DG` / `~DB`); the symbologies the app does not model.
+- **All:** conversions are checked through the parsers of the three languages, not on a printer; values that no manual bounds pass unchanged between languages.
 
 ## Limitations
 

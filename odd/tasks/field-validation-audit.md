@@ -1,6 +1,6 @@
 # Field validation audit (UI, conversion, typed code) against the manuals
 
-Status: IN PROGRESS (started 2026-10-09 on branch `feat/field-validation-audit`). Requested by the user: after the TPCL block width limit turned out
+Status: DONE, PENDING USER REVIEW (started 2026-10-09 on branch `feat/field-validation-audit`). Requested by the user: after the TPCL block width limit turned out
 to be 1040 (English manuals) vs 1057 (Spanish manual), check that EVERY value the app writes, converts or accepts is valid for the printer, in
 TPCL, TSPL and ZPL. The user will review and test everything at the end (reviews are postponed until all tasks are done).
 
@@ -41,7 +41,7 @@ ZPL (manuals: docs/zpl vol 1 and 2)
 - [x] V12 ZPL images (`^GF`, `~DG`)
 Cross cutting
 - [x] V13 Conversions: every value converted TPCL / TSPL / ZPL lands valid in the target (clamp / snap + one aviso); matrix of tests per pair
-- [ ] V14 Close: README (validation rules and their sources), conversion matrix doc, full `node --test`, Chrome probe of the panels for the three
+- [x] V14 Close: README (validation rules and their sources), conversion matrix doc, full `node --test`, Chrome probe of the panels for the three
       languages (screenshots outside the repo), this document finished, Engram mirror, merge request to the user
 
 ## Findings (filled by each task)
@@ -440,3 +440,47 @@ Expectation changes in existing tests: tests/tpcl-barcode-validation.test.js (a 
 - V11 (route: delegated writer, one writer, direct; RED first: 13 of the 16 new tests failed on the old code): ZPL barcodes, QR and Data Matrix (tests/zpl-barcode-validation.test.js, 16 tests). Verification: `node --test` 4228 tests, 4227 pass, 0 fail, 1 skipped (was 4212 / 4211 before; +16 new). Commit: see `git log` (fix: validate ZPL barcode, QR and Data Matrix values against the manuals).
 - V12 (route: delegated writer, one writer, direct; RED first: 8 of the 17 new tests failed on the old code): ZPL images (tests/zpl-image-validation.test.js, 17 tests). Verification: `node --test` 4245 tests, 4244 pass, 0 fail, 1 skipped (was 4228 / 4227 before; +17 new). Commit: see `git log` (fix: validate ZPL image values against the manuals).
 - V13 (route: delegated writer, one writer, direct; RED first: 11 of the 15 first tests failed on the old code, then the example and image-limit tests were added): conversions land valid in the target (tests/conversion-validity.test.js, 20 tests). Verification: `node --test` 4265 tests, 4264 pass, 0 fail, 1 skipped (was 4245 / 4244 before; +20 new). Commit: see `git log` (fix: make conversions land valid in the target language).
+- V14 (route: delegated writer, one writer, direct; documentation and verification, no RED applicable): README section "Validation of values" (three surfaces, per-language ranges with manual editions, manual-disagreement policy, one Not validated / unverified list per language), the stale image limit of the SG paragraph fixed (width 1..9999, height 1..99999, 512 KB) and the "What a conversion adjusts" paragraph added under the conversion table. Verification: `node --test` 4265 tests, 4264 pass, 0 fail, 1 skipped (3983 at the start of the audit, +282). Commit: see `git log` (docs: document the value validation rules and close the audit).
+  Browser probe (Chrome, puppeteer-core, file:// page; scripts and screenshots outside the repo in the Temp ui folder: v14probe.js, v14-*-props.png, v14-*-bad.png), 27 checks, 27 PASS, 0 FAIL; the only console errors are the known print agent CORS ones:
+  - PASS x6 `blank-tpcl`, `template-tpcl`, `blank-tspl`, `template-tspl`, `blank-zpl`, `template-zpl` (the six shipped examples): the Avisos list holds no warning or error (information only).
+  - PASS x3 every number input of every item of the three templates (text, line, barcode, QR; TPCL 28 inputs, TSPL 13, ZPL 13) has `min` and `max` set from the new limits (for example TPCL PV size 20..850, spacing -512..512, module 1..15, barcode height 1..1000, QR cell 1..52, line width 1..99; TSPL multipliers 1..10; ZPL sizes up to 32000).
+  - PASS x3 typing a value above the maximum into each number input (23 TPCL, 13 TSPL, 13 ZPL fields tried): the value is clamped to the maximum in the field and in the code, never kept out of range. 31 of the 49 cases also show an aviso; the other 18 are clamped in the panel without one (see Open).
+  - PASS x3 pasted labels with an out-of-range value give warnings in Avisos: TPCL `{PC01;0100,0100,14,19,B,00,B|}` (magnification) and `{XB00;...}` (module, height), TSPL `BARCODE ...,45,...` / `DENSITY 20` (rotation, range 0..15), ZPL `^BY99` ("módulo 99 fuera de 1..10 puntos, se usa 10").
+  - PASS x12 Convertir a... for the 6 pairs on both examples of each language (blank and template): the converted text read back by the app has no warning or error (and the conversion list holds no warning).
+  - Not covered by the probe: Data Matrix and image items (no shipped example has one; covered by tests/conversion-validity.test.js and the per-task validation tests).
+
+## Summary
+- TPCL (V1..V4): label setup `{D` / `{AX` / `{XS` / `{LC` / `{XR`, text `PC` / `PV` (sizes, spacing, attribute, bold, zero suppression, alignment, `P5`, 255 characters), barcodes (check digit, module 01..15, widths, height 0000..1000, 126 / 2000 characters), QR, Data Matrix and `SG` images (width 1..9999, height 1..99999, 512 KB) are limited in the panel, clamped on emit with one aviso, and warned with their range when typed. The Formato row limits pitch / width / length to the `{D` ranges; the 33rd `XB` and 101st `PV` are reported.
+- TSPL (V5..V8): `SIZE`, `GAP` (0..25.4 mm), `BLINE`, `OFFSET`, `DENSITY`, `SPEED`, `FEED`, `PRINT`, shapes with at least 1 dot, `TEXT` font / rotation / multiplier / counters `@0..@49`, `BARCODE` height / rotation / narrow / wide / readable, `QRCODE`, `DMATRIX` and `BITMAP` (mode, size, data length) are checked; what only TSC v3.0 defines keeps its behavior (Open).
+- ZPL (V9..V12): `^PW` / `^LL` / `^LH` / `^FO` / `^FT` (0..32000 for every item), `^LS` / `^LT`, `^GB` / `^GC` / `^GD` / `^GE`, `^A` sizes (scalable 10..32000, bitmapped whole multiples of the matrix of the dpi), `^CF`, `^FB`, 3072 characters, `^FN`, `^SN`, `^BY` (module 1..10, ratio 2.0..3.0, height), every `^B*` height / flag, `^BQ`, `^BX` and `^GF` (1..99999 bytes) are limited and warned; the Formato maximum follows the dpi.
+- Conversions (V13): every converted value lands valid in the target; a matrix of 6 pairs x 2 resolutions x about 190 cases re-reads the result with the target parser without warning. Found and fixed: a TSPL parser stack overflow on a 500000 byte BITMAP, a ZPL line / box longer than 32000 dots limited silently, a skipped symbology reported once per item, and an image limit that refused 10000 dots wide before looking at the language.
+- Tests: 3983 at the start of the audit, 4265 now (+282 in 13 new test files plus the V13 matrix; 0 fail, 1 skipped). README: new section "Validation of values" with the ranges per language, the manual-disagreement policy (widest value of at least one manual) and the Not validated / unverified lists.
+
+Commits of the branch (`git log --oneline 56af94a..HEAD`, oldest last; the V14 commit is the latest, added with this document):
+```
+78d00fb fix: make conversions land valid in the target language
+bf04c77 fix: validate ZPL image values against the manuals
+fb65560 fix: validate ZPL barcode, QR and Data Matrix values against the manuals
+b0dc83c fix: validate ZPL text values against the manuals
+274baff fix: validate ZPL label setup and shapes against the manuals
+6839e06 fix: validate TSPL image values against the manual
+3dbcefc fix: validate TSPL barcode, QR and Data Matrix values against the manual
+e5c68b8 fix: validate TSPL text values against the manual
+9cee3e8 fix: validate TSPL label setup and shape values against the manual
+09ea438 fix: validate TPCL image values against the manuals
+5736057 fix: validate TPCL barcode, QR and Data Matrix values against the manuals
+10bd957 fix: validate TPCL text values against the manuals
+c883acb fix: validate TPCL label setup and shape values against the manuals
+3415883 docs: plan the field validation audit
+```
+
+## How to review
+1. Read the README section "Validation of values" first (README.md, before "Limitations"); then the per-task tables under Findings above for the sources of each range. Look at one commit per language: `c883acb` (TPCL setup), `10bd957` (TPCL text), `9cee3e8` (TSPL setup), `274baff` (ZPL setup), `78d00fb` (conversions).
+2. In the app, open the **Plantilla — TPCL**, select a text, type 950 in the width field and leave it: it goes to 850 (the `PV` maximum). Do the same with the barcode module (limit 15) and the QR cell (limit 52).
+3. Paste `{PC01;0100,0100,14,19,B,00,B|}` (TPCL), `BARCODE 100,100,"128",50,1,45,2,2,"X"` (TSPL) and `^XA^BY99^FO50,50^BCN,100,Y,N,N^FD12345^FS^XZ` (ZPL): each shows an orange warning with the valid range in Avisos, and the code you pasted is not rewritten.
+4. In **Formato** type a width of 500 mm in TPCL (it stops at 108 mm), a GAP of 40 mm in TSPL (25.4 mm) and, in ZPL, a very long label (limit 32000 dots at the selected dpi); then change **Resolución** and see the ZPL limit follow it.
+5. Load a template, **Convertir a…** each of the other two languages and paste the result back into the code box: no warning remains.
+
+## Open (added by V14)
+- V14 The Propiedades panel clamps a typed number above its maximum to the maximum (the field and the code show it) but 18 of the 49 probe cases give no aviso: TPCL `PC` / `PV` zero suppression and bold, line end point and width, TSPL line width / height, ZPL line length / thickness. The value is never kept out of range and nothing is written invalid; a visible notice for every clamp would need a generic hook in `changeProperty` (js/app.js) and was not added.
+- V14 The browser probe covers the three languages' templates (text, line, barcode, QR) only; Data Matrix, images and TSPL / ZPL shapes other than lines are covered by the unit tests and the V13 matrix, not by the browser.
