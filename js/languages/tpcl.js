@@ -127,6 +127,17 @@
     return diag.warning(`${ref}: ${list} fuera del formato (X con 4 dígitos, Y con 4 o 5, en 0,1 mm): la impresora puede no aceptarlo`);
   }
 
+  /** Longest data string of a PC / PV text (B-SV4 6.3.7, B-452-R 6.3.8, B-452-TS12 6.10: "Max. 255 digits", the excess is discarded). */
+  const TEXT_DATA_MAX = 255;
+
+  /** Data of a text as the printer keeps it: cut to 255 characters, with a warning when something was discarded. */
+  function fitTextData(ctx, ref, data) {
+    const value = data == null ? data : String(data);
+    if (value == null || value.length <= TEXT_DATA_MAX) return value;
+    ctx.report(diag.warning(`${ref}: datos de ${value.length} caracteres: la impresora descarta lo que pase de ${TEXT_DATA_MAX} (máximo del manual), se dibujan los ${TEXT_DATA_MAX} primeros`));
+    return value.slice(0, TEXT_DATA_MAX);
+  }
+
   const HANDLERS = [
     {
       // Label size: D<pitch>,<width>,<length>
@@ -166,7 +177,8 @@
       handle(m, cmd, ctx) {
         const target = DATA_TARGET[m[1]] + m[2];
         const field = ctx.fields[target];
-        if (field) field.data = field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3];
+        if (field && field.kind === 'text') field.data = fitTextData(ctx, target, m[3]);
+        else if (field) field.data = field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3];
         else ctx.report(diag.error(`R${m[1]}${m[2]} no tiene un ${target} definido antes`));
       },
     },
@@ -210,10 +222,10 @@
   // TPCL format rules that do not prevent drawing but that the printer may reject.
   // Each rule is independent: to add one, add it to RULES.
   const RULES = [
-    // Coordinates with 4 digits
+    // Coordinates with 4 digits (text: Y may have 4 or 5, B-SV4 6.3.7 / 6.3.8 and B-452-R 6.3.8 / 6.3.9)
     item => ['x', 'y']
-      .filter(k => item.raw && item.raw[k] != null && item.raw[k].length !== 4)
-      .map(k => diag.warning(`${item.ref}: ${k}="${item.raw[k]}" no tiene 4 dígitos (la impresora puede no aceptarlo)`)),
+      .filter(k => item.raw && item.raw[k] != null && !(k === 'y' && item.kind === 'text' ? /^\d{4,5}$/ : /^\d{4}$/).test(item.raw[k]))
+      .map(k => diag.warning(`${item.ref}: ${k}="${item.raw[k]}" no tiene ${k === 'y' && item.kind === 'text' ? '4 o 5' : '4'} dígitos (la impresora puede no aceptarlo)`)),
   ];
 
   /** D command (without braces) matching a resolved size: D<pitch>,<width>,<length>. */
@@ -481,7 +493,7 @@
   const SLICE_HELPERS = Object.freeze({
     sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder, coordDigitsWarning,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
-    wrap, safeData, coordText, allocId,
+    wrap, safeData, coordText, allocId, fitTextData, TEXT_DATA_MAX,
     COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
   });
 

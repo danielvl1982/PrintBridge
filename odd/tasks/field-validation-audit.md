@@ -26,7 +26,7 @@ For every command parameter the app handles, the three surfaces agree with the m
 ## Tasks (one writer at a time; check off only after observed tests)
 TPCL (manuals: docs/tpcl)
 - [x] V1 TPCL label setup and shapes: `{D`, `{AX`, `{C`, `{XS`, `{LC` lines, boxes, `{XR` areas, ellipses
-- [ ] V2 TPCL text: PC / PV (sizes, spacing, rotation, attribute, bold, counter, zero suppression, alignment, P5 block), RC / RV data
+- [x] V2 TPCL text: PC / PV (sizes, spacing, rotation, attribute, bold, counter, zero suppression, alignment, P5 block), RC / RV data
 - [ ] V3 TPCL barcodes (`{XB` types, widths, ratios, heights, check digits, data lengths and character sets), QR, Data Matrix
 - [ ] V4 TPCL images (`{SG`)
 TSPL (manual: docs/tspl)
@@ -76,6 +76,36 @@ declare `sizeLimits` and `fitSize` (TPCL does); `PB.sizes.apply` returns the fit
 Expectation changes in existing tests: tests/area-slice.test.js fixture D now has a 3 mm gap (it had pitch = length, which now reports the 2 mm information); LC `native`
 now also holds the type as written (tests/shape-radius.test.js, tests/units-and-source.test.js).
 
+### V2 TPCL text (`{PC`, `{PV`, `{RC`, `{RV`)
+Manuals as in V1 (SV4 6.3.7 / 6.3.8 and RC 6.3.10 from line 1498 of its text, R 6.3.8 / 6.3.9 from line 2090 / 2838, TS12 6.10 / 6.11 from line 1835 / 2470, x72 same family). Magnification
+and the P5 block were done earlier (tpcl-magnification, tpcl-text-types) and are only re-checked. "Parse before" = what the parser did with a typed value.
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| String number PC aaa / PV aa | PC 000..199 (two digits 00..99 also valid), PV 00..99 (SV4 1498+, R 2098, TS12 PV 2478) | no field | the 101st PV was written `100` (invalid) with a generic "more than 100 fields" / one warning naming PC 000..199 / PV 00..99, not renumbered | none / warning per command (digit count, range) |
+| X / Y | X exactly 4 digits, Y 4 or 5 (SV4, R); TS12 PV says 4 for both | number 0..9999 (V1) | clamp 0..9999 + warning (already) | a 5-digit Y warned as not 4 digits / valid (4 or 5), X still exactly 4 |
+| PV width dddd / height eeee | 0020..0850, 4 digits (SV4 1531+, R 2852; TS12 2495+: fonts A, B 0850, E..I 0600, TrueType 0400; the widest is used) | number 1..9999 / 20..850 | `pad4(max(1, n))` up to 9999 / clamped to 0020..0850 + one warning | none; size 0 gave NaN / drawn clamped, warning with the range and the digits, panel still reads what is written |
+| PV font f | A, B (all); E..J (R), E..I (TS12); 01..25 TrueType has another syntax (SV4 1539+, R 2858+, TS12 2515+) | A, B only (valid) | always B | any letter accepted / warning for a letter outside A, B, E..J |
+| PC font ff | A..T (TS12 1865+; R has more incl. kanji, q, r, v, w, 01..55; SV4 only E, J, M, N, O, Q) | A..T (valid) | letters from the bitmap table | unknown letter warned (already) / unchanged |
+| Spacing ghh (PC) / ghhh (PV) | PC +-00..99 (2 digits), PV +-000..512 (3 digits) (SV4 1553+ and 1580+, R 2238, TS12 1920 and 2535) | -99..99 / -512..512 (already) | clamped silently / clamped + one warning | any digit count / warning for the wrong digit count or range; drawn limited, native keeps the digits |
+| Rotation ii | 00, 11, 22, 33 | select (valid) | nearest quarter turn + warning (already) | unknown code warned (already) |
+| Attribute W / F aabb, C aa | 01..99 dots each; B has none (SV4 1568+, R, TS12 1950+) | 1..99 (already) | clamped silently / clamped + one warning | 0, wrong digit counts silently / warning; 00 drawn as 1, native keeps it |
+| Bold Jkkll (PC) | kk, ll 00..16 (SV4 1580+, R 2301+, TS12 1975+); PV has none | 0..16 (already) | clamped silently / clamped + one warning | clamped to 16 silently, J on PV and bad digits silently / warning for each |
+| Check digit Mm / Mk | 0, 1, 2 (SV4 1587+, R 2318, TS12 1985+) | not modelled | never written | ignored / warning for a value outside 0..2 (Open: not drawn) |
+| Increment noooooooooo | sign + 10 digits, 0000000000..9999999999 | +-9999999999 (already) | clamped + warning (already) | malformed token silently ignored / warning |
+| Zero suppression Zpp / Znn | 00..20 (SV4 1594+, R 2330, TS12 2006) | 0..20 (already) | clamped silently / clamped + one warning | Z25 read as 20 silently, malformed Z silently / warning with the range |
+| Alignment P1..P3, P4aaaa | aaaa 0050..1040 (SV4, R) / 0050..1057 (TS12); 1057 used (V1 decision) | width 50..1057 (already) | width clamped silently / clamped + one warning | width read as written and drawn as written / drawn as the nearest valid, native keeps the digits (panel shows what is written), warning; P6, P4 without 4 digits, unknown tokens now warn |
+| P5aaaabbbcc (PC only) | aaaa 0050..1057, bbb 010..500, cc 01..99 (done in tpcl-text-types) | fields with those ranges (already) | clamped + warning (already) | warning (already); P5 on PV now warns "only PC" |
+| Data string | max 255 characters, the excess is discarded (SV4 1949+, R 2648, TS12 2027; 127 for kanji fonts, not modelled) | content field maxLength 255 (already) | any length / cut to 255 + one warning | any length / cut to 255 (what the printer prints) + warning, inline `=` and `{RC` / `{RV` |
+| Link fields `;ss` | 01..99, up to 20 | not modelled | never written | ignored (swallowed by the optional parameters) / unchanged (Open) |
+| Unknown optional parameter | order `(,J)(,M)(,n)(,Z)(,P)` | - | - | silently skipped / warning with the token |
+
+Other changes: palette `build` and the PC <-> PV switch take a free number inside 00..99 (the lowest free one when the next is above 99, nothing when all 100 are used); the "Tipo de fuente" note says when the PC -> PV switch limits the size
+to 0020..0850. `PB.languages` TPCL helpers gain `fitTextData` / `TEXT_DATA_MAX`.
+Expectation changes in existing tests: PV sizes in tests/update-item.test.js (20..850 instead of 1..9999); the TSPL example label has a 1.5 mm text, which TPCL can only write as 2 mm (PV minimum 0020), so
+tests/cross-conversion.test.js documents one extra warning for tspl-label-100x60 -> tpcl and the text-size comparison floors a PV text at 20; tests/conversion-matrix.test.js accepts the PV size warning among the font
+diagnostics (and `font.size` / `font.width` as may-differ keys for the two example labels); the TSPL BLOCK-with-PV test tolerates the same warning.
+
 ## Open (manuals silent or contradictory; kept as is)
 - V1 `{D` 4th parameter (backing paper width, R 0300..1120, ignored by SV4): not validated, kept only while the size is unchanged.
 - V1 `{LC` radius: the manuals only fix 3 digits (0..999); no relation to the rectangle size is stated (the viewer limits the drawn radius to half the shorter side).
@@ -84,7 +114,15 @@ now also holds the type as written (tests/shape-radius.test.js, tests/units-and-
 - V1 `{D` model tables (SV4 table, TS12 table) give model-specific limits (for example length 8..998 mm, width 13..108 mm); only the command-level ranges are used.
 - V1 A converted label without a pitch is written with pitch = length, which the printer shortens by 2 mm (information added to the existing pitch notice); inventing a 2 mm gap was not done.
 - V1 TPCL could draw a circle as a rounded LC rectangle (LC note 5); today ellipses and circles are skipped with a warning (a feature, not a validation).
+- V2 Check digit `Mm` / `Mk` is read but not modelled (never drawn, never written); a typed M3 only warns.
+- V2 Link fields (`;01,02` instead of `=data`) are not modelled: the command is read without data.
+- V2 PV fonts E..J (price fonts, TEC FONT 2 / 3, Gothic 725) and TrueType 01..25 are not offered (the viewer draws every PV font the same); R limits TrueType to 0400 and TS12 limits E..I to 0600, only 0850 is used.
+- V2 PC fonts beyond A..T (kanji U..X, q, r, v, w, writable characters 01..55) are warned as unknown and drawn as J; data limit 127 for those fonts is not applied.
+- V2 Equal-space and block width: SV4 / R say 0050..1040, TS12 0050..1057; 1057 is kept (V1 decision), so a 1041..1057 value is written without warning.
+- V2 The character code table (allowed characters of the data) is not validated beyond the framing characters `{ } |` and line breaks, which become spaces.
+- V2 Counters: the manual allows at most 32 incrementing fields and 40-digit data; not checked.
 - V1 Issue speed: SV4 lists 1..9 and A, R and TS12 only 2 and 4 (model dependent); the widest is accepted.
 
 ## Progress
 - V1 (route: delegated writer, one writer, direct; RED first: 22 of the 32 new tests failed on the old code): TPCL label setup and shapes (tests/tpcl-label-setup.test.js, tests/tpcl-shapes-validation.test.js). Verification: `node --test` 4015 tests, 4014 pass, 0 fail, 1 skipped (was 3983 / 3982 before; +32 new). Commit: see `git log` (fix: validate TPCL label setup and shape values against the manuals).
+- V2 (route: delegated writer, one writer, direct; RED first: 31 of the 34 new tests failed on the old code): TPCL text (tests/tpcl-text-validation.test.js, 34 tests). Verification: `node --test` 4049 tests, 4048 pass, 0 fail, 1 skipped (was 4015 / 4014 before; +34 new). Commit: see `git log` (fix: validate TPCL text values against the manuals).

@@ -36,15 +36,15 @@ test('updateItem and describeItem are exposed as optional language hooks', () =>
 // ---- text PV ----
 
 test('updateItem: PV width and height rewrite only those fields (4 digits kept)', () => {
-  const { out, after, diagnostics } = edit(PV, { width: 250, height: 5 });
-  assert.equal(out, '{PV01;0100,0200,0250,0005,B,00,B|}');
+  const { out, after, diagnostics } = edit(PV, { width: 250, height: 25 });
+  assert.equal(out, '{PV01;0100,0200,0250,0025,B,00,B|}');
   assert.deepEqual(diagnostics, []);
-  assert.equal(after.font.size, 5);
+  assert.equal(after.font.size, 25);
   assert.equal(after.font.scaleX * after.font.size, 250);
 });
 
-test('updateItem: PV clamps width and height to 1..9999', () => {
-  assert.equal(edit(PV, { width: 0, height: 99999 }).out, '{PV01;0100,0200,0001,9999,B,00,B|}');
+test('updateItem: PV clamps width and height to 20..850 (0020..0850 in the manuals)', () => {
+  assert.equal(edit(PV, { width: 0, height: 99999 }).out, '{PV01;0100,0200,0020,0850,B,00,B|}');
 });
 
 test('updateItem: PV rotation maps to the 2-digit text codes', () => {
@@ -231,7 +231,7 @@ test('describeItem: PV fields with values, ranges and rotation options (from tex
   assert.deepEqual(keys(d), ['fontType', 'kind', 'width', 'height', 'rotation', 'font', 'spacing', 'attribute', 'counter', 'zeroSuppress', 'align']);
   assert.deepEqual(d.fields.map(f => f.type), ['radio', 'select', 'number', 'number', 'select', 'select', 'number', 'select', 'number', 'number', 'select']);
   assert.deepEqual([field(d, 'width').value, field(d, 'height').value, field(d, 'rotation').value], [100, 100, 0]);
-  assert.deepEqual([field(d, 'width').min, field(d, 'width').max], [1, 9999]);
+  assert.deepEqual([field(d, 'width').min, field(d, 'width').max], [20, 850]);
   assert.deepEqual(field(d, 'rotation').options.map(o => o.value), [0, 90, 180, 270]);
   assert.ok(d.fields.every(f => typeof f.label === 'string' && f.label));
 });

@@ -105,11 +105,17 @@
    */
   const SPACING_MAX = Object.freeze({ PC: 99, PV: 512 });
   const SPACING_WIDTH = Object.freeze({ PC: 2, PV: 3 });
+  /** Zero suppression "Zpp": 00..20 (the helper constant of js/languages/tpcl.js is not loaded yet when this file is). */
+  const ZERO_LIMIT = 20;
 
-  /** { spacing: { value, native } } of a signed token ("+05", "-120"), nothing when omitted or 0. */
-  function parseSpacing(token, dotSize) {
+  /**
+   * { spacing: { value, native } } of a signed token ("+05", "-120"), nothing when omitted or 0. `native` keeps the dots as written; `value`
+   * (what is drawn) is limited to the command's range, like the printer would have to.
+   */
+  function parseSpacing(token, dotSize, command) {
     const dots = token ? Number(token) : 0;
-    return dots ? { spacing: { value: dots * dotSize, native: dots } } : {};
+    const drawn = Math.sign(dots) * Math.min(Math.abs(dots), SPACING_MAX[command]);
+    return dots ? { spacing: { value: drawn * dotSize, native: dots } } : {};
   }
 
   /** Spacing token ("+05", "-120", digits padded to `width`) from signed dots clamped to the command's range; null for 0. */
@@ -158,7 +164,10 @@
   function parseAlign(params) {
     const m = ALIGN_PARAM.exec(params || '');
     if (!m || m[1] === '1') return {};
-    return { align: m[1] ? { kind: ALIGN_KINDS[m[1]] } : { kind: 'equal', width: +m[2] } };
+    if (m[1]) return { align: { kind: ALIGN_KINDS[m[1]] } };
+    // An area width outside 0050..1057 is drawn as the nearest valid one; native keeps the digits as written
+    const width = clampInt(+m[2], ALIGN_MIN_WIDTH, ALIGN_MAX_WIDTH);
+    return { align: { kind: 'equal', width, ...(width !== +m[2] && { native: { width: +m[2] } }) } };
   }
 
   const isAlignKind = k => typeof k === 'string' && Object.hasOwn(ALIGN_CODES, k);
@@ -448,7 +457,7 @@
       {
         key: 'alignWidth', label: 'Ancho del área', type: 'number', min: ALIGN_MIN_WIDTH, max: ALIGN_MAX_WIDTH, step: 1, group, exact: true,
         read: raw => readAlignToken(raw).width ?? undefined,
-        model: item => (item.align && item.align.kind === 'equal' ? item.align.width : undefined),
+        model: item => (item.align && item.align.kind === 'equal' ? (item.align.native ? item.align.native.width : item.align.width) : undefined),
         write: (v, width, raw, changes) => {
           if (!isOffset(v) || isAlignKind(changes.align) || readAlignToken(raw).kind !== 'equal') return null;
           return alignToken('equal', v);
@@ -506,10 +515,84 @@
   const COUNTER_PARAM = /(?:^|,)([+-]\d{10})(?=,|;|$)/;
   const ZERO_PARAM = /(?:^|,)Z(\d{2})(?=,|;|$)/;
 
+  /** PV character width and height (0.1 mm): 0020..0850 (B-SV4 6.3.8, B-452-R 6.3.9; B-452-TS12 6.11 limits fonts E..I to 0600, the widest is used). */
+  const PV_SIZE = Object.freeze([20, 850]);
+  const clampPvSize = n => clampInt(Number.isFinite(n) ? n : PV_SIZE[0], PV_SIZE[0], PV_SIZE[1]);
+  const pvSizeOutside = n => !(n >= PV_SIZE[0] && n <= PV_SIZE[1]);
+  /** Outline font letters of the manuals: A, B (all), E..J (B-452-R; B-452-TS12 lists E..I). TrueType fonts (01..25) use another syntax. */
+  const PV_FONT_LETTER = /^[ABE-J]$/;
+  /** Largest string number: PC 000..199 (2 or 3 digits), PV 00..99 (2 digits). */
+  const MAX_FIELD_NUMBER = Object.freeze({ PC: 199, PV: 99 });
+  /** Offsets of the attribute W / F / C in dots. */
+  const ATTRIBUTE_OFFSET = Object.freeze([1, 99]);
+
+  /**
+   * Problems of a PC / PV command as written (Spanish warnings with the manual's range), over the match of its handler (1 number, 4 / 5 width and
+   * height of a PV, 7 spacing, 9 / 10 attribute, 11 the optional parameters). Nothing is rewritten: the item keeps the values as written and
+   * is drawn with the nearest valid ones.
+   */
+  function textProblems(command, m) {
+    const ref = command + m[1];
+    const pc = command === 'PC';
+    const out = [];
+    const bad = text => out.push(`${ref}: ${text}`);
+    const number = pc ? /^\d{2,3}$/.test(m[1]) && +m[1] <= MAX_FIELD_NUMBER.PC : /^\d{2}$/.test(m[1]);
+    if (!number) bad(`número de campo "${m[1]}" fuera de ${pc ? '00..99 (2 dígitos) o 000..199 (3 dígitos)' : '00..99 (2 dígitos)'}: la impresora puede no aceptarlo`);
+    if (!pc) {
+      for (const [name, raw] of [['ancho', m[4]], ['alto', m[5]]]) {
+        if (!/^\d{4}$/.test(raw) || pvSizeOutside(+raw)) bad(`${name} "${raw}" fuera de 0020..0850 (4 dígitos, en 0,1 mm): la impresora puede no aceptarlo, se dibuja con ${String(clampPvSize(+raw)).padStart(4, '0')}`);
+      }
+      if (!PV_FONT_LETTER.test(m[6])) bad(`fuente "${m[6]}" no válida para PV (A, B, E..J): la impresora puede no aceptarlo`);
+    }
+    if (m[7]) {
+      const max = SPACING_MAX[command];
+      const digits = SPACING_WIDTH[command];
+      if (!new RegExp(String.raw`^[+-]\d{${digits}}$`).test(m[7]) || Math.abs(+m[7]) > max) {
+        bad(`espaciado "${m[7]}" fuera de ±${'0'.repeat(digits)}..${max} (${digits} dígitos, en puntos): la impresora puede no aceptarlo, se dibuja con ${Math.min(Math.abs(+m[7]), max)} puntos`);
+      }
+    }
+    const [letter, digits] = [m[9], m[10]];
+    const offsets = digits.match(/\d{2}/g) || [];
+    const attributeOk = letter === 'B' ? digits === '' : digits === '' || (letter === 'C' ? digits.length === 2 : digits.length === 4);
+    if (!attributeOk || offsets.some(o => +o < ATTRIBUTE_OFFSET[0])) {
+      const form = letter === 'B' ? 'B no lleva desplazamientos' : letter === 'C' ? 'C necesita aa (2 dígitos)' : `${letter} necesita aabb (4 dígitos)`;
+      bad(`atributo ${letter}${digits} no válido (${form}, cada desplazamiento 01..99 puntos): la impresora puede no aceptarlo`);
+    }
+    const rest = (m[11] || '').split(';')[0];
+    if (rest && !rest.startsWith(',')) bad(`parámetros opcionales mal formados "${rest}"`);
+    for (const token of rest.startsWith(',') ? rest.slice(1).split(',') : []) {
+      if (token.startsWith('J')) {
+        if (!pc) bad(`${token}: la negrita (J) solo existe en PC (la fuente vectorial no la tiene)`);
+        else if (!/^J\d{4}$/.test(token)) bad(`${token}: negrita mal formada, se esperaba Jkkll (4 dígitos, cada desplazamiento 00..16 puntos)`);
+        else if (+token.slice(1, 3) > BOLD_MAX || +token.slice(3) > BOLD_MAX) bad(`${token}: negrita fuera de 00..16 puntos (cada desplazamiento): la impresora puede no aceptarlo, se dibuja con ${Math.min(+token.slice(1, 3), BOLD_MAX)} y ${Math.min(+token.slice(3), BOLD_MAX)}`);
+      } else if (token.startsWith('M')) {
+        if (!/^M[012]$/.test(token)) bad(`${token}: dígito de control no válido (M0, M1 o M2)`);
+      } else if (/^[+-]/.test(token)) {
+        if (!/^[+-]\d{10}$/.test(token)) bad(`${token}: incremento mal formado, se esperaba signo y 10 dígitos (0000000000..9999999999)`);
+      } else if (token.startsWith('Z')) {
+        if (!/^Z\d{2}$/.test(token)) bad(`${token}: supresión de ceros mal formada, se esperaba Zpp (2 dígitos, 00..20)`);
+        else if (+token.slice(1) > ZERO_LIMIT) bad(`${token}: supresión de ceros fuera de 00..20: la impresora puede no aceptarlo, se dibuja con 20`);
+      } else if (token.startsWith('P')) {
+        if (/^P[123]$/.test(token) || (pc && /^P5\d{9}$/.test(token))) continue; // P5: see parseBlock
+        const area = /^P4(\d{4})$/.exec(token);
+        if (area) {
+          if (+area[1] < ALIGN_MIN_WIDTH || +area[1] > ALIGN_MAX_WIDTH) bad(`${token}: ancho del espaciado igual fuera de 0050..1057 (0,1 mm): la impresora puede no aceptarlo, se dibuja con ${clampInt(+area[1], ALIGN_MIN_WIDTH, ALIGN_MAX_WIDTH)}`);
+        } else if (!pc && /^P5/.test(token)) bad(`${token}: el salto de línea automático (P5) solo existe en PC`);
+        else bad(`${token}: alineación no válida (P1, P2, P3, P4aaaa${pc ? ' o P5aaaabbbcc' : ''})`);
+      } else {
+        bad(`parámetro opcional "${token}" desconocido: la impresora puede no aceptarlo`);
+      }
+    }
+    return out;
+  }
+
+  /** Warning of an emit that had to limit a text value, once per label. */
+  const limited = (ctx, key, text) => ctx.once(key, () => diag.warning(text));
+
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
-      ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, wrap, safeData, coordText, allocId,
+      ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, wrap, safeData, coordText, fitTextData, TEXT_DATA_MAX,
       COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
     } = helpers;
 
@@ -522,7 +605,11 @@
 
     /** Increment and zero suppression tokens of an item (with their commas), empty without them. */
     const counterText = (item, ctx) => (item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0 ? `,${emitCounterToken(ctx, item.counter.step)}` : '');
-    const zeroText = item => (item.zeroSuppress > 0 ? `,Z${zeroDigits(item.zeroSuppress)}` : '');
+    const zeroText = (item, ctx) => {
+      if (!(item.zeroSuppress > 0)) return '';
+      if (item.zeroSuppress > ZERO_LIMIT) limited(ctx, 'tpcl-zero-range', 'Hay textos con supresión de ceros fuera de 00..20 (TPCL): se ajusta al límite');
+      return `,Z${zeroDigits(item.zeroSuppress)}`;
+    };
 
     /**
      * The two panel fields over the optional increment and zero suppression tokens (written whole with their comma: `exact`,
@@ -570,13 +657,18 @@
     function attributeText(attribute, ctx) {
       if (!attribute || !isKind(attribute.kind)) return 'B';
       const dots = n => (Number.isFinite(n) ? ctx.dot(n) : null);
-      return attributeToken(attribute.kind, attribute.native ? dots(attribute.h) : null, dots(attribute.v));
+      const [h, v] = [attribute.native ? dots(attribute.h) : null, dots(attribute.v)];
+      if ([h, v].some(n => n != null && (n < ATTRIBUTE_OFFSET[0] || n > ATTRIBUTE_OFFSET[1]))) {
+        limited(ctx, 'tpcl-attribute-range', 'Hay textos con desplazamientos del atributo (W, F, C) fuera de 01..99 puntos (TPCL): se ajustan al límite');
+      }
+      return attributeToken(attribute.kind, h, v);
     }
 
     /** Spacing token with its comma ("+05,"), empty without spacing: the dots as written, else the distance in 0.1 mm converted. */
     function spacingText(spacing, command, ctx) {
       if (!spacing) return '';
       const dots = Number.isFinite(spacing.native) ? spacing.native : Number.isFinite(spacing.value) ? ctx.dot(spacing.value) : 0;
+      if (Math.abs(dots) > SPACING_MAX[command]) limited(ctx, 'tpcl-spacing-range', 'Hay textos con espaciado entre caracteres fuera de ±99 puntos (PC) o ±512 (PV): se ajusta al límite de TPCL');
       const token = spacingToken(dots, command);
       return token ? `${token},` : '';
     }
@@ -585,7 +677,54 @@
     function boldText(bold, ctx) {
       if (!bold) return '';
       const dots = key => (bold.native && Number.isFinite(bold.native[key]) ? bold.native[key] : Number.isFinite(bold[key]) ? ctx.dot(bold[key]) : 0);
+      if ([dots('h'), dots('v')].some(n => n < 0 || n > BOLD_MAX)) limited(ctx, 'tpcl-bold-range', 'Hay textos con negrita (J) fuera de 00..16 puntos (TPCL): se ajusta al límite');
       return boldToken(dots('h'), dots('v'));
+    }
+
+    /** Alignment token of an item, the equal-space area limited to 0050..1057 (one warning per label). */
+    function alignText(item, ctx) {
+      const { kind, width } = item.align;
+      if (kind === 'equal' && Number.isFinite(width) && (width < ALIGN_MIN_WIDTH || width > ALIGN_MAX_WIDTH)) {
+        limited(ctx, 'tpcl-align-range', 'Hay textos con espaciado igual fuera de 0050..1057 (0,1 mm): el ancho del área se ajusta al límite de TPCL');
+      }
+      return alignToken(kind, width);
+    }
+
+    /** Next string number of a PC (000..199) / PV (00..99) command: beyond the manual's range it is reported once, not renumbered. */
+    function textId(ctx, command) {
+      const id = ctx.ids.next(command);
+      if (+id > MAX_FIELD_NUMBER[command]) {
+        limited(ctx, `tpcl-${command}-id`, command === 'PC'
+          ? 'Hay más de 200 textos de mapa de bits (PC): TPCL solo admite los números 000..199, los demás pueden no aceptarse'
+          : 'Hay más de 100 textos vectoriales (PV): TPCL solo admite los números 00..99, los demás pueden no aceptarse');
+      }
+      return id;
+    }
+
+    /**
+     * Number for a new PC / PV command and its data command inside the manual's range (`limit`; PV is always 2 digits): the next one, else the
+     * lowest free one, null when every number is taken.
+     */
+    function freeId(text, format, data, limit) {
+      const candidate = nextId(text, format, data);
+      if (+candidate <= limit && (format !== 'PV' || candidate.length === 2)) return candidate;
+      const used = new Set([...text.matchAll(new RegExp(String.raw`\{(?:${format}|${data})(\d+);`, 'g'))].map(hit => Number(hit[1])));
+      for (let i = 0; i <= limit; i++) if (!used.has(i)) return String(i).padStart(2, '0');
+      return null;
+    }
+
+    /** Data of a text cut to 255 characters (the printer discards the rest), with one warning per label. */
+    function textData(ctx, data) {
+      if (data.length <= TEXT_DATA_MAX) return data;
+      limited(ctx, 'tpcl-text-data', `Hay textos de más de ${TEXT_DATA_MAX} caracteres: TPCL descarta el exceso, se cortan a ${TEXT_DATA_MAX}`);
+      return data.slice(0, TEXT_DATA_MAX);
+    }
+
+    /** PV width / height as 4 digits, limited to 0020..0850 (one warning per label). */
+    function pvDim(ctx, n) {
+      const size = Math.round(n);
+      if (pvSizeOutside(size)) limited(ctx, 'tpcl-pv-size', 'Hay textos vectoriales (PV) con ancho o alto fuera de 0020..0850 (0,1 mm): se ajustan al límite de TPCL');
+      return pad4(clampPvSize(size));
     }
 
     /**
@@ -614,26 +753,25 @@
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
       const rot = rotationCode(ctx, item.rotation);
       // A text block is the PC automatic line feed (P5): the breaks of the data become spaces (the data has no line breaks in TPCL)
-      const data = safeData(ctx, item.block ? String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, ' ') : item.data);
+      const data = textData(ctx, safeData(ctx, item.block ? String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, ' ') : item.data));
       const choice = bitmapChoice({ ...font, size, scaleX });
       // The outline font (PV) has no automatic line feed: its text is one line
       if (item.block && !choice) ctx.once('tpcl-text-block', () => diag.warning('Hay bloques de texto (BLOCK de TSPL, ^FB de ZPL) cuya fuente solo se escribe vectorial (PV): el salto de línea automático (P5) necesita una fuente de mapa de bits (PC), se escriben como una línea de texto sin ajuste de línea'));
       const attribute = attributeText(item.attribute, ctx);
       if (item.reverse) ctx.once('tpcl-text-reverse', () => diag.warning('Hay textos con impresión inversa (^FR de ZPL): TPCL no la tiene en el texto (su atributo de fondo negro es otra cosa), se escriben normales'));
       const block = item.block && choice ? blockText(item, ctx) : '';
-      const align = block || (item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignToken(item.align.kind, item.align.width) : '');
+      const align = block || (item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignText(item, ctx) : '');
       if (choice) {
-        const id = allocId(ctx, 'PC');
-        return [wrap(`PC${id};${x},${y},${magnificationToken(choice.h)},${magnificationToken(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RC${id};${data}`)];
+        const id = textId(ctx, 'PC');
+        return [wrap(`PC${id};${x},${y},${magnificationToken(choice.h)},${magnificationToken(choice.v)},${choice.letter},${spacingText(item.spacing, 'PC', ctx)}${rot},${attribute}${boldText(item.bold, ctx)}${counterText(item, ctx)}${zeroText(item, ctx)}${align}`), wrap(`RC${id};${data}`)];
       }
       if (item.bold) ctx.once('tpcl-bold-pv', () => diag.info('Hay textos en negrita (J) que se escriben con la fuente vectorial (PV), que no tiene ese parámetro: se escriben sin negrita'));
       // The outline font is always drawn sans bold: any other family, weight or style is lost
       if ((font.family || OUTLINE_FONT.family) !== OUTLINE_FONT.family || (font.weight == null ? OUTLINE_FONT.weight : font.weight) !== OUTLINE_FONT.weight || (font.style || 'normal') !== 'normal') {
         ctx.once('tpcl-fonts', () => diag.info('Las fuentes TPCL no coinciden con las de origen (familia, peso o cursiva): los textos sin fuente de mapa de bits equivalente se escriben con la fuente vectorial (PV)'));
       }
-      const id = allocId(ctx, 'PV');
-      const dim = n => pad4(Math.max(1, clampCoord(n)));
-      return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RV${id};${data}`)];
+      const id = textId(ctx, 'PV');
+      return [wrap(`PV${id};${x},${y},${pvDim(ctx, size * scaleX)},${pvDim(ctx, size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${counterText(item, ctx)}${zeroText(item, ctx)}${align}`), wrap(`RV${id};${data}`)];
     }
 
     /**
@@ -673,7 +811,9 @@
       const defaultDots = clampInt(defaultMargin, 1, 99);
       const given = parseAttributeDigits(letter, digits);
       const [h, v] = [given ? given.h : defaultDots, given && given.v != null ? given.v : defaultDots];
-      return { attribute: { kind, h: h * ctx.dot, ...(kind !== 'strike' && { v: v * ctx.dot }), ...(given && { native: given }), defaultDots } };
+      // An offset of 0 is outside 01..99: drawn as 1 dot, native keeps the 0 as written
+      const [drawnH, drawnV] = [Math.max(h, ATTRIBUTE_OFFSET[0]), Math.max(v, ATTRIBUTE_OFFSET[0])];
+      return { attribute: { kind, h: drawnH * ctx.dot, ...(kind !== 'strike' && { v: drawnV * ctx.dot }), ...(given && { native: given }), defaultDots } };
     }
 
     function bitmapFont(ctx, ref, code, hMag, vMag) {
@@ -703,7 +843,8 @@
       const view = options && ROTATION_STEPS.includes(options.viewRotation) ? options.viewRotation : 0;
       const itemRotation = (360 - view) % 360; // clockwise, so that item + view = 0 (upright)
       const tail = VARIABLE.tail.replace('{rot2}', ROTATION_CODES[itemRotation]);
-      const id = nextId(text, format, data);
+      const id = freeId(text, format, data, MAX_FIELD_NUMBER.PV);
+      if (id == null) return text; // all 100 numbers 00..99 are taken
       const placeholder = freePlaceholder(text, name);
       const withFormat = insertCommand(text, `{${format}${id};${pad4(clampCoord(point.x))},${pad4(clampCoord(point.y))},${tail}|}`);
       return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
@@ -738,7 +879,10 @@
           return `La fuente de mapa de bits (PC) es la única con negrita (J) y bloque de texto (P5)${long}`;
         }
         const lost = [item && item.bold && 'la negrita (J)', item && item.block && 'el bloque de texto (P5: vuelve a una línea)'].filter(Boolean);
-        return lost.length ? `Al cambiar a vectorial (PV) se pierde ${lost.join(' y ')}` : undefined;
+        const f = (item && item.font) || {};
+        const limits = [f.size * f.scaleX, f.size].some(n => Number.isFinite(n) && pvSizeOutside(Math.round(n)));
+        const notes = [lost.length && `se pierde ${lost.join(' y ')}`, limits && 'el ancho y el alto se limitan a 0020..0850 (0,1 mm)'].filter(Boolean);
+        return notes.length ? `Al cambiar a vectorial (PV) ${notes.join('; ')}` : undefined;
       },
       write: () => null,
     };
@@ -755,7 +899,8 @@
     /** Number of the converted command: the one it has when the other namespace (PV / PC and its RV / RC data) leaves it free, else the next free one. */
     function convertedId(text, ref, format, data) {
       const digits = /^P[CV](\d+)$/.exec(ref)[1];
-      return new RegExp(String.raw`\{(?:${format}|${data})${digits};`).test(text) ? nextId(text, format, data) : digits;
+      const valid = (format === 'PV' ? /^\d{2}$/ : /^\d{2,3}$/).test(digits) && +digits <= MAX_FIELD_NUMBER[format];
+      return valid && !new RegExp(String.raw`\{(?:${format}|${data})${digits};`).test(text) ? digits : freeId(text, format, data, MAX_FIELD_NUMBER[format]);
     }
 
     /**
@@ -768,7 +913,7 @@
       const font = item.font;
       const size = Number.isFinite(font.size) && font.size > 0 ? font.size : DEFAULT_OUTLINE_SIZE;
       const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
-      const dim = n => pad4(Math.max(1, clampCoord(n)));
+      const dim = n => pad4(clampPvSize(n));
       const coords = /^\{PC\d+;(\d+,\d+),/.exec(stripped)[1];
       const spacing = m[4] ? `${spacingToken(Number(m[4].slice(0, -1)), 'PV') ?? '+000'},` : '';
       const between = stripped.slice(at(6)[1], at(8)[0]).replace(/,J\d{4}(?=,|$)/, '');
@@ -799,6 +944,7 @@
         if (!FONT_TYPE_OPTIONS.some(o => o.value === to) || (to === 'vector') === vector || typeof text !== 'string') return null;
         const [format, dataLetter] = to === 'vector' ? ['PV', 'V'] : ['PC', 'C'];
         const id = convertedId(text, item.ref, format, `R${dataLetter}`);
+        if (id == null) return null;
         const command = vector ? vectorToBitmap(found, item, id) : bitmapToVector(found, item, id);
         const [fromLetter, digits] = [vector ? 'V' : 'C', /^P[CV](\d+)$/.exec(item.ref)[1]];
         const edits = [...text.slice(span.end).matchAll(new RegExp(String.raw`\{R${fromLetter}${digits};`, 'g'))]
@@ -821,17 +967,18 @@
           pattern: new RegExp(String.raw`^PC(\d+);(\d+),(\d+),(\d+),(\d+),` + TEXT_TAIL),
           handle(m, cmd, ctx) {
             const ref = 'PC' + m[1];
+            textProblems('PC', m).forEach(text => ctx.report(diag.warning(text)));
             ctx.addField(ref, {
               kind: 'text', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
               font: bitmapFont(ctx, ref, m[6].toUpperCase(), m[4], m[5]),
               rotation: textRotation(ctx, ref, m[8]),
-              ...parseSpacing(m[7], ctx.dot),
+              ...parseSpacing(m[7], ctx.dot, 'PC'),
               ...textAttribute(ctx, m[9], m[10], Math.max(magnification(m[4]), magnification(m[5])) * PC_DEFAULT_DOTS),
               ...parseBold(m[11], ctx.dot),
               ...parseCounter(ctx, m[11]),
               ...parseAlign(m[11]),
               ...withMagnifications(parseBlock(ctx, ref, m[11], m[8]), m[4], m[5]),
-              data: m[12] ?? null,
+              data: m[12] == null ? null : fitTextData(ctx, ref, m[12]),
             });
           },
         },
@@ -841,15 +988,18 @@
           handle(m, cmd, ctx) {
             const ref = 'PV' + m[1];
             const { family, weight } = OUTLINE_FONT;
+            textProblems('PV', m).forEach(text => ctx.report(diag.warning(text)));
+            // A width / height outside 0020..0850 is drawn as the nearest valid one (the panel still reads the digits as written)
+            const [width, height] = [clampPvSize(+m[4]), clampPvSize(+m[5])];
             ctx.addField(ref, {
               kind: 'text', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-              font: { size: +m[5], scaleX: +m[4] / +m[5], family, weight, style: 'normal' },
+              font: { size: height, scaleX: width / height, family, weight, style: 'normal' },
               rotation: textRotation(ctx, ref, m[8]),
-              ...parseSpacing(m[7], ctx.dot),
+              ...parseSpacing(m[7], ctx.dot, 'PV'),
               ...textAttribute(ctx, m[9], m[10], (Math.max(+m[4], +m[5]) / 10) * PV_DEFAULT_DOTS_PER_MM),
               ...parseCounter(ctx, m[11]),
               ...parseAlign(m[11]),
-              data: m[12] ?? null,
+              data: m[12] == null ? null : fitTextData(ctx, ref, m[12]),
             });
           },
         },
@@ -871,8 +1021,8 @@
           fields: [
             fontTypeField,
             VECTOR_KIND_FIELD,
-            numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
-            numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
+            numberField('width', 'Ancho (0,1 mm)', 1, PV_SIZE[0], PV_SIZE[1], item => Math.round(item.font.size * item.font.scaleX)),
+            numberField('height', 'Alto (0,1 mm)', 2, PV_SIZE[0], PV_SIZE[1], item => item.font.size),
             rotationField(5),
             fontField(3, OUTLINE_FONT_OPTIONS),
             spacingField(4, 'PV'),
