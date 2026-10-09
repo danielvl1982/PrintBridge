@@ -36,7 +36,7 @@ TSPL (manual: docs/tspl)
 - [x] V8 TSPL images (`BITMAP`)
 ZPL (manuals: docs/zpl vol 1 and 2)
 - [x] V9 ZPL label setup and shapes: `^PW`, `^LL`, `^LH`, `^FO`/`^FT`, `^GB`, `^GC`, `^GD`, `^GE`, `^FR`, `^LR`
-- [ ] V10 ZPL text: `^A`, `^CF`, `^FB`, `^FW`, `^SN`, `^FN`, character sizes per resolution
+- [x] V10 ZPL text: `^A`, `^CF`, `^FB`, `^FW`, `^SN`, `^FN`, character sizes per resolution
 - [ ] V11 ZPL barcodes (`^B*`, `^BY`), `^BQ` QR, `^BX` Data Matrix
 - [ ] V12 ZPL images (`^GF`, `~DG`)
 Cross cutting
@@ -271,7 +271,33 @@ Other changes: `PB.languages` ZPL gains `fitSize`, `sizeLimits` and `sizeLimitsF
 `OFFSET_LIMITS`; the shape helper `place()` takes the emit context and the shared helpers `fitCoord` / `coordDots` limit every origin. A converted TPCL / TSPL shape at a negative position (for example a TSPL BAR) now reports the ZPL limit once.
 Expectation changes in existing tests: tests/zpl.test.js (a `^PW0` is no longer "ignored, the last valid one wins": it is drawn as the smallest valid width, 2 dots, and warned).
 
+### V10 ZPL text (`^A`, `^CF`, `^FW`, `^FB`, `^FD` / `^FV`, `^FN`, `^SN`)
+Manuals: ZPL II Programming Guide vol 1 (2003; text lines of pdftotext -layout: ^A 1064+, ^CF 4520+, ^FB 5575+, ^FD 5722+, ^FH 5749+, ^FN 5873+, ^FV 6096+, ^FW 6142+, ^SN 9588+) and vol 2 (2005; bitmapped fonts "magnified from 2 to 10 times", whole numbers, 2517+;
+fields of ^SN and ^FN 1636+, 1700+). Vol 2 gives no ranges of its own; the matrices per printhead (203 / 300 dpi) were already applied from it (FONTS_203 / FONTS_300).
+
+| Parameter | Manual range (source) | UI before / after | Emit before / after | Parse warning before / after |
+|---|---|---|---|---|
+| `^A` font f | A..Z and 0..9 (V1 1064+) | select of the fonts with a known matrix plus 0 (valid) / unchanged | only those (valid) | an invalid character was silently the default font / warning, default font used |
+| `^A` orientation o | N R I B | select (valid) | already | already warned |
+| `^A` h, w, scalable (0 and the fonts without a matrix) | 0 (standard) or 10..32000 dots (V1 1064+) | number 0..32000, a typed 1..9 was written as is / typed value written as 0 or 10..32000 | already limited to 10..32000 with one info / same | 1..9 drawn at 1 dot, 40000, negative, 10.5, text silently / warning with the range, drawn at 10 or 32000, native keeps what was written |
+| `^A` h, w, bitmapped (A..H, P..V) | whole multiples 1..10 of the matrix of the printhead (V1 1064+, V2 2517+; ^A@ says "rounded to the nearest") | any number / typed value written as the nearest multiple (the matrix of the document dpi) | always an exact multiple (already) | rounded silently / warning with the font and its matrix, drawn at the nearest multiple |
+| `^CF` f, h, w | f A..Z 0..9; h, w 0..32000 (V1 4520+) | not offered | never written | invalid font and out of range or non numeric sizes silently / warning per argument with 0..32000 |
+| `^FW` r | N R I B (V1 6142+) | not offered | never written | warned without the values / warning lists "N, R, I o B" |
+| `^FB` a, b, c, e | a 0..9999 (0 does not print), b 1..9999, c -9999..9999, e 0..9999 (V1 5575+) | block fields 1..9999 / 1..9999 / -9999..9999 (already right) | clamped silently / clamped with one warning with the ranges | width over 9999 and the others silently clamped, non numeric silently default / warning per argument with the range, drawn at the limit |
+| `^FB` d | L C R J | select (valid) | already | invalid letter was an info / warning |
+| `^FD` / `^FV` data | up to 3072 characters; ^ and ~ only through ^FH or other prefixes (V1 5722+, 6096+) | content field maxLength 3072 (already) | any length, ^ ~ and the indicator escaped with ^FH (already) / cut to 3072 with one warning (^FD, ^FV, ^FB data, ^SN start, ^FN default) | any length / read whole, warning with the limit |
+| `^FN` n | 0..9999 (V1 5873+) | not offered | only numbers read from a file | warned without the range / the message says 0..9999 |
+| `^SN` v, n, z | v: 12 digits indexed, n: 12 digits, z Y / N (V1 9588+) | increment -999999999999..999999999999, zeros checkbox (already) | increment clamped + warning, start over 12 digits info (already) | n and z warned (already) / also a start value with more than 12 consecutive digits |
+| `^FO` / `^FT` of a text | 0..32000 (V9) | - | text with ^FO or a block used a bare `max(0, x)` (above 32000 and negative silently) / goes through the V9 limit with one warning | V9 |
+| Resolution | matrices of 203 and 300 dpi (V2 61+, 64+) | font labels show both | already per dpi | the multiple check follows the resolution of the document |
+
+Other changes: the properties panel size field (`^A` h, w) is a custom field that snaps the typed value to the font in force (the font typed in the same edit counts) at the dpi of the document; `fitData` (js/languages/zpl.js) limits the data of every ^FD / ^FV written (shared with the barcode slices).
+Expectation changes in existing tests: tests/zpl-fonts.test.js uses the standard size for the P..V fonts (30 x 30 is not a multiple of their matrices); tests/zpl-text.test.js updateItem of font D writes 54 x 60 (multiples of 18 x 10) instead of 60 x 55.
+
 ## Open (manuals silent or contradictory; kept as is)
+- V10 `^A@` (font by name) fields are read as an unsupported command (not drawn as text); `^FP`, `^FC` and `^CI13` backslash handling in `^FB` data are not validated. A literal backslash in block data is written as is (the guide needs ^CI13 to print it).
+- V10 The sizes of a `^CF` are not checked against a font that comes later (a `^CFA,30` is only warned when out of 0..32000; a non multiple is silent because the font of the field decides). Changing the font in the panel does not re-snap the sizes already written (the next size edit does; the next parse warns).
+- V10 Data length 3072 is counted in characters of the data before the ^FH escapes (the guide does not say which side); fonts without matrix (I..O, W..Z, 1..9, downloaded) are checked as scalable (10..32000), which may be wrong for a downloaded bitmapped font. ^SF (mask serialization) is still not modelled; the `^FB` width upper bound is "the label width (or 9999)": 9999 is used.
 - V9 `^GC` and `^GE` thickness: the table says "2 to 4095" but also "default 1"; typed code accepts 1 without a warning (the default), the panel and the emit use 2..4095 as the accepted range. `^GB` w / h below t are raised to t silently because the guide's own examples use 0 (^GB0,100,20).
 - V9 `^PW` upper limit is "the width of the label" (model dependent, no number given); 32000 dots is the widest the viewer accepts, so a width above the printhead is not warned. `^LL` also depends on the memory installed (V1 8296+).
 - V9 `^LT` range "might be smaller depending on the printer platform", `^LS` and `^LH` do not say what happens beyond their ranges: the viewer applies the nearest limit. `^PO I`, `^PM`, `^LS` / `^LT` and the printer state commands are still not drawn (reported once).
@@ -330,3 +356,4 @@ Expectation changes in existing tests: tests/zpl.test.js (a `^PW0` is no longer 
 - V7 (route: delegated writer, one writer, direct; RED first: 12 of the 15 new tests failed on the old code): TSPL barcodes, QRCODE and DMATRIX (tests/tspl-barcode-validation.test.js, 15 tests). Verification: `node --test` 4155 tests, 4154 pass, 0 fail, 1 skipped (was 4140 / 4139 before; +15 new). Commit: see `git log` (fix: validate TSPL barcode, QR and Data Matrix values against the manual).
 - V8 (route: delegated writer, one writer, direct; RED first: 9 of the 13 new tests failed on the old code): TSPL images (tests/tspl-image-validation.test.js, 13 tests). Verification: `node --test` 4168 tests, 4167 pass, 0 fail, 1 skipped (was 4155 / 4154 before; +13 new). Commit: see `git log` (fix: validate TSPL image values against the manual).
 - V9 (route: delegated writer, one writer, direct; RED first: 16 of the 23 new tests failed on the old code): ZPL label setup and shapes (tests/zpl-label-validation.test.js, 23 tests). Verification: `node --test` 4191 tests, 4190 pass, 0 fail, 1 skipped (was 4168 / 4167 before; +23 new). Commit: see `git log` (fix: validate ZPL label setup and shapes against the manuals).
+- V10 (route: delegated writer, one writer, direct; RED first: 17 of the 21 new tests failed on the old code): ZPL text (tests/zpl-text-validation.test.js, 21 tests). Verification: `node --test` 4212 tests, 4211 pass, 0 fail, 1 skipped (was 4191 / 4190 before; +21 new). Commit: see `git log` (fix: validate ZPL text values against the manuals).

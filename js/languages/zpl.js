@@ -84,6 +84,9 @@
  * pages (default 0, USA 1; 13 = CP850); it does not mention UTF-8, so the viewer reads and writes the text as UTF-8 (the app decodes files
  * that way) and a non-ASCII emit reports one info. ^CC / ^CT / ^CD prefix changes are read by the tokenizer but the emitter always writes
  * the standard prefixes and never escapes the changed ones.
+ * Text ranges (V10): ^A h, w 0 (standard) or 10..32000 dots for a scalable font, whole multiples (1..10) of the matrix for a bitmapped one; ^CF f A..Z 0..9, h, w
+ * 0..32000; ^FW N R I B; ^FB a 0..9999, b 1..9999, c -9999..9999, d L C R J, e 0..9999; ^FD / ^FV up to 3072 characters; ^FN 0..9999; ^SN 12 digits indexed.
+ * Typed values outside are read as written, drawn at the nearest valid one and reported; the emit cuts / limits what it writes and reports it once.
  */
 (function (PB) {
   'use strict';
@@ -291,9 +294,17 @@
     return zplEdit.encodeData(value);
   }
 
+  /** Data cut to the 3072 characters of ^FD / ^FV (the guide gives no behaviour for more; one warning per emit). */
+  function fitData(ctx, data) {
+    const text = data == null ? '' : String(data);
+    if (text.length <= zplEdit.MAX_DATA) return text;
+    ctx.once('zpl-data-length', () => diag.warning(`Hay datos de más de ${zplEdit.MAX_DATA} caracteres (máximo de ^FD / ^FV): se cortan al límite`));
+    return text.slice(0, zplEdit.MAX_DATA);
+  }
+
   /** The data command of a field: "^FDtext" or "^FH^FDa_5Eb" when the text needs the hex escapes (tag: 'FD' or 'FV'). */
   function fieldData(ctx, data, tag = 'FD') {
-    const { hex, text } = safeData(ctx, data);
+    const { hex, text } = safeData(ctx, fitData(ctx, data));
     return `${hex ? '^FH' : ''}^${tag}${text}`;
   }
 
@@ -309,7 +320,7 @@
    *   - anything else: ^FD (or ^FH^FD when the data needs the hex escapes). A zero suppression without a counter has no ZPL form (info).
    */
   function dataCommands(ctx, item, data = item.data) {
-    const text = data == null ? '' : String(data);
+    const text = fitData(ctx, data);
     const fn = item.native && item.native.fn;
     if (fn && item.data === `<#FN${fn.n}#>`) {
       return `^FN${fn.n}${typeof fn.prompt === 'string' ? `"${fn.prompt}"` : ''}${fn.default === undefined ? '' : fieldData(ctx, fn.default)}`;
@@ -497,10 +508,13 @@
       handle(m, cmd, ctx) {
         const name = cmd.args[0] && /^[A-Za-z0-9]$/.test(cmd.args[0].raw) ? cmd.args[0].raw.toUpperCase() : null;
         const [h, w] = [int(cmd.args[1]), int(cmd.args[2])];
-        if (name === null && h === null && w === null) {
-          if (cmd.args.some(a => a.raw !== '')) invalid(ctx, '^CF', cmd);
-          return;
-        }
+        // Guide (V1 4520+): font A..Z 0..9, height and width 0..32000 dots; a value outside is reported (the cells clamp it when they draw)
+        if (cmd.args[0] && cmd.args[0].raw !== '' && name === null) ctx.report(diag.warning(`^CF: fuente "${cmd.args[0].raw.slice(0, 10)}" no válida (A..Z o 0..9)`));
+        [['alto', 1, h], ['ancho', 2, w]].forEach(([label, i, v]) => {
+          const a = cmd.args[i];
+          if (a && a.raw !== '' && (v === null || v < 0 || v > zplEdit.COORD_MAX)) ctx.report(diag.warning(`^CF: ${label} "${a.raw.slice(0, 20)}" fuera de 0..32000 puntos o no es un número entero`));
+        });
+        if (name === null && h === null && w === null) return;
         const f = ctx.font;
         // explicit: a ^CF gave sizes, so an ^A of another font without sizes uses them (Volume Two, page 63); the power-up default A 9 x 5 does not
         ctx.font = {
@@ -518,7 +532,7 @@
       handle(m, cmd, ctx) {
         const r = cmd.args[0] ? cmd.args[0].raw.toUpperCase() : '';
         if (r === '') return;
-        if (rotationOf(r) === null) invalid(ctx, '^FW', cmd);
+        if (rotationOf(r) === null) invalid(ctx, '^FW', cmd, 'orientación N, R, I o B');
         else ctx.orientation = r;
       },
     },
@@ -727,6 +741,7 @@
   function readSerial(ctx, cmd) {
     const [a, b, c] = [0, 1, 2].map(i => cmd.args[i]);
     const start = a && a.raw !== '' ? a.raw : '1';
+    if (/\d{13}/.test(start)) ctx.report(diag.warning(`^SN: el valor inicial tiene más de 12 dígitos seguidos, solo se incrementan los 12 de la derecha`));
     let step = 1;
     if (b && b.raw !== '') {
       const n = int(b);
@@ -748,7 +763,7 @@
   function readFn(ctx, cmd) {
     const m = /^\s*(\d*)\s*(?:"([^"]*)")?\s*$/.exec(cmd.raw.slice(1 + cmd.name.length));
     const n = m ? (m[1] === '' ? 0 : Number(m[1])) : NaN;
-    if (!m || n > FN_MAX) { invalid(ctx, '^FN', cmd); return null; }
+    if (!m || n > FN_MAX) { invalid(ctx, '^FN', cmd, `número de campo 0..${FN_MAX}`); return null; }
     return { cmd, n, prompt: m[2] };
   }
 
@@ -803,6 +818,7 @@
       if (id === '^FR') field.reverse = true;
       else if (id === '^FB') field.block = cmd;
       else if (cmd.data) {
+        if ((id === '^FD' || id === '^FV') && cmd.args[0].raw.length > zplEdit.MAX_DATA) ctx.report(diag.warning(`${id}: ${cmd.args[0].raw.length} caracteres, la guía admite hasta ${zplEdit.MAX_DATA}`));
         field.data = { cmd, kind: cmd.name, value: cmd.args[0].value, raw: cmd.args[0].raw, start: cmd.args[0].start, end: cmd.args[0].end, hex: !!cmd.hex };
         field.serial = null;
       } else if (id === '^FN') field.fn = readFn(ctx, cmd);
