@@ -144,12 +144,18 @@ Overlays a picture on the preview to check where it would go. Until you insert i
   - **Propiedades panel:** selecting an item shows its editable fields. Changing a field (on leaving it or pressing
     Intro) rewrites only that field in the code, and **Ctrl+Z** in the code box undoes it. With nothing selected it shows
     "Selecciona un objeto". Clicking empty space deselects. What can be edited, in TPCL, TSPL and ZPL (the fields below are mostly TPCL / TSPL; the ZPL fields are listed in *ZPL support*, under each component, and have the same shape: numbers and options, content, font, counters, barcode type, reverse print):
+    - **Tipo (texts):** the first field of a text. **Línea de texto** (the default) or **Bloque de texto** (the text wrapped in a width). Which values exist depends on the language of the label:
+      TSPL (`TEXT` / `BLOCK`) and ZPL (a field without / with `^FB`) offer both; TPCL has no text block in any of its manuals, so its select only lists **Línea de texto** (disabled, with a note). Changing it rewrites the
+      command in one edit (**Ctrl+Z** undoes it): a line becomes a block 20 characters wide with as many lines as the text needs, left aligned; a block becomes a line again (the width, lines and alignment are lost
+      and the line breaks become spaces). A counter text (TSPL `@n`, ZPL `^SN`) stays a line: a block does not print it. A block adds **Ancho del bloque (puntos)**, **Líneas máx.**, **Alineación**
+      (Izquierda, Centro, Derecha; ZPL also Justificado) and, in ZPL only, **Interlineado (puntos)** (extra space between lines, may be negative). In its **Contenido** a line break is `\&` in ZPL and `\[R]` in TSPL.
+      An `^FT` field keeps its first line where it was when it becomes a block. TSPL has no line count: **Líneas máx.** writes `height = lines * line pitch` (character height of the font + space).
     - **Numbers and options:** size or magnification, rotation, module width, human-readable text, error-correction level,
       end point and thickness (the fields each command has).
     - **Radio (esquinas redondeadas):** rectangles only (TPCL `LC` type 1, TSPL `BOX`): the corner radius, 0..999 in 0.1 mm for TPCL and in dots for TSPL, drawn clamped to half of the shorter side. A value above 0 adds the optional token at the end of the command; 0 keeps an existing token and writes nothing for an absent one. The TSPL radius argument comes from the TSPL2 manual and is not verified on a printer.
     - **Data Matrix** (TPCL `XB` type `Q`, TSPL `DMATRIX`): TPCL **Tamaño de módulo** (dots, 1..99), **Rotación** and **Tamaño del símbolo** (automatic or one of the 24 square sizes, 10 x 10 to 144 x 144: the optional `,Ciiijjj` token is added, changed or removed; a rectangular size or a connection setting `J...` is never touched);
       TSPL **Ancho** and **Alto** (the area), **Módulo** and **Tamaño del símbolo** (rows and columns together; only in the form with `xm,row,col`).
-    - **Contenido:** the data of text, barcodes, QR and Data Matrix. TSPL: `TEXT`, `BARCODE`, `QRCODE` and `DMATRIX` (not a counter `@n` (edit its start value in the `@n="..."` line), `BLOCK`,
+    - **Contenido:** the data of text, barcodes, QR and Data Matrix. TSPL: `TEXT`, `BARCODE`, `QRCODE` and `DMATRIX` (not a counter `@n` (edit its start value in the `@n="..."` line),
       `128M`/`EAN128` or QR manual mode). ZPL: text, barcodes, QR and Data Matrix (`^` and `~` go through `^FH`). TPCL: `PC`/`PV` text, barcodes, QR and Data Matrix, inline (`=data`) or in the `RC`/`RV`/`RB`
       command; values with `| { }` or line breaks are rejected because TPCL has no escape for them.
     - **Fuente:** the PC font letter (A-T) or PV font (`A`, `B`) in TPCL, the font id of `TEXT` in TSPL and the `^A` font in ZPL (A..H, `0`). A value not in the
@@ -216,6 +222,7 @@ The positions of the items are carried through the neutral model, so they are ex
 | Text: TPCL attribute (reverse, box, strike) | ~ written without | ~ written without | – | – | – | – |
 | Text: TPCL alignment, spacing, bold | ~ written without | ~ written without | – | – | – | – |
 | Text: ZPL reverse print `^FR` | – | – | – | – | ~ written normal | ~ written normal |
+| Text block (`BLOCK`, `^FB`): width, lines, alignment, line space, line breaks | – | – | ~ one line of text (breaks as spaces) | = (justified: `BLOCK` writes left) | ~ one line of text | = (justified: written left) |
 | Counters (increment / step) and their start value | = | = | = | = | = | = |
 | Zero suppression (TPCL characters kept, ZPL `z`) | ~ dropped | ~ becomes "all leading zeros" | – | – | = | ~ dropped |
 | `#NAME#` variables | ~ literal text | ~ literal text | = | ~ literal text | = (`<#FNn#>`) | ~ literal text |
@@ -279,14 +286,14 @@ The language is detected from the text (`{…|}` commands). What the viewer draw
 The language is detected from the text (no selector): a label with `SIZE`, `CLS` or `TEXT`/`BARCODE`/`QRCODE`/`DMATRIX`/`BITMAP`/`BAR`/`BOX`
 followed by a number is read as TSPL. Based on the TSC TSPL/TSPL2 Programming Manual v3.0. The label is drawn, clicking an item selects its line, and, as with TPCL, you can
 **drag items** to move them, edit their properties (numbers, font and content) in the **Propiedades** panel, **add components from the palette** (text, barcode, QR, Data Matrix, line, box, ellipse, circle, inverted area and image,
-written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (`BLOCK` and `BITMAP` data are never touched, and a counter `@n` keeps its text: only its step in the `SET COUNTER` line is editable).
+written before `PRINT`) and change the size (the **Formato** row). Only the field being edited is rewritten (`BITMAP` data is never touched, and a counter `@n` keeps its text: only its step in the `SET COUNTER` line is editable).
 `REFERENCE` and `SHIFT` are taken into account (the item lands under the cursor), positions never go below 0 and `DIRECTION 0` is edited as `DIRECTION 1`.
 It can be converted to TPCL or ZPL with **Convertir a…**.
 
 | Command | What it is |
 |---|---|
 | `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SHIFT` | Label setup (size in inches, mm or dots; coordinates in dots). The **Formato** row writes `SIZE` and `GAP` in mm (the field **Separación (GAP)**; pitch = height + gap) |
-| `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
+| `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation). `BLOCK x,y,width,height,"font",rotation,x-mul,y-mul,[space,][align,][fit,]"content"` is a **text block**: the text is wrapped in `width` dots (see *Text blocks* at the end of this section) |
 | `BARCODE` | Code128 (also `128M` and `EAN128`), Code39, ITF / `25`, Code 93 (`93`), Codabar (`CODA`) and EAN13 / EAN8 / UPCA / UPCE (each also with `+2` and `+5`) are generated for real; the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
 | `DMATRIX` | Data Matrix: `DMATRIX x,y,width,height,[xm,row,col,]"content"` (dots). Generated for real (ECC200, ASCII encodation, square symbols only). Without `xm,row,col` the code fits the width and height (whole dots of the smaller side / symbol side); with them it is drawn with that module, and `row` = `col` forces one of the 24 square sizes (`0,0` = automatic; a rectangle is reported). There is no rotation. Moved, edited (**Ancho**, **Alto**, **Módulo**, **Tamaño del símbolo**, **Contenido**) and inserted from the palette (**Data Matrix**). The command comes from the B-442/443 manual (syntax and one example only) and is **not verified on a printer** |
@@ -301,7 +308,7 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
 
 - **Images in the code:** the **Imagen** palette entry and **Insertar en el código** write the picture as a TPCL `SG`, a TSPL `BITMAP` or a ZPL `^GF` command, depending on the label's language (none of the formats is verified on a real printer yet). A preview image can still be overlaid to check positions.
 - **Palette details:** new items use font `"3"` (text), Code 128 with readable text (barcode), QR with level `M` and cell 4 (always unrotated), Data Matrix with a module of 4 dots (TPCL, rotated like the barcodes; TSPL, with `xm,row,col` of the symbol its placeholder needs), a 40 mm `BAR`, a 30 x 20 mm `BOX`, a 30 x 20 mm `ELLIPSE`, a 20 mm `CIRCLE` (3 dots thick) and a 30 x 10 mm inverted area (`REVERSE`, TPCL `XR` type `B`; inserted after the items already drawn, right before the print command, so it inverts them); texts and barcodes are written rotated so they look upright in the current view. Text and barcode data are `<#NOMBRE#>` placeholders, written literally (TSPL has no substitution).
-- `BLOCK` is drawn as one line of text at its origin (no word wrapping); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
+- `BLOCK` is drawn wrapped (see *Text blocks*); `DIRECTION 0` is drawn as `DIRECTION 1` (no 180° flip) with an
   information message; the QR rotation, the `BITMAP` modes 1 and 2 (drawn as overwrite), and the
   text alignment parameters are read but not drawn; a TSPL counter `@n` without an assigned start value, a mix such as `"x"+@1` and the counters of `BLOCK` and `QRCODE` are shown literally.
 - Counters: TPCL increment `n`, TSPL `SET COUNTER @n step` / `@n="start"` and ZPL `^SN` are converted both ways (the start value is the data; TSPL has 50 counters, `@0`-`@49`, with steps up to 999999999). The TPCL zero suppression has no TSPL equivalent and is dropped with one information message; QR codes have no counter in either language.
@@ -311,6 +318,15 @@ Not supported (a warning is shown): `PDF417`, `MAXICODE` and `PUTBMP`/`PUTPCX`/`
   bytes (the code box shows them as a private-use placeholder, U+E00D, because a text box would turn them into line breaks; conversion and
   download write them back as `0x0D`). Pasted text cannot carry arbitrary bytes, so for exact graphics open the file.
 - The viewer imitates the printer fonts (as with TPCL): text widths are approximate.
+
+### Text blocks (TSPL and ZPL)
+
+The three block languages share one model (`item.block`: width, maximum lines, alignment, extra line space). **Not verified on a printer**; the local TSPL manual (B-442/443) does not describe `BLOCK`, its syntax is the one of the TSC TSPL2 manual as this viewer reads it.
+
+- **TSPL `BLOCK`:** `width` and `height` in dots; the optional arguments are positional (`space` = extra space between lines in dots, `align` = 0 or 1 left, 2 center, 3 right, `fit`). The height holds `floor(height / (character height + space))` lines, which is the block's maximum lines; text past them is not drawn. There is no justification. `\[R]` / `\[L]` (CR / LF) are line breaks, `\["]` a quote. A `BLOCK` with no width is read as a line, with an information message.
+- **ZPL `^FBw,l,s,j,h`** before `^FD` (a field modifier like `^FR`): `w` width in dots (0: the printer prints nothing, the viewer draws a line and says so), `l` maximum lines (default **1**; the guide says extra text overwrites the last line, the viewer clips it), `s` extra line space in dots (negative removes space), `j` L C R J (default L; the last line of a justified text stays left), `h` hanging indent (kept, not drawn). `\&` is a line break. With `^FO` the first line starts at the origin; with `^FT` the origin is the baseline of the **last possible line** (the guide), so the first line is `lines - 1` pitches above it. `^SN` does not print inside `^FB` (guide).
+- **Wrapping in the preview is approximate:** the browser draws the letters with Arial / Times / Courier, so the viewer wraps with one advance per character (mono 0.6 em, sans 0.55 em, bold sans 0.59, serif 0.5, times the horizontal stretch of the font), greedily, cutting a word longer than a line at the edge (the ZPL printer hyphenates it). The line breaks of the drawing can differ a little from the printed ones; the pitch of the lines is the character height plus the extra space (the manuals do not give the line height). Justified text spreads its words (`word-spacing`) except in the last line of each paragraph; centre and right place each line on the block width. A rotated block turns with the text: the lines advance towards the left of the text direction, as with any text.
+- **Conversion:** a block keeps its width, lines, alignment, extra line space and line breaks between TSPL and ZPL (`BLOCK` writes `height = lines * pitch`, `^FB` the lines directly; justified goes to TSPL as left with an information message). **TPCL has no text block**: a block is written as one line of text (breaks as spaces) with one warning.
 
 ## ZPL support (Zebra)
 
@@ -329,7 +345,7 @@ The language is detected from the text (no selector): a label with a `^XA` forma
 
 ### Text
 
-A field `^FO x,y ^A f o,h,w ^FD data ^FS` is drawn; a field with only `^FD` / `^FV` is text in the default font `^CF` (A 9×5 at power-up). `^FR` (reverse print) draws the text white blended with `difference`, so it reads inverted over black (and black over white). `^FH` escapes are decoded; `^FP` other than horizontal is reported and drawn left to right; a `^FB` block is reported (warning) and the text is drawn as one line.
+A field `^FO x,y ^A f o,h,w ^FD data ^FS` is drawn; a field with only `^FD` / `^FV` is text in the default font `^CF` (A 9×5 at power-up). `^FR` (reverse print) draws the text white blended with `difference`, so it reads inverted over black (and black over white). `^FH` escapes are decoded; `^FP` other than horizontal is reported and drawn left to right; `^FB` makes the field a text block, drawn wrapped (see *Text blocks (TSPL and ZPL)* at the end of the TSPL support section; the ZPL reading of `^FB` is listed there too).
 
 **Fonts** (the matrices are the ones of Volume Two, printed pages 61 and 64-65, by printhead; the drawing is the viewer's simulation, as for TPCL / TSPL: every bitmapped font is drawn with one mono face). The **Resolución** picks the table: 203 dpi is the 8 dots/mm one, 300 dpi the 12 dots/mm one (E and H differ), any other resolution uses the 203 dpi one. Cell height × width in dots at 1×, with the inter-character gap and the baseline of Table 10 (page 61):
 
@@ -438,7 +454,7 @@ Lines, boxes, circles, ellipses, diagonals and the inverted / cleared areas, dra
 
 ### Not supported
 
-Reported and not drawn (a warning each; `^DF`, `^POI` and the extra formats of a file are information messages): PDF417 and MicroPDF417 (`^B7`, `^BF`), MaxiCode (`^BD`), the other `^B*` symbologies (Postnet, Planet, Code 11, LOGMARS, Plessey, Code 49, Codablock...), the `^FB` text block (one line is drawn), the images stored in the printer (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`), binary `^GFB` / `^GFC` and Z64 data (B64 is read), `^DF` / `^XF` stored formats, the `^SF` mask serialization, `^POI` and the second and later formats of a file.
+Reported and not drawn (a warning each; `^DF`, `^POI` and the extra formats of a file are information messages): PDF417 and MicroPDF417 (`^B7`, `^BF`), MaxiCode (`^BD`), the other `^B*` symbologies (Postnet, Planet, Code 11, LOGMARS, Plessey, Code 49, Codablock...), the images stored in the printer (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`), binary `^GFB` / `^GFC` and Z64 data (B64 is read), `^DF` / `^XF` stored formats, the `^SF` mask serialization, `^POI` and the second and later formats of a file.
 
 ### Conversion
 
@@ -461,7 +477,7 @@ Nothing in the ZPL support or in the conversions has been tried on a printer. Be
 
 ## Limitations
 
-- **ZPL:** the unsupported commands (PDF417 / MicroPDF417, MaxiCode, the `^FB` text block, the other `^B*` symbologies, stored images, binary `^GF`) and everything the manuals do not document are listed in *ZPL support*; nothing of ZPL has been verified on a printer. Only 203 and 300 dpi can be selected.
+- **ZPL:** the unsupported commands (PDF417 / MicroPDF417, MaxiCode, the other `^B*` symbologies, stored images, binary `^GF`) and everything the manuals do not document are listed in *ZPL support*; nothing of ZPL has been verified on a printer. Only 203 and 300 dpi can be selected.
 - **Conversion:** nothing a conversion writes has been verified on a printer (see **Convertir a…** for what is lost in each direction).
 - The printer letters are imitated with Arial / Times / Courier: the **width of the texts is approximate**. To
   adjust fine margins, always make a test print.

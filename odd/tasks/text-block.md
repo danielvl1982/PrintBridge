@@ -23,7 +23,7 @@ form of a text gets a **Tipo** select whose valid values depend on the language 
 - [x] B2 Emit + conversion: TSPL BLOCK / ZPL ^FB written from a block; TPCL warns and writes one line; conversion matrix + cross-conversion
       cases for blocks; ZPL's "not implemented ^FB" diagnostics go away.
 - [x] B3 Properties: the **Tipo** select (values per language), block fields, rewriting through the language edit engines (undo works).
-- [ ] B4 Tests, README (text block, limits, the wrap approximation), CONTRIBUTING, a template / palette check, Chrome probe.
+- [x] B4 Tests, README (text block, limits, the wrap approximation), CONTRIBUTING, a template / palette check, Chrome probe.
 
 ## Acceptance
 `node --test` green; in the app: a TSPL / ZPL text switched to "Bloque de texto" wraps in the preview, the width / lines / alignment edit the
@@ -32,3 +32,6 @@ command, back to "Línea" removes the block; a TPCL text offers only "Línea de 
 ## Progress
 - B1 done (7202586): item.block in the neutral model (js/core/model.js), wrapBlock + tspans in the SVG renderer, TSPL BLOCK and ZPL ^FB readers.
 - B2 done (fbea11a): TSPL BLOCK / ZPL ^FB emit, TPCL one-line text with one warning, matrix + cross-conversion cases.
+- B3 done (2ecde68): Tipo select per language (TSPL TEXT <-> BLOCK through the shape `reemit` hook, ZPL ^FB added / removed through a custom field, TPCL a disabled one-option select with a note), block fields (width, lines, alignment, ZPL line space), one rewritten text per change (Ctrl+Z checked in Chrome).
+- B4 done (this commit): README (Tipo, Text blocks section, conversion row, ZPL limits), odd/tasks/zpl-support.md note, Chrome probe run outside the repo (TSPL and ZPL templates: Tipo -> block, width / lines / alignment edit the code and the preview wraps, back to line restores the text, Ctrl+Z; TPCL: Tipo offers only the line; no page errors).
+- Decisions taken without the user (open for review): default block width = 20 characters of the font (not the remaining label width: the edit engines do not know the label size); default lines = what the wrapped text needs; ZPL ^FB keeps the guide default of 1 line only when written without the argument; the "extra line pitch" = character height + space (the manuals give no line height); TSPL has no justification (written left with an info); ^FT blocks: lines / line space edits move the first line (the guide: ^FT is the baseline of the last line), only the Tipo change keeps it.
