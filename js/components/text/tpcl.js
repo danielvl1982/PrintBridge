@@ -49,6 +49,7 @@
   /** Magnification drawn for a token as written: the nearest valid one ("08" -> 0.8 ; "14" -> 1.5 ; "1" -> 1). */
   const magnification = s => snapMagnification(tenthsOf(s)) / 10;
 
+  const VALID_MAGNIFICATIONS_TEXT = 'de 1 a 9 (una cifra), de 0,5 a 0,9 (05..09) y de 1 a 9,5 de 0,5 en 0,5 (10, 15, 20 ... 95)';
 
   /**
    * TEC bitmap fonts of the PC command: size in points, family, weight and style they are simulated with.
@@ -647,6 +648,11 @@
       return { block: { width, ...(lines > 0 && { lines }), align: 'left', lineSpace: space }, native: { block: { width, space, lines } } };
     }
 
+    /** The block part of a PC item plus native.hMag / native.vMag: the magnification tokens as written (an invalid one is drawn as the nearest valid one, never rewritten). */
+    function withMagnifications(block, hMag, vMag) {
+      return { ...block, native: { ...block.native, hMag, vMag } };
+    }
+
     function textRotation(ctx, ref, rotationCode) {
       if (!(rotationCode in ROTATIONS)) ctx.report(diag.warning(`${ref}: rotación "${rotationCode}" desconocida, se dibuja sin rotar`));
       return ROTATIONS[rotationCode] ?? 0;
@@ -672,6 +678,11 @@
         spec = BITMAP_FONTS[DEFAULT_BITMAP_FONT];
       }
       const [points, family, weight, style = 'normal'] = spec;
+      const invalid = [['horizontal', hMag], ['vertical', vMag]].filter(([, token]) => !isValidMagnification(token));
+      if (invalid.length) {
+        const written = invalid.map(([name, token]) => `${name} "${token}"`).join(' y ');
+        ctx.report(diag.warning(`${ref}: ampliación ${written} no válida: la impresora no imprime el campo (valores válidos: ${VALID_MAGNIFICATIONS_TEXT}); se dibuja con ${String(magnification(hMag)).replace('.', ',')}× horizontal y ${String(magnification(vMag)).replace('.', ',')}× vertical`));
+      }
       const v = magnification(vMag);
       return { size: points * units.UNITS_PER_POINT * v, scaleX: magnification(hMag) / v, family, weight, style };
     }
@@ -814,7 +825,7 @@
               ...parseBold(m[11], ctx.dot),
               ...parseCounter(ctx, m[11]),
               ...parseAlign(m[11]),
-              ...parseBlock(ctx, ref, m[11], m[8]),
+              ...withMagnifications(parseBlock(ctx, ref, m[11], m[8]), m[4], m[5]),
               data: m[12] ?? null,
             });
           },

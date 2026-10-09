@@ -29,7 +29,7 @@ const PV = tail => `{PV01;0100,0200,0100,0120,B,00,B${tail}=alpha beta|}`;
 test('parse: P5aaaabbbcc is a block with width and line space in 0.1 mm, the lines, no alignment, and the digits as written in native', () => {
   const [item] = itemsOf(PC(',P5030002003'));
   assert.deepEqual(item.block, { width: 300, lines: 3, align: 'left', lineSpace: 20 });
-  assert.deepEqual(item.native, { block: { width: 300, space: 20, lines: 3 } });
+  assert.deepEqual(item.native, { block: { width: 300, space: 20, lines: 3 }, hMag: '10', vMag: '10' });
   assert.equal(item.align, undefined);
   assert.equal(item.data, 'alpha beta gamma delta epsilon');
 });
