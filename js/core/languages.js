@@ -23,7 +23,7 @@
  *   ^BY command, which may govern other barcodes: it is rewritten in place when the barcode owns it, else a field-local ^BY and a restoring one
  *   are written around the field (js/components/barcode/zpl.js).
  * describeItem (optional): the fields updateItem accepts for an item, language-agnostic, so the UI can build a panel:
- *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'checkbox' | 'text', value, min, max, step?, options?: [{ value, label }] }] }
+ *   { kind, fields: [{ key, label, type: 'number' | 'select' | 'radio' | 'checkbox' | 'text', value, min, max, step?, options?: [{ value, label }] }] }
  *   with the current values (read from the command in text if given, else from the item) and an empty list if none.
  *   A 'text' field may carry maxLength. TPCL's `content` edits the data wherever it is stored (inline "=data" or the
  *   R<C|V|B> data command) and is left out when the item has none; values with | { } or line breaks are rejected.

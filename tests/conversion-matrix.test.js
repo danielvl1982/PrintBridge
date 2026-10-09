@@ -89,7 +89,8 @@ neutral('text-reserved-characters', () => [text({ data: 'a^b~c,d;e\\f' })]);
 neutral('text-accents', () => [text({ data: 'Ñandú café' })]);
 neutral('text-all-ascii', () => [text({ data: '!#$%&\'()*+-./:<=>?@[]_`0123456789' })]);
 neutral('text-zpl-reverse', () => [text({ reverse: true })]);
-// Text blocks (TSPL BLOCK, ZPL ^FB): width, lines, alignment and line space travel between TSPL and ZPL; TPCL has no block
+// Text blocks (TSPL BLOCK, ZPL ^FB, TPCL PC P5): width, lines and line space travel between the three; TPCL has no alignment of a block, and the
+// sans 100 font of the first cases is an outline (PV) font in TPCL, which has no block (the "-bitmap" cases use a font the PC command writes)
 const block = (o = {}) => ({ width: 300, lines: 4, align: 'left', lineSpace: 0, ...o });
 const BLOCK_DATA = 'Hello world, this is a block of text';
 neutral('text-block', () => [text({ data: BLOCK_DATA, block: block() })]);
@@ -100,6 +101,15 @@ neutral('text-block-line-space', () => [text({ data: BLOCK_DATA, block: block({ 
 neutral('text-block-breaks', () => [text({ data: 'one\ntwo three', block: block() })]);
 neutral('text-block-rotated', () => [text({ x: 500, data: BLOCK_DATA, rotation: 90, block: block() })]);
 neutral('text-block-mono', () => [text({ data: BLOCK_DATA, font: font(100, 'mono'), block: block({ width: 400 }) })]);
+// A 12 pt mono font is the bitmap PC font S at magnification 1.0, so TPCL writes these as PC ...,P5aaaabbbcc
+const PC_MONO = font(12 * PB.units.UNITS_PER_POINT, 'mono');
+neutral('text-block-bitmap', () => [text({ data: BLOCK_DATA, font: PC_MONO, block: block({ lineSpace: 20 }) })]);
+neutral('text-block-bitmap-center', () => [text({ data: BLOCK_DATA, font: PC_MONO, block: block({ lineSpace: 20, align: 'center' }) })]);
+neutral('text-block-bitmap-right', () => [text({ data: BLOCK_DATA, font: PC_MONO, block: block({ lineSpace: 20, align: 'right' }) })]);
+neutral('text-block-bitmap-justify', () => [text({ data: BLOCK_DATA, font: PC_MONO, block: block({ lineSpace: 20, align: 'justify' }) })]);
+neutral('text-block-bitmap-no-space', () => [text({ data: BLOCK_DATA, font: PC_MONO, block: block() })]);
+neutral('text-block-bitmap-breaks', () => [text({ data: 'one\ntwo three', font: PC_MONO, block: block({ lineSpace: 20 }) })]);
+neutral('text-block-bitmap-rotated', () => [text({ x: 500, data: BLOCK_DATA, rotation: 90, font: PC_MONO, block: block({ lineSpace: 20 }) })]);
 
 // The fonts of each language, written natively: every bitmap font, magnifications, the scalable fonts and the rotations. The neutral model
 // cannot name a font and every language maps its family and size to its own, so a font is always "degraded" between languages.
@@ -465,7 +475,9 @@ const ZERO_ZPL = /supresión de ceros/;
 const ELLIPSE_TPCL = /elipses y círculos no se escriben en TPCL/;
 const REVERSE = /impresión inversa/;
 const WHITE = /en blanco/;
-const TPCL_BLOCK = /TPCL no tiene bloque de texto/;
+const TPCL_BLOCK = /cuya fuente solo se escribe vectorial \(PV\)/;
+const TPCL_BLOCK_ALIGN = /el salto de línea automático de TPCL \(P5\) no tiene alineación/;
+const TPCL_BLOCK_RANGE = /fuera de los rangos de TPCL/;
 
 const RULES = [
   // ---- text
@@ -476,9 +488,20 @@ const RULES = [
   [/^text-counter-zero-suppress$/, [T2S, Z2S], deg(['zeroSuppress'], ZERO_TSPL)],
   [/^text-counter-zero-suppress$/, [T2Z], deg(['zeroSuppress'], ZERO_ZPL)],
   [/^text-zpl-reverse$/, [Z2T, Z2S], deg(['reverse'], REVERSE)],
-  [/^text-block-breaks$/, [S2T, Z2T], deg(['block', 'data'], TPCL_BLOCK)],
-  [/^text-block/, [S2T, Z2T], deg(['block'], TPCL_BLOCK)],
-  [/^text-block-justify$/, [Z2S], deg(['block.align'], /bloques de texto justificados/)],
+  // The ZPL font 0 of the neutral sans 100 is an outline (PV) font in TPCL (no block); the TSPL scalable font 0 happens to be a PC bitmap font
+  // at a magnification, so the block survives and only the line space 0 (TPCL's minimum is 010) moves
+  [/^text-block-breaks$/, [Z2T], deg(['block', 'data'], TPCL_BLOCK)],
+  [/^text-block(?!-bitmap)/, [Z2T], deg(['block'], TPCL_BLOCK)],
+  // mono 100 is an outline font at 203 dpi but a PC font at 300 dpi
+  [/^text-block-mono$/, [S2T], deg(['block'], /cuya fuente solo se escribe vectorial \(PV\)|fuera de los rangos de TPCL/, ['block.lineSpace'])],
+  [/^text-block-(center|right)$/, [S2T], both([], ['block.lineSpace', 'block.align'], [TPCL_BLOCK_RANGE, TPCL_BLOCK_ALIGN])],
+  [/^text-block(?!-bitmap|-line-space|-mono|-center|-right)/, [S2T], deg(['block.lineSpace'], TPCL_BLOCK_RANGE, ['data'])],
+  // The breaks of the data become spaces in TPCL (its data has none), and the TPCL block has no alignment
+  [/^text-block-bitmap-(center|right)$/, [S2T, Z2T], deg(['block.align'], TPCL_BLOCK_ALIGN)],
+  [/^text-block-bitmap-justify$/, [Z2T], deg(['block.align'], TPCL_BLOCK_ALIGN)],
+  [/^text-block-bitmap-breaks$/, [S2T, Z2T], deg(['data'], /./)],
+  [/^text-block-bitmap-no-space$/, [S2T, Z2T], deg(['block.lineSpace'], TPCL_BLOCK_RANGE)],
+  [/^text-block(-bitmap)?-justify$/, [Z2S], deg(['block.align'], /bloques de texto justificados/)],
   // ---- fonts: always the nearest built-in font of the target, reported; the sizes and the geometry stay
   [/^fonts-/, PAIRS, deg([], FONTS, ['font', 'font.size', 'font.width'])],
   // ---- barcodes

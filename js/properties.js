@@ -8,11 +8,11 @@
 
   /**
    * Value a form control holds, as the language expects it, or undefined if the input is not valid (the caller then
-   * keeps the field as it was). raw: text of a number / select / text control, checked state of a checkbox. A text field keeps its string as is.
+   * keeps the field as it was). raw: text of a number / select / radio / text control, checked state of a checkbox. A text field keeps its string as is.
    */
   function coerceFieldValue(field, raw) {
     if (field.type === 'checkbox') return Boolean(raw);
-    if (field.type === 'select') {
+    if (field.type === 'select' || field.type === 'radio') {
       const option = (field.options || []).find(o => String(o.value) === String(raw));
       return option ? option.value : undefined;
     }
@@ -74,7 +74,35 @@
       return input;
     }
 
+    /** A radio field (a few exclusive choices shown together): a group of radio inputs, one per option; it notifies the option chosen. */
+    function radioRow(field) {
+      const group = document.createElement('div');
+      group.className = 'props-field props-radio';
+      group.setAttribute('role', 'radiogroup');
+      const choices = document.createElement('span');
+      choices.className = 'props-choices';
+      for (const o of field.options || []) {
+        const choice = document.createElement('label');
+        const input = document.createElement('input');
+        input.type = 'radio';
+        input.name = `prop-${field.key}`;
+        input.value = o.value;
+        input.checked = o.value === field.value;
+        input.dataset.key = field.key;
+        input.addEventListener('change', () => {
+          const value = coerceFieldValue(field, input.value);
+          if (input.checked && value !== undefined) onChange(field.key, value);
+        });
+        choice.append(input, Object.assign(document.createElement('span'), { textContent: o.label }));
+        choices.append(choice);
+      }
+      group.append(Object.assign(document.createElement('span'), { textContent: field.label }), choices);
+      if (field.note) group.append(Object.assign(document.createElement('small'), { className: 'props-note', textContent: field.note }));
+      return group;
+    }
+
     function row(field) {
+      if (field.type === 'radio') return radioRow(field);
       const label = document.createElement('label');
       const input = control(field);
       input.dataset.key = field.key;

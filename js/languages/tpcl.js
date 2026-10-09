@@ -451,10 +451,12 @@
       for (const f of shape.fields) {
         const value = match ? f.read(match[f.group], item) : f.model && f.model(item);
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step, note } = f;
+        const { key, label, type, min, max, step } = f;
         // optionsFor lists a current value outside the options; it also gets the item and the matched command text (the
-        // options of the barcode check digit depend on the symbology written there)
-        const options = f.optionsFor ? f.optionsFor(value, item, match ? match[f.group] : undefined) : f.options;
+        // options of the barcode check digit depend on the symbology written there). noteFor does the same for the note
+        const raw = match ? match[f.group] : undefined;
+        const options = f.optionsFor ? f.optionsFor(value, item, raw) : f.options;
+        const note = f.noteFor ? f.noteFor(value, item, raw) : f.note;
         fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }), ...(note && { note }) });
       }
     }
@@ -475,17 +477,25 @@
   function updateItem(text, item, changes, { dpi = PB.config.resolutions[0] } = {}) {
     if (!changes) return text;
     const found = editableOf(item, text);
-    // Fields flagged `reemit` (the barcode type and check digit) rewrite the whole format command through the shape's `reemit`
-    // hook: (found, item, changes, { dpi }) -> the new text, or null to refuse (text unchanged). The remaining changes of the same
-    // call are then applied to the new command, which is parsed again (the type moves the parameters).
+    // Fields flagged `reemit` (the barcode type and check digit, the text's Tipo and font type) rewrite the whole format command through
+    // the shape's `reemit` hook: (found, item, changes, { dpi, text }) -> the new command, or null to refuse (text unchanged). A hook may
+    // answer { command, edits, ref } instead: the command plus edits [{ start, end, value }] over the text AFTER the command (its RC / RV
+    // data command follows the format command's number) and the new ref of the item. The remaining changes of the same call are then
+    // applied to the new command, which is parsed again (the type moves the parameters).
     const reemitKeys = found && found.shape.reemit ? found.shape.fields.filter(f => f.reemit && Object.hasOwn(changes, f.key)).map(f => f.key) : [];
     if (reemitKeys.length) {
-      const command = found.match ? found.shape.reemit(found, item, changes, { dpi }) : null;
-      const rewritten = command === null ? null : text.slice(0, found.span.start) + command + text.slice(found.span.end);
+      const answer = found.match ? found.shape.reemit(found, item, changes, { dpi, text }) : null;
+      const [command, extra, ref] = answer !== null && typeof answer === 'object' ? [answer.command, answer.edits || [], answer.ref || item.ref] : [answer, [], item.ref];
+      let rewritten = null;
+      if (command !== null) {
+        // The extra edits lie after the command: right to left, then the command itself
+        rewritten = [...extra].sort((a, b) => b.start - a.start).reduce((out, { start, end, value }) => out.slice(0, start) + value + out.slice(end), text);
+        rewritten = rewritten.slice(0, found.span.start) + command + rewritten.slice(found.span.end);
+      }
       const rest = Object.fromEntries(Object.entries(changes).filter(([k]) => !reemitKeys.includes(k)));
       if (rewritten === null || rewritten === text) return Object.keys(rest).length ? updateItem(text, item, rest, { dpi }) : text;
       if (!Object.keys(rest).length) return rewritten;
-      const again = parse(rewritten, { dpi }).items.find(i => i.ref === item.ref);
+      const again = parse(rewritten, { dpi }).items.find(i => i.ref === ref);
       return again ? updateItem(rewritten, again, rest, { dpi }) : rewritten;
     }
     // Edits as absolute ranges of the text: { start, end, value }

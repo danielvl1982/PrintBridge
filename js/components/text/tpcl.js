@@ -3,6 +3,8 @@
  * command's palette template.
  *   PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute>[=text]
  *   PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>[=text]
+ * A PC text may hold the automatic line feed P5aaaabbbcc (a text block, neutral item.block); the properties panel switches a text between the two
+ * commands (radio "Tipo de fuente") and between a line and a block (Tipo select), both by rewriting the command (reemit).
  * The hooks are built by a factory because they need the shared helpers of js/languages/tpcl.js, which loads after
  * this file: factory(helpers) -> { handlers, build, coordinates, editable } (see js/components/registry.js).
  * The RC/RV data handler is shared with the barcode and QR kinds and stays in js/languages/tpcl.js.
@@ -145,6 +147,36 @@
   }
 
   /**
+   * Automatic line feed "P5aaaabbbcc" (PC only; PV has no such alignment): a text block. aaaa = width of the string area (0050..1040, 0.1 mm),
+   * bbb = line feed spacing (010..500), cc = number of lines (01..99). It takes the place of the other alignment, so a block never has one.
+   * The manual's figure draws "line feed spacing" as the gap between two lines, so it is the model's block.lineSpace (extra distance added to the
+   * character height). UNVERIFIED unit: the 2001 Spanish edition (B-452-TS12) says 0.1 mm, the 2004 / 2012 English editions (B-SV4, B-452-R)
+   * say "1 mm units" (010..500 mm would be an absurd line feed, so 0.1 mm is used). The manuals do not say where a line breaks: the viewer wraps at
+   * spaces and cuts a word longer than the area at the edge (see wrapBlock). With the character / string rotations 01, 12, 23, 30 (which this
+   * viewer does not support) the printer ignores the block; the app's rotations 00, 11, 22, 33 keep it.
+   */
+  const BLOCK_RANGES = Object.freeze({ width: [ALIGN_MIN_WIDTH, ALIGN_MAX_WIDTH], space: [10, 500], lines: [1, 99] });
+  const BLOCK_PARAM = /(?:^|,)P5(\d{4})(\d{3})(\d{2})(?=,|;|$)/;
+  /** Width of a block made from a line: this many characters of the font, and the line feed spacing it starts with (0.1 mm). */
+  const DEFAULT_BLOCK_CHARS = 20;
+  const DEFAULT_BLOCK_SPACE = BLOCK_RANGES.space[0];
+
+  /** Block token (",P50400010003") from width, spacing and lines, each clamped to its range of the manual. */
+  function blockToken(width, space, lines) {
+    const part = (key, n, digits) => String(clampInt(Number.isFinite(n) ? n : BLOCK_RANGES[key][0], ...BLOCK_RANGES[key])).padStart(digits, '0');
+    return `,P5${part('width', width, 4)}${part('space', space, 3)}${part('lines', lines, 2)}`;
+  }
+
+  /** { width, space, lines } of a block token as found in the command (numbers as written), null when it is not one. */
+  function readBlockToken(raw) {
+    const m = /^,P5(\d{4})(\d{3})(\d{2})$/.exec(raw || '');
+    return m ? { width: +m[1], space: +m[2], lines: +m[3] } : null;
+  }
+
+  /** True when any of the three values of a block is outside the manual's range (the printer may reject it). */
+  const blockOutOfRange = b => Object.entries(BLOCK_RANGES).some(([key, [min, max]]) => !(b[key] >= min && b[key] <= max));
+
+  /**
    * Font select of the properties panel: the letter is written as is, and a letter outside `letters` that the item
    * already has is listed as an extra last option so the select shows the real value (it is never offered otherwise).
    */
@@ -201,6 +233,27 @@
       if (Math.abs(v - vi) > MAGNIFICATION_TOLERANCE || Math.abs(h - hi) > MAGNIFICATION_TOLERANCE) continue;
       const distance = Math.abs(vi - 10);
       if (!best || distance < best.distance) best = { letter, h: hi, v: vi, distance };
+    }
+    return best;
+  }
+
+  /**
+   * PC font that stands for an outline (PV) font when the radio "Tipo de fuente" switches to the bitmap font: the PV font is always drawn sans bold
+   * (OUTLINE_FONT), so only the sans bold PC fonts compete; each is tried with the whole magnifications (1..99) closest to the size and the width of
+   * the item, and the one with the smallest relative error wins (the one nearest to 1.0 on a tie). { letter, h, v } with h, v the magnifications in 0.1.
+   */
+  function nearestBitmap(font) {
+    const size = Number.isFinite(font.size) && font.size > 0 ? font.size : DEFAULT_OUTLINE_SIZE;
+    const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
+    let best = null;
+    for (const [letter, [points, family, weight, style = 'normal']] of Object.entries(BITMAP_FONTS)) {
+      if (family !== OUTLINE_FONT.family || weight !== OUTLINE_FONT.weight || style !== 'normal') continue;
+      const v = (size / (points * units.UNITS_PER_POINT)) * 10;
+      const h = v * scaleX;
+      const [vi, hi] = [clampInt(v, 1, 99), clampInt(h, 1, 99)];
+      const error = Math.abs(v - vi) / v + Math.abs(h - hi) / h;
+      const distance = Math.abs(vi - 10);
+      if (!best || error < best.error - 1e-9 || (Math.abs(error - best.error) <= 1e-9 && distance < best.distance)) best = { letter, h: hi, v: vi, error, distance };
     }
     return best;
   }
@@ -301,15 +354,24 @@
     return [field('boldH', 'Negrita horizontal', 'h'), field('boldV', 'Negrita vertical', 'v')];
   }
 
+  const LINE_OPTION = Object.freeze({ value: 'line', label: 'Línea de texto' });
+  const KIND_OPTIONS = Object.freeze([LINE_OPTION, Object.freeze({ value: 'block', label: 'Bloque de texto' })]);
+
   /**
-   * The Tipo select of a text: TPCL has no text block (not in any of its manuals), so the only value is the line. It is listed (the panel shows it
-   * disabled, with the note) so that the form is the same in the three languages, and it never writes anything.
+   * The Tipo select of an outline (PV) text: the block (P5) only exists for the bitmap font, so the only value is the line. It is listed (the
+   * panel shows it disabled, with the note) so that the form is the same in the three languages, and it never writes anything.
    */
-  const KIND_FIELD = Object.freeze({
-    key: 'kind', label: 'Tipo', type: 'select', group: 1, options: Object.freeze([{ value: 'line', label: 'Línea de texto' }]),
-    note: 'TPCL no tiene bloque de texto: un texto es siempre una línea',
+  const VECTOR_KIND_FIELD = Object.freeze({
+    key: 'kind', label: 'Tipo', type: 'select', group: 1, options: Object.freeze([LINE_OPTION]),
+    note: 'Bloque de texto solo con fuente de mapa de bits (PC)',
     read: () => 'line', model: () => 'line', write: () => null,
   });
+
+  /** The two kinds of font of a TPCL text: the radio "Tipo de fuente" switches the command between PC and PV (see reemit in tpcl()). */
+  const FONT_TYPE_OPTIONS = Object.freeze([{ value: 'bitmap', label: 'Mapa de bits (PC)' }, { value: 'vector', label: 'Vectorial (PV)' }]);
+
+  /** Why the block is not offered: the rotations 01 / 12 / 23 / 30 make the printer ignore it. */
+  const ROTATED_BLOCK_NOTE = 'Con el giro 01 / 12 / 23 / 30 la impresora ignora el salto de línea automático: el bloque no está disponible';
 
   const ALIGN_OPTIONS = Object.freeze([
     { value: 'left', label: 'Izquierda' }, { value: 'center', label: 'Centro' }, { value: 'right', label: 'Derecha' }, { value: 'equal', label: 'Espaciado igual' },
@@ -325,10 +387,11 @@
     return [
       {
         key: 'align', label: 'Alineación', type: 'select', group, exact: true, options: ALIGN_OPTIONS,
-        read: raw => readAlignToken(raw).kind,
-        model: item => (item.align && item.align.kind) || 'left',
+        // A block (P5) has no alignment: the select is left out and never overwrites its token
+        read: raw => (readBlockToken(raw) ? undefined : readAlignToken(raw).kind),
+        model: item => (item.block ? undefined : (item.align && item.align.kind) || 'left'),
         write: (v, width, raw, changes) => {
-          if (!isAlignKind(v)) return null;
+          if (!isAlignKind(v) || readBlockToken(raw)) return null;
           if (v === 'left') return raw === '' ? null : ',P1';
           const had = readAlignToken(raw);
           return alignToken(v, isOffset(changes.alignWidth) ? changes.alignWidth : had.width);
@@ -343,6 +406,31 @@
           return alignToken('equal', v);
         },
       },
+    ];
+  }
+
+  /**
+   * The three block fields (PC only) over the one P5 token (",P5aaaabbbcc", written whole: `exact`): width of the area, number of lines and line
+   * feed spacing. They exist only for an item with a block. The token is composed by the first of the three present in the change set (width, then
+   * spacing, then lines: the order of the token), each value clamped to the manual's range.
+   */
+  function blockFields(group) {
+    const ORDER = ['blockWidth', 'blockLines', 'blockSpace'];
+    const field = (key, label, part) => ({
+      key, label, type: 'number', min: BLOCK_RANGES[part][0], max: BLOCK_RANGES[part][1], step: 1, group, exact: true,
+      read: (raw, item) => (item && item.block && readBlockToken(raw) ? readBlockToken(raw)[part] : undefined),
+      model: item => (item.block ? item.native && item.native.block ? item.native.block[part] : undefined : undefined),
+      write: (v, width, raw, changes) => {
+        const had = readBlockToken(raw);
+        if (!isOffset(v) || !had || ORDER.slice(0, ORDER.indexOf(key)).some(k => isOffset(changes[k]))) return null;
+        const pick = (k, p) => (isOffset(changes[k]) ? changes[k] : had[p]);
+        return blockToken(pick('blockWidth', 'width'), pick('blockSpace', 'space'), pick('blockLines', 'lines'));
+      },
+    });
+    return [
+      field('blockWidth', 'Ancho del área (0,1 mm)', 'width'),
+      field('blockLines', 'Líneas', 'lines'),
+      field('blockSpace', 'Interlineado (0,1 mm)', 'space'),
     ];
   }
 
@@ -361,9 +449,10 @@
   const COUNTER_SLOT = String.raw`((?:,${COUNTER_TOKEN_RE})?)`;
   const ZERO_SLOT = String.raw`((?:,${ZERO_TOKEN_RE})?)`;
   /** Optional parameters between the attribute and the data (J, M, n, Z, never P), then the alignment token, possibly empty. */
-  const ALIGN_SLOT = String.raw`(?:,(?!P)[^,=;|]*)*((?:,P(?:[123]|4\d{4}))?)`;
-  /** The increment, the zero suppression and the alignment slots (capture groups, in this order). */
-  const TAIL_SLOTS = MISC_SLOT + COUNTER_SLOT + ZERO_SLOT + ALIGN_SLOT;
+  const alignSlot = alternatives => String.raw`(?:,(?!P)[^,=;|]*)*((?:,P(?:${alternatives}))?)`;
+  /** The increment, the zero suppression and the alignment slots (capture groups, in this order); only the bitmap PC has the P5 block. */
+  const TAIL_SLOTS = MISC_SLOT + COUNTER_SLOT + ZERO_SLOT + alignSlot(String.raw`[123]|4\d{4}`);
+  const PC_TAIL_SLOTS = MISC_SLOT + COUNTER_SLOT + ZERO_SLOT + alignSlot(String.raw`[123]|4\d{4}|5\d{9}`);
 
   /** The increment token as its own comma-separated token among the optional parameters (spacing is before the rotation, never here). */
   const COUNTER_PARAM = /(?:^|,)([+-]\d{10})(?=,|;|$)/;
@@ -452,6 +541,21 @@
     }
 
     /**
+     * The P5 token (",P5aaaabbbcc") of an item with a block: width and spacing in 0.1 mm, lines = the block's or what the wrapped text needs (at
+     * least 1), each clamped to the manual's range with one warning per label. The block has no alignment (P5 replaces it), so a centred, right
+     * or justified one is written left with one info; the spacing unit is unverified (see BLOCK_RANGES), said once.
+     */
+    function blockText(item, ctx) {
+      const b = item.block;
+      const lines = Number.isInteger(b.lines) && b.lines > 0 ? b.lines : Math.max(1, PB.slices.text.wrapBlock(item.data, b, item.font).lines.length);
+      const wanted = { width: Math.round(b.width), space: Math.round(b.lineSpace || 0), lines };
+      if (blockOutOfRange(wanted)) ctx.once('tpcl-block-range', () => diag.warning('Hay bloques de texto fuera de los rangos de TPCL (ancho 0050..1040, interlineado 010..500, líneas 01..99): se ajustan al límite'));
+      if (b.align && b.align !== 'left') ctx.once('tpcl-block-align', () => diag.info('Hay bloques de texto centrados, a la derecha o justificados: el salto de línea automático de TPCL (P5) no tiene alineación, se escriben a la izquierda'));
+      ctx.once('tpcl-block-unit', () => diag.info('Hay bloques de texto (P5): el interlineado se escribe en unidades de 0,1 mm (manual en español); los manuales en inglés dicen 1 mm: compruébelo en su impresora'));
+      return blockToken(wanted.width, wanted.space, wanted.lines);
+    }
+
+    /**
      * PC (bitmap font) when the model font matches BITMAP_FONTS, else PV (outline font: width = size * scaleX, height =
      * size, font letter B like the palette template), each followed by its RC / RV data command (empty without data).
      */
@@ -461,13 +565,15 @@
       const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
       const rot = rotationCode(ctx, item.rotation);
-      // TPCL has no text block (none of its manuals): a block is written as one line, its breaks as spaces, with one warning
-      if (item.block) ctx.once('tpcl-text-block', () => diag.warning('Hay bloques de texto (BLOCK de TSPL, ^FB de ZPL): TPCL no tiene bloque de texto, se escriben como una línea de texto sin ajuste de línea'));
+      // A text block is the PC automatic line feed (P5): the breaks of the data become spaces (the data has no line breaks in TPCL)
       const data = safeData(ctx, item.block ? String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, ' ') : item.data);
       const choice = bitmapChoice({ ...font, size, scaleX });
+      // The outline font (PV) has no automatic line feed: its text is one line
+      if (item.block && !choice) ctx.once('tpcl-text-block', () => diag.warning('Hay bloques de texto (BLOCK de TSPL, ^FB de ZPL) cuya fuente solo se escribe vectorial (PV): el salto de línea automático (P5) necesita una fuente de mapa de bits (PC), se escriben como una línea de texto sin ajuste de línea'));
       const attribute = attributeText(item.attribute, ctx);
       if (item.reverse) ctx.once('tpcl-text-reverse', () => diag.warning('Hay textos con impresión inversa (^FR de ZPL): TPCL no la tiene en el texto (su atributo de fondo negro es otra cosa), se escriben normales'));
-      const align = item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignToken(item.align.kind, item.align.width) : '';
+      const block = item.block && choice ? blockText(item, ctx) : '';
+      const align = block || (item.align && isAlignKind(item.align.kind) && item.align.kind !== 'left' ? alignToken(item.align.kind, item.align.width) : '');
       if (choice) {
         const id = allocId(ctx, 'PC');
         const mag = n => String(n).padStart(2, '0');
@@ -481,6 +587,23 @@
       const id = allocId(ctx, 'PV');
       const dim = n => pad4(Math.max(1, clampCoord(n)));
       return [wrap(`PV${id};${x},${y},${dim(size * scaleX)},${dim(size)},B,${spacingText(item.spacing, 'PV', ctx)}${rot},${attribute}${counterText(item, ctx)}${zeroText(item)}${align}`), wrap(`RV${id};${data}`)];
+    }
+
+    /**
+     * { block, native } of the automatic line feed P5aaaabbbcc among the optional parameters of a PC command (see BLOCK_RANGES): width and
+     * line space in 0.1 mm, lines (cc; 00 = no limit), the dots / digits as written in native.block. Nothing without P5, nor with a rotation
+     * code the printer ignores it for (01, 12, 23, 30: one info, the text is drawn as a line). A value out of range reads as written, with a warning.
+     */
+    function parseBlock(ctx, ref, params, rotationCode) {
+      const m = BLOCK_PARAM.exec(params || '');
+      if (!m) return {};
+      if (!(rotationCode in ROTATIONS)) {
+        ctx.report(diag.info(`${ref}: con el giro ${rotationCode} la impresora ignora el salto de línea automático (P5), se dibuja como una línea de texto`));
+        return {};
+      }
+      const [width, space, lines] = [+m[1], +m[2], +m[3]];
+      if (blockOutOfRange({ width, space, lines })) ctx.report(diag.warning(`${ref}: P5 fuera de rango (ancho 0050..1040, interlineado 010..500, líneas 01..99): la impresora puede no aceptarlo`));
+      return { block: { width, ...(lines > 0 && { lines }), align: 'left', lineSpace: space }, native: { block: { width, space, lines } } };
     }
 
     function textRotation(ctx, ref, rotationCode) {
@@ -529,6 +652,111 @@
       return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
     }
 
+    // ---- Properties: the radio "Tipo de fuente" (PC <-> PV) and the Tipo select (line <-> block), both rewrite the command (reemit)
+
+    /** The block is available for the rotation codes this viewer supports (00, 11, 22, 33); 01 / 12 / 23 / 30 make the printer ignore it. */
+    const blockAvailable = raw => raw === undefined || Object.hasOwn(ROTATIONS, raw);
+
+    /** Tipo select of a PC text: line or block, written by reemit (the P5 token replaces / removes the alignment token). */
+    const bitmapKindField = {
+      key: 'kind', label: 'Tipo', type: 'select', group: 5, reemit: true, options: KIND_OPTIONS,
+      optionsFor: (value, item, raw) => (blockAvailable(raw) ? KIND_OPTIONS : [LINE_OPTION]),
+      noteFor: (value, item, raw) => (blockAvailable(raw) ? undefined : ROTATED_BLOCK_NOTE),
+      read: (raw, item) => (item && item.block ? 'block' : 'line'),
+      model: item => (item.block ? 'block' : 'line'),
+      write: () => null,
+    };
+
+    /**
+     * The radio "Tipo de fuente": the command is a PC (bitmap font) or a PV (outline font). Written by reemit. The note says what the other
+     * type cannot hold (it is shown before the change, since the change drops it).
+     */
+    const fontTypeField = {
+      key: 'fontType', label: 'Tipo de fuente', type: 'radio', group: 0, reemit: true, options: FONT_TYPE_OPTIONS,
+      read: (raw, item) => (item && /^PV/.test(item.ref) ? 'vector' : 'bitmap'),
+      model: item => (/^PV/.test(item.ref) ? 'vector' : 'bitmap'),
+      noteFor: (value, item) => {
+        if (value === 'vector') {
+          const long = item && item.spacing && Math.abs(item.spacing.native) > SPACING_MAX.PC ? '; el espaciado se limita a ±99 puntos' : '';
+          return `La fuente de mapa de bits (PC) es la única con negrita (J) y bloque de texto (P5)${long}`;
+        }
+        const lost = [item && item.bold && 'la negrita (J)', item && item.block && 'el bloque de texto (P5: vuelve a una línea)'].filter(Boolean);
+        return lost.length ? `Al cambiar a vectorial (PV) se pierde ${lost.join(' y ')}` : undefined;
+      },
+      write: () => null,
+    };
+
+    /** The P5 token of a block made from a line: DEFAULT_BLOCK_CHARS characters wide, the minimum spacing and the lines the text needs. */
+    function defaultBlockToken(item) {
+      const { advanceOf, wrapBlock } = PB.slices.text;
+      const f = item.font;
+      const width = clampInt(DEFAULT_BLOCK_CHARS * f.size * advanceOf(f) * f.scaleX, ...BLOCK_RANGES.width);
+      const lines = Math.max(1, wrapBlock(item.data, { width, align: 'left', lineSpace: DEFAULT_BLOCK_SPACE }, f).lines.length);
+      return blockToken(width, DEFAULT_BLOCK_SPACE, lines);
+    }
+
+    /** Number of the converted command: the one it has when the other namespace (PV / PC and its RV / RC data) leaves it free, else the next free one. */
+    function convertedId(text, ref, format, data) {
+      const digits = /^P[CV](\d+)$/.exec(ref)[1];
+      return new RegExp(String.raw`\{(?:${format}|${data})${digits};`).test(text) ? nextId(text, format, data) : digits;
+    }
+
+    /**
+     * PC -> PV: the outline font B with width = size * scaleX and height = size (0.1 mm); the spacing keeps its dots with 3 digits; the position,
+     * rotation, attribute, the other optional parameters, the counter, zero suppression, the alignment (1..4: PV has the same Po) and the inline
+     * data stay as written. The bold (J) and the block (P5) have no PV equivalent and are dropped (the text is a line again).
+     */
+    function bitmapToVector({ stripped, match: m }, item, id) {
+      const at = i => m.indices[i];
+      const font = item.font;
+      const size = Number.isFinite(font.size) && font.size > 0 ? font.size : DEFAULT_OUTLINE_SIZE;
+      const scaleX = Number.isFinite(font.scaleX) && font.scaleX > 0 ? font.scaleX : 1;
+      const dim = n => pad4(Math.max(1, clampCoord(n)));
+      const coords = /^\{PC\d+;(\d+,\d+),/.exec(stripped)[1];
+      const spacing = m[4] ? `${spacingToken(Number(m[4].slice(0, -1)), 'PV') ?? '+000'},` : '';
+      const between = stripped.slice(at(6)[1], at(8)[0]).replace(/,J\d{4}(?=,|$)/, '');
+      const tail = stripped.slice(at(8)[0], at(10)[0]) + (readBlockToken(m[10]) ? '' : m[10]) + stripped.slice(at(10)[1]);
+      return `{PV${id};${coords},${dim(size * scaleX)},${dim(size)},B,${spacing}${stripped.slice(at(5)[0], at(6)[1])}${between}${tail}`;
+    }
+
+    /** PV -> PC: the nearest bitmap font (nearestBitmap) with its magnifications; the rest stays as written (the spacing is clamped to 2 digits). */
+    function vectorToBitmap({ stripped, match: m }, item, id) {
+      const at = i => m.indices[i];
+      const choice = nearestBitmap(item.font);
+      const mag = n => String(n).padStart(2, '0');
+      const coords = /^\{PV\d+;(\d+,\d+),/.exec(stripped)[1];
+      const spacing = m[4] ? `${spacingToken(Number(m[4].slice(0, -1)), 'PC') ?? '+00'},` : '';
+      return `{PC${id};${coords},${mag(choice.h)},${mag(choice.v)},${choice.letter},${spacing}${stripped.slice(at(5)[0], at(6)[1])}${stripped.slice(at(6)[1])}`;
+    }
+
+    /**
+     * Hook of the shape for the fields flagged `reemit` (see updateItem in js/languages/tpcl.js): the command written again, or null to refuse.
+     *   fontType: PC <-> PV (the number of the command is kept when free; its RC / RV data command is renamed to match, which is why the answer
+     *     carries `edits` over the rest of the text and the new `ref`).
+     *   kind (PC only): block = the alignment token becomes a default P5 block (only for the rotations that keep it); line = the P5 token goes.
+     */
+    function reemit(found, item, changes, { text }) {
+      const { stripped, match: m, span } = found;
+      const vector = /^PV/.test(item.ref);
+      if (Object.hasOwn(changes, 'fontType')) {
+        const to = changes.fontType;
+        if (!FONT_TYPE_OPTIONS.some(o => o.value === to) || (to === 'vector') === vector || typeof text !== 'string') return null;
+        const [format, dataLetter] = to === 'vector' ? ['PV', 'V'] : ['PC', 'C'];
+        const id = convertedId(text, item.ref, format, `R${dataLetter}`);
+        const command = vector ? vectorToBitmap(found, item, id) : bitmapToVector(found, item, id);
+        const [fromLetter, digits] = [vector ? 'V' : 'C', /^P[CV](\d+)$/.exec(item.ref)[1]];
+        const edits = [...text.slice(span.end).matchAll(new RegExp(String.raw`\{R${fromLetter}${digits};`, 'g'))]
+          .map(hit => ({ start: span.end + hit.index + 1, end: span.end + hit.index + 3 + digits.length, value: `R${dataLetter}${id}` }));
+        return { command, edits, ref: `${format}${id}` };
+      }
+      if (Object.hasOwn(changes, 'kind') && !vector) {
+        const [s, e] = m.indices[10];
+        if (changes.kind === 'block' && !item.block && blockAvailable(m[5])) return stripped.slice(0, s) + defaultBlockToken(item) + stripped.slice(e);
+        if (changes.kind === 'line' && item.block) return stripped.slice(0, s) + stripped.slice(e);
+      }
+      return null;
+    }
+
     return {
       // Parse handlers: { pattern, handle(match, cmd, ctx) }
       handlers: [
@@ -546,6 +774,7 @@
               ...parseBold(m[11], ctx.dot),
               ...parseCounter(ctx, m[11]),
               ...parseAlign(m[11]),
+              ...parseBlock(ctx, ref, m[11], m[8]),
               data: m[12] ?? null,
             });
           },
@@ -582,8 +811,10 @@
         { // Outline text: PVnn;x,y,<width>,<height>,<font>,[±adj,]<rotation>,<attribute>
           applies: item => item.kind === 'text' && /^PV/.test(item.ref),
           pattern: new RegExp(String.raw`^\{PV\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + TAIL_SLOTS, 'd'),
+          reemit,
           fields: [
-            KIND_FIELD,
+            fontTypeField,
+            VECTOR_KIND_FIELD,
             numberField('width', 'Ancho (0,1 mm)', 1, 1, MAX_COORD, item => Math.round(item.font.size * item.font.scaleX)),
             numberField('height', 'Alto (0,1 mm)', 2, 1, MAX_COORD, item => item.font.size),
             rotationField(5),
@@ -596,9 +827,12 @@
         },
         { // Bitmap text: PCnn;x,y,<h magnification>,<v magnification>,<font>,[±adj,]<rotation>,<attribute> (steps of 0.1)
           applies: item => item.kind === 'text' && /^PC/.test(item.ref),
-          pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + TAIL_SLOTS, 'd'),
+          pattern: new RegExp(String.raw`^\{PC\d+;\d+,\d+,(\d+),(\d+),([A-Za-z0-9]),` + SPACING_SLOT + String.raw`(\d{2}),([BWFC]\d{0,4})` + BOLD_SLOT + PC_TAIL_SLOTS, 'd'),
+          reemit,
           fields: [
-            KIND_FIELD,
+            fontTypeField,
+            bitmapKindField,
+            ...blockFields(10),
             numberField('hMag', 'Ampliación horizontal (×0,1)', 1, 1, 99),
             numberField('vMag', 'Ampliación vertical (×0,1)', 2, 1, 99),
             rotationField(5),

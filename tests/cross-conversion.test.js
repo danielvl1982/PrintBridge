@@ -302,14 +302,14 @@ test('every cross conversion of the examples reports no error diagnostics and le
   }
 });
 
-test('a TSPL BLOCK keeps its width, lines, alignment and line space going to TPCL as one line with one warning', () => {
-  const source = ['SIZE 100 mm,60 mm', 'GAP 3 mm,0 mm', 'DIRECTION 1', 'CLS', 'BLOCK 40,30,300,100,"3",0,1,1,4,2,"first line\\[R]second line"', 'PRINT 1,1'].join('\r\n');
+test('a TSPL BLOCK with a vector-only font (PV) goes to TPCL as one line with one warning', () => {
+  const source = ['SIZE 100 mm,60 mm', 'GAP 3 mm,0 mm', 'DIRECTION 1', 'CLS', 'BLOCK 40,30,300,100,"1",0,1,1,4,2,"first line\\[R]second line"', 'PRINT 1,1'].join('\r\n');
   const { result, converted } = cross(source, 'tpcl', 203);
   assert.equal(converted.items.length, 1);
   assert.equal(converted.items[0].block, undefined);
   assert.equal(converted.items[0].data, 'first line second line');
   assert.deepEqual(levels(result.diagnostics, 'warning').map(d => d.text), [levels(result.diagnostics, 'warning')[0].text]);
-  assert.match(levels(result.diagnostics, 'warning')[0].text, /TPCL no tiene bloque de texto/);
+  assert.match(levels(result.diagnostics, 'warning')[0].text, /necesita una fuente de mapa de bits [(]PC[)]/);
 });
 
 test('a ZPL ^FB block goes to TSPL as BLOCK and back to ZPL as ^FB with the same parameters (both resolutions)', () => {
