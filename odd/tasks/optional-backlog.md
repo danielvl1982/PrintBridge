@@ -36,4 +36,5 @@ languages: decide the scope with the user before designing it.
 - Mod 10 of an even-length Interleaved 2 of 5 (manual and viewer may disagree).
 - A TSPL "Alto (mm)" field for the block, rounded to whole lines.
 - `GAP 0` written when the TSPL gap is emptied or typed as 0 (today the existing `GAP` line is left as it is).
+- GS1-128 is NOT optional: it is a planned task, see `odd/tasks/gs1-128.md`.
 - `^SF` (ZPL mask) is not optional: it is the next planned task, with the local print agent.
