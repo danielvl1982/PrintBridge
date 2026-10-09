@@ -15,7 +15,7 @@ const REQUIRED_IDS = [
   'imgX', 'imgY', 'imgW', 'imgRotation', 'imgThreshold', 'imgThresholdValue', 'btnImageInsert', 'btnImageRemove', 'imageFile',
   'svgwrap', 'dims', 'cursor', 'src', 'vars', 'msgs', 'convert',
   'dpi', 'calib', 'rotation', 'optGrid', 'optAnchor', 'optOverlap', 'btnOpen', 'file', 'example',
-  'size', 'szW', 'szH', 'szP',
+  'size', 'szW', 'szH', 'szP', 'szPField', 'szPText',
 ];
 
 const countId = id => (html.match(new RegExp('\\sid="' + id + '"', 'g')) || []).length;
@@ -89,9 +89,10 @@ test('the toolbars no longer hold the view controls', () => {
   }
 });
 
-const SIZE_IDS = ['size', 'szW', 'szH', 'szP'];
+// szPField / szPText: the label and the text of the pitch input, which become Paso / Separación (GAP) with the language
+const SIZE_IDS = ['size', 'szW', 'szH', 'szPField', 'szPText', 'szP'];
 
-test('the four label-size controls sit in the stage size row, before the view row', () => {
+test('the label-size controls sit in the stage size row, before the view row', () => {
   const stage = at('<div class="stage">');
   const sizeRow = at('<div class="size-row"');
   const viewRow = at('<div class="view-row"');
@@ -213,7 +214,7 @@ test('Avisos grows freely: no max-height or overflow rule on .msgs-panel / .msgs
   }
 });
 
-test('the size row holds only the size select and the three size fields, in order, with no Apply button', () => {
+test('the size row holds only the size select and the three size fields (with the pitch field label), in order, with no Apply button', () => {
   const row = sizeRowHtml();
   const ids = [...row.matchAll(/\sid="([^"]+)"/g)].map(m => m[1]);
   assert.deepEqual(ids, SIZE_IDS);

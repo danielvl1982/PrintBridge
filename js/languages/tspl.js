@@ -425,6 +425,9 @@
       if (handler) handler.handle(cmd.raw.match(handler.pattern), cmd, ctx);
       else ctx.report(diag.warning(`Comando no soportado por el visor: ${cmd.raw.slice(0, 40)}`));
     }
+    // pitch = height + gap, whatever the order of SIZE and GAP in the text
+    const size = model.size;
+    if (Number.isFinite(size.height) && Number.isFinite(size.gap) && size.gap > 0) size.pitch = size.height + size.gap;
     return { model, ctx };
   }
 
@@ -499,7 +502,9 @@
     } else {
       ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe SIZE, indique el tamaño antes de exportar'));
     }
-    if (Number.isFinite(size.gap)) out.push(`GAP ${mmNumber(size.gap)} mm,0 mm`);
+    // gap = pitch - height: a label that only knows its pitch (TPCL) still gets its GAP
+    const gap = Number.isFinite(size.gap) ? size.gap : (size.pitch > size.height ? size.pitch - size.height : null);
+    if (Number.isFinite(gap)) out.push(`GAP ${mmNumber(gap)} mm,0 mm`);
     else ctx.report(diag.info('No se escribe GAP: la separación entre etiquetas o la marca negra no está especificada, compruebe el ajuste en su impresora'));
     // DIRECTION 0 (printed rotated 180 degrees) is written back as it was read; a ^POI of ZPL has no TSPL counterpart here and is reported
     const rotated = size.native && size.native.direction === 0;

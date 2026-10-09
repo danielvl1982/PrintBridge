@@ -40,7 +40,7 @@ test('run converts TPCL to TSPL: detected source, target, text and both diagnost
 test('run converts TSPL to TPCL and the dpi changes the dots', () => {
   const r = PB.convert.run(tsplExample.source, 'tpcl', { dpi: 203 });
   assert.equal(r.source, 'tspl');
-  assert.ok(r.text.startsWith('{D0600,1000,0600|}'));
+  assert.ok(r.text.startsWith('{D0630,1000,0600|}'));
   const r300 = PB.convert.run(tsplExample.source, 'tpcl', { dpi: 300 });
   assert.notEqual(r300.text, r.text);
 });

@@ -36,8 +36,8 @@
   }
 
   /**
-   * Pitch of the size a label declares, for display: the declared pitch or, when the language only states the separation
-   * (TSPL GAP), height + gap. null if neither is known. The parsed model is not changed.
+   * Pitch of the size a label declares, for display: the declared pitch or, for a hand-made model that only states the
+   * separation, height + gap (the parsers already derive it). null if neither is known. The parsed model is not changed.
    */
   function declaredPitch(size) {
     if (size.pitch != null) return size.pitch;

@@ -23,11 +23,12 @@ function fakeElement(tagName = 'div') {
 }
 
 /** Runs fn with a fake document and a panel built on fake elements; applied sizes are collected in `applied`. */
-function withPanel(fn) {
+function withPanel(fn, withField = false) {
   const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
   Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: tag => fakeElement(tag) } });
   try {
     const els = { select: fakeElement('select'), width: fakeElement('input'), height: fakeElement('input'), pitch: fakeElement('input') };
+    if (withField) Object.assign(els, { pitchField: fakeElement('label'), pitchText: fakeElement('span') });
     const applied = [];
     const panel = PB.ui.createSizePanel(els, catalog, { onApply: size => applied.push(size) });
     panel.init();
@@ -146,5 +147,98 @@ test('selectFor marks the standard size for a size known to within a dot (ZPL 10
     assert.equal(els.select.value, 'custom', 'an exact size does not get the tolerance');
     panel.selectFor({ width: 1000, height: 603, pitch: null, tolerance: 1.25 });
     assert.equal(els.select.value, 'custom');
+  });
+});
+
+// label-gap G2: the pitch field follows the language (TPCL "Paso" = pitch, TSPL "Separación (GAP)" = gap, hidden for ZPL / none).
+
+/** withPanel with the optional label wrapper and text of the pitch / gap field. */
+function withLanguagePanel(fn) {
+  withPanel(({ panel, els, applied }) => fn({ panel, els, applied }), true);
+}
+
+test('setLanguage: TPCL shows Paso with the pitch, TSPL shows Separación (GAP) with pitch - height, ZPL and no language hide it', () => {
+  withLanguagePanel(({ panel, els }) => {
+    panel.showArea(area(1000, 600, 630));
+    panel.setLanguage('tpcl');
+    assert.deepEqual([els.pitchText.textContent, els.pitch.value, els.pitchField.hidden], ['Paso', 63, false]);
+    assert.match(els.pitchField.title, /Distancia entre el inicio/);
+    panel.setLanguage('tspl');
+    assert.deepEqual([els.pitchText.textContent, els.pitch.value, els.pitchField.hidden], ['Separación (GAP)', 3, false]);
+    assert.match(els.pitchField.title, /GAP/);
+    panel.showArea(area(1000, 600, null));
+    assert.equal(els.pitch.value, '');
+    for (const language of ['zpl', null]) {
+      panel.setLanguage(language);
+      assert.equal(els.pitchField.hidden, true, String(language));
+    }
+    panel.setLanguage('tpcl');
+    assert.equal(els.pitchField.hidden, false);
+  });
+});
+
+test('TSPL: editing the gap applies pitch = height + gap; an empty or zero gap applies pitch = height', () => {
+  withLanguagePanel(({ panel, els, applied }) => {
+    panel.setLanguage('tspl');
+    panel.showArea(area(1000, 600, 630));
+    els.pitch.type('4,5');
+    els.pitch.commit();
+    assert.deepEqual([applied[0].w, applied[0].h, applied[0].p], [1000, 600, 645]);
+    els.pitch.commit('');
+    assert.equal(applied[1].p, 600);
+    els.pitch.commit('0');
+    assert.equal(applied[2].p, 600);
+  });
+});
+
+test('editing the height keeps the gap: TPCL moves the pitch, TSPL keeps the GAP', () => {
+  withLanguagePanel(({ panel, els, applied }) => {
+    panel.setLanguage('tpcl');
+    panel.showArea(area(1000, 600, 630));
+    els.height.commit('70');
+    assert.deepEqual([applied[0].h, applied[0].p], [700, 730]);
+    panel.setLanguage('tspl');
+    panel.showArea(area(1000, 600, 630));
+    els.height.commit('70');
+    assert.deepEqual([applied[1].h, applied[1].p], [700, 730], 'height 70 + GAP 3 (the gap is pitch - height in the model)');
+    panel.showArea(area(1000, 600, 630));
+    els.width.commit('90');
+    assert.deepEqual([applied[2].w, applied[2].h, applied[2].p], [900, 600, 630]);
+  });
+});
+
+test('TPCL: editing the pitch writes it as typed; a label without gap keeps pitch = height when the height changes', () => {
+  withLanguagePanel(({ panel, els, applied }) => {
+    panel.setLanguage('tpcl');
+    panel.showArea(area(1000, 600, 630));
+    els.pitch.commit('65');
+    assert.deepEqual([applied[0].h, applied[0].p], [600, 650]);
+    panel.showArea(area(1000, 600, 600));
+    els.height.commit('70');
+    assert.deepEqual([applied[1].h, applied[1].p], [700, 700]);
+  });
+});
+
+test('the combo sets the standard pitch (height + 3 mm) whatever the language', () => {
+  withLanguagePanel(({ panel, els, applied }) => {
+    panel.setLanguage('tspl');
+    els.select.value = '100x60';
+    els.select.fire('change');
+    assert.deepEqual([applied[0].h, applied[0].p], [600, 630]);
+  });
+});
+
+test('an input event on a field that is not the focused one (the browser undo reaching a typed edit) does not freeze that field', () => {
+  withLanguagePanel(({ panel, els }) => {
+    panel.setLanguage('tpcl');
+    panel.showArea(area(1000, 600, 630));
+    globalThis.document.activeElement = fakeElement('textarea');
+    els.pitch.type('5');
+    panel.showArea(area(1000, 600, 650));
+    assert.equal(els.pitch.value, 65, 'the field follows the label');
+    globalThis.document.activeElement = els.pitch;
+    els.pitch.type('7');
+    panel.showArea(area(1000, 600, 650));
+    assert.equal(els.pitch.value, '7', 'the field being typed in is left alone');
   });
 });

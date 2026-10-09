@@ -8,8 +8,8 @@ const { loadUpTo } = require('./helpers/load');
 // Tolerance rules (all units are 0.1 mm, dot = PB.units.dotSize(dpi)):
 //   - coordinates, line ends, barcode height, barcode module/widths, QR cell, line thickness: |delta| <= 1 dot
 //     (the conversion rounds to whole dots TPCL -> TSPL and to whole 0.1 mm TSPL -> TPCL, so the real error is <= 0.5)
-//   - label width/height: |delta| <= 1 (TSPL writes one decimal of a mm). The TPCL pitch and the TSPL gap are NOT converted
-//     (open question): pitch/gap are only compared when both sides have them.
+//   - label width/height: |delta| <= 1 (TSPL writes one decimal of a mm). The TPCL pitch and the TSPL gap are one value
+//     (pitch = height + gap, derived on reading): pitch/gap are compared when both sides have them.
 //   - text size and character width (size * scaleX): |delta| <= half a point (UNITS_PER_POINT / 2), the rounding of the TSPL
 //     scalable font "0" (whole points). Family, weight and style are not compared: a change must be reported by the font info.
 //   - barcode interCharGap is not compared (the TSPL parser always sets it to the module); everything else is exact:
@@ -99,7 +99,6 @@ function cross(source, targetId, dpi) {
 }
 
 // Exact fidelity diagnostics (level + message prefix) of each conversion, in emission order. They are the same at 203 and 300 dpi.
-const INFO_GAP = ['info', 'No se escribe GAP'];
 const INFO_FONTS_TSPL = ['info', 'Las fuentes TSPL no coinciden'];
 const INFO_SIZE_TSPL = ['info', 'Hay textos cuyo tamaño se redondea a puntos enteros'];
 const INFO_VARIABLES = ['info', 'Las variables #NOMBRE# se escriben como texto literal en TSPL'];
@@ -109,9 +108,9 @@ const INFO_FONTS_TPCL = ['info', 'Las fuentes TPCL no coinciden'];
 const INFO_XS = ['info', 'Parámetros de {XS} por defecto'];
 
 const CASES = [
-  { example: spool, from: 'tpcl', to: 'tspl', expected: [INFO_GAP, INFO_FONTS_TSPL, INFO_SIZE_TSPL, INFO_VARIABLES] },
-  { example: barcodes, from: 'tpcl', to: 'tspl', expected: [INFO_GAP, INFO_FONTS_TSPL, INFO_VARIABLES] },
-  { example: tsplExample, from: 'tspl', to: 'tpcl', expected: [INFO_AX, INFO_PITCH, INFO_FONTS_TPCL, INFO_XS] },
+  { example: spool, from: 'tpcl', to: 'tspl', expected: [INFO_FONTS_TSPL, INFO_SIZE_TSPL, INFO_VARIABLES] },
+  { example: barcodes, from: 'tpcl', to: 'tspl', expected: [INFO_FONTS_TSPL, INFO_VARIABLES] },
+  { example: tsplExample, from: 'tspl', to: 'tpcl', expected: [INFO_AX, INFO_FONTS_TPCL, INFO_XS] },
 ];
 
 for (const dpi of [203, 300]) {
@@ -135,16 +134,17 @@ for (const dpi of [203, 300]) {
   }
 }
 
-test('TPCL -> TSPL keeps the label size and says that the pitch is not converted', () => {
+test('TPCL -> TSPL keeps the label size and carries the pitch as GAP = pitch - height', () => {
   const { original, converted } = cross(spool.source, 'tspl', 203);
   assert.deepEqual([original.size.width, original.size.height, original.size.pitch], [990, 550, 610]);
-  assert.deepEqual([converted.size.width, converted.size.height, converted.size.gap], [990, 550, null]);
+  assert.deepEqual([converted.size.width, converted.size.height, converted.size.gap], [990, 550, 60]);
+  assert.equal(converted.size.pitch, 610);
 });
 
-test('TSPL -> TPCL writes the height as the pitch (the gap is not converted) and says so', () => {
+test('TSPL -> TPCL writes the pitch height + GAP and says nothing about it', () => {
   const { result, converted } = cross(tsplExample.source, 'tpcl', 203);
-  assert.deepEqual([converted.size.width, converted.size.height, converted.size.pitch], [1000, 600, 600]);
-  assert.ok(result.diagnostics.some(d => d.level === 'info' && /paso de etiqueta/.test(d.text)));
+  assert.deepEqual([converted.size.width, converted.size.height, converted.size.pitch, converted.size.gap], [1000, 600, 630, 30]);
+  assert.ok(!result.diagnostics.some(d => /paso de etiqueta/.test(d.text)));
 });
 
 test('fonts that change family, weight or style are always reported (TPCL -> TSPL and TSPL -> TPCL)', () => {

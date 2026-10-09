@@ -13,7 +13,7 @@ test('neutral model: language and size of the reference spool example', () => {
   assert.equal(model.language, 'tpcl');
   assert.deepEqual(
     [model.size.width, model.size.height, model.size.pitch, model.size.gap],
-    [990, 550, 610, null],
+    [990, 550, 610, 60],
   );
   assert.deepEqual(model.size.native, { dRaw: 'D0610,0990,0550', axRaw: 'AX;+010,+000,+00' });
   assert.equal('dRaw' in model.size, false);

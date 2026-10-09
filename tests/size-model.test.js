@@ -83,9 +83,9 @@ test('examples no longer force a size', () => {
   for (const e of PB.examples) assert.equal('sizeId' in e, false, e.id);
 });
 
-test('declaredPitch: TSPL derives pitch = height + gap for display, the parsed model keeps pitch null', () => {
+test('declaredPitch: TSPL derives pitch = height + gap on reading, and the view shows it', () => {
   const model = tspl.parse('SIZE 100 mm,60 mm\nGAP 3 mm,0 mm');
-  assert.equal(model.size.pitch, null);
+  assert.equal(model.size.pitch, 630);
   assert.equal(PB.sizes.declaredPitch(model.size), 630);
   assert.equal(PB.sizes.view(model).pitch, 630);
 });

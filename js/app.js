@@ -28,7 +28,7 @@
   const messages = ui.createMessagesPanel($('msgs'));
   const variablesPanel = ui.createVariablesPanel($('vars'), { values: state.values, onChange: () => refresh() });
   const sizePanel = ui.createSizePanel(
-    { select: $('size'), width: $('szW'), height: $('szH'), pitch: $('szP') },
+    { select: $('size'), width: $('szW'), height: $('szH'), pitch: $('szP'), pitchField: $('szPField'), pitchText: $('szPText') },
     catalog,
     { onApply: applySize },
   );
@@ -157,6 +157,7 @@
       const opts = options();
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));
+      sizePanel.setLanguage(model.language);
       sizePanel.showArea(area);
       sizePanel.selectFor({ ...model.size, pitch: sizes.declaredPitch(model.size) });
       lastModel = model;

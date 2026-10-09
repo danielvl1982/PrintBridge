@@ -77,15 +77,16 @@ The drawing updates immediately while typing in the code, so coordinates and siz
 
 ### Formato
 
-The row is a view of the label: **Ancho**, **Alto** and **Paso** (mm) always show the size the label declares, and the drawing always
+The row is a view of the label: **Ancho**, **Alto** and the pitch / gap field (mm) always show the size the label declares, and the drawing always
 follows it. If the label declares no size, the fields show 99×55 mm and a warning says so.
 
 | Control | What it does |
 |---|---|
-| **Tamaño etiqueta** | Standard sizes (mm, **Paso** = height + 3): 100×150, 100×100, 100×60, 80×50, 60×40, 50×30 and 40×30. Picking one writes it to the label. It marks the standard equal to the declared size, or **Personalizado…** if there is none. |
-| **Ancho / Alto / Paso** | Edit one and leave the field to write the size to the label (in TPCL, the `{D…|}` command and an existing `{AX…|}` is left untouched; in TSPL, `SIZE` and, when **Paso** is larger than **Alto**, `GAP` = Paso − Alto, an existing `GAP` is kept if Paso equals Alto; in ZPL, `^PW` and `^LL` in dots, and **Paso** has no ZPL command, so it is not written). An empty **Paso** means the height. A zero, negative or invalid value goes back to the label's value. |
+| **Tamaño etiqueta** | Standard sizes (mm, pitch = height + 3, so TSPL gets `GAP 3 mm`): 100×150, 100×100, 100×60, 80×50, 60×40, 50×30 and 40×30. Picking one writes it to the label. It marks the standard equal to the declared size, or **Personalizado…** if there is none. |
+| **Ancho / Alto** | Edit one and leave the field to write the size to the label (in TPCL, the `{D…|}` command, and an existing `{AX…|}` is left untouched; in TSPL, `SIZE`; in ZPL, `^PW` and `^LL` in dots). Editing the width or the height keeps the gap between labels, so the pitch follows the height. A zero, negative or invalid value goes back to the label's value. |
+| **Paso** (TPCL) / **Separación (GAP)** (TSPL) | One field that follows the language of the label; ZPL and a label with no recognized language hide it, because ZPL has no command for it. Pitch = height + gap, and the viewer derives each from the other when it reads the label: TPCL `D<pitch>,…` gives the gap = pitch − height, TSPL `GAP g` gives the pitch = height + g. In TPCL the field is the pitch and an empty one means the height; in TSPL it is the gap in mm (empty or 0: no `GAP`, an existing one is left alone). Leaving the field rewrites `{D…|}` or `GAP` like the width and the height, and Ctrl+Z undoes it. |
 
-- **Paso:** distance between the start of one label and the next (height + gap between labels).
+- **Paso:** distance between the start of one label and the next (height + gap between labels). **Separación (GAP):** the gap between labels, in the same units (pitch − height).
 
 ### Imagen
 
@@ -236,7 +237,7 @@ The positions of the items are carried through the neutral model, so they are ex
 | Reverse / clear areas (TPCL `XR`, TSPL `REVERSE` / `ERASE`, ZPL `^GB`) | = | = | = | = | = | = |
 | Images (bitmap) | = | = | = | = | = | = |
 | Label size (width, height) | = | = (whole dots: 100×60 mm reads back 100.0×60.1) | = | = | = | = |
-| Pitch (TPCL) / gap (TSPL) | ~ gap not written | ~ one information message: ZPL has only `^PW` / `^LL` | ~ pitch = height | ~ same message | ~ pitch = height | ~ no `GAP` |
+| Pitch (TPCL) / gap (TSPL) (pitch = height + gap) | = `GAP` = pitch − height (none when pitch = height) | ~ one information message: ZPL has only `^PW` / `^LL` | = pitch = height + `GAP` (height when there is no `GAP`, with an information message) | ~ same message | ~ pitch = height | ~ no `GAP` |
 | Label printed rotated 180° (TSPL `DIRECTION 0`, ZPL `^POI`) | – | – | ~ not written | ~ not written | ~ not written | ~ not written |
 
 Notes: a TPCL field has 4 digits and 2-digit ids, and coordinates are rounded between 0.1 mm and dots (values beyond the field are clamped with a warning); a TPCL
@@ -284,7 +285,7 @@ It can be converted to TPCL or ZPL with **Convertir a…**.
 
 | Command | What it is |
 |---|---|
-| `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SHIFT` | Label setup (size in inches, mm or dots; coordinates in dots). The **Formato** row writes `SIZE` and `GAP` in mm |
+| `SIZE`, `GAP`, `DIRECTION`, `REFERENCE`, `SHIFT` | Label setup (size in inches, mm or dots; coordinates in dots). The **Formato** row writes `SIZE` and `GAP` in mm (the field **Separación (GAP)**; pitch = height + gap) |
 | `TEXT`, `BLOCK` | Texts (fonts `1`-`8`, scalable `0`/`ROMAN.TTF`, multipliers, rotation) |
 | `BARCODE` | Code128 (also `128M` and `EAN128`), Code39, ITF / `25`, Code 93 (`93`), Codabar (`CODA`) and EAN13 / EAN8 / UPCA / UPCE (each also with `+2` and `+5`) are generated for real; the other types are drawn approximately and reported |
 | `QRCODE` | QR code (generated for real; ECC level, cell size, manual-mode data) |
