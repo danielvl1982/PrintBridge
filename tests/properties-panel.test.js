@@ -66,3 +66,52 @@ test('text fields: the panel renders a text input with its maxLength and notifie
     if (saved) Object.defineProperty(globalThis, 'document', saved); else delete globalThis.document;
   }
 });
+
+test('radio fields: like a select, the matching option value is returned and anything else is rejected', () => {
+  const field = { type: 'radio', value: 'bitmap', options: [{ value: 'bitmap', label: 'Mapa de bits (PC)' }, { value: 'vector', label: 'Vectorial (PV)' }] };
+  assert.equal(coerceFieldValue(field, 'vector'), 'vector');
+  assert.equal(coerceFieldValue(field, 'other'), undefined);
+});
+
+test('radio fields: the panel renders one radio input per option in a group, checks the current one, and notifies only the option chosen', () => {
+  const listeners = new Map();
+  const fake = tag => {
+    const el = {
+      tagName: tag, dataset: {}, attributes: {}, children: [], append(...c) { this.children.push(...c); }, replaceChildren(...c) { this.children = c; },
+      setAttribute(name, value) { this.attributes[name] = value; },
+      addEventListener(type, fn) { listeners.set(el, { ...listeners.get(el), [type]: fn }); }, contains: () => false, querySelector: () => null,
+    };
+    return el;
+  };
+  const saved = Object.getOwnPropertyDescriptor(globalThis, 'document');
+  Object.defineProperty(globalThis, 'document', { configurable: true, value: { createElement: fake, activeElement: null } });
+  try {
+    const els = { empty: fake('p'), title: fake('h'), form: fake('form'), overlay: fake('div') };
+    const calls = [];
+    PB.ui.createPropertiesPanel(els, { onChange: (key, value) => calls.push([key, value]) }).show({
+      kind: 'text',
+      fields: [{
+        key: 'fontType', label: 'Tipo de fuente', type: 'radio', value: 'bitmap', note: 'una nota',
+        options: [{ value: 'bitmap', label: 'Mapa de bits (PC)' }, { value: 'vector', label: 'Vectorial (PV)' }],
+      }],
+    });
+    const group = els.form.children[0];
+    assert.equal(group.tagName, 'div');
+    assert.equal(group.attributes.role, 'radiogroup');
+    assert.equal(group.children[0].textContent, 'Tipo de fuente');
+    const choices = group.children[1].children;
+    assert.deepEqual(choices.map(c => c.children[1].textContent), ['Mapa de bits (PC)', 'Vectorial (PV)']);
+    const [bitmap, vector] = choices.map(c => c.children[0]);
+    assert.deepEqual([bitmap.type, bitmap.checked, vector.checked, bitmap.name === vector.name, vector.dataset.key], ['radio', true, false, true, 'fontType']);
+    assert.equal(group.children[2].textContent, 'una nota');
+    // A radio only notifies when it is the one checked
+    vector.checked = false;
+    listeners.get(vector).change();
+    assert.deepEqual(calls, []);
+    vector.checked = true;
+    listeners.get(vector).change();
+    assert.deepEqual(calls, [['fontType', 'vector']]);
+  } finally {
+    if (saved) Object.defineProperty(globalThis, 'document', saved); else delete globalThis.document;
+  }
+});
