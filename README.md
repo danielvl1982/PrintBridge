@@ -41,7 +41,8 @@ from scratch with the TPCL template label.
 | `js/drawing.js` | Label drawing and overlap detection |
 | `js/ui.js` | Screen panels |
 | `js/convert-panel.js` | The "Convertir a…" panel (target, output, fidelity warnings, Copiar, Descargar) |
-| `js/print-panel.js` | The "Impresión" panel (agent status, printer, copies, Imprimir, agent address) that talks to the local print agent |
+| `js/print-panel.js` | The "Impresión" panel (agent status, mode Etiquetera RAW / Driver imagen, printer, copies, resolution, paper, offsets, Imprimir, agent address) that talks to the local print agent |
+| `js/render-export.js` | Exports the viewer drawing to a PNG of exact size in mm at a resolution (used by the Driver mode of the print panel) |
 | `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
@@ -284,6 +285,7 @@ It needs Windows and [Node.js](https://nodejs.org) LTS, has no dependencies and 
    **Agente** is the address of the agent (default `http://127.0.0.1:9631`) and **Reintentar** checks it again.
 
 **Imprimir** sends the label in the **Código de etiqueta** box in its own language, with the bytes that saving it as a file would write (TSPL `BITMAP` data included). The variables (`#NAME#`) that have an assigned value in the **Variables** panel (or a default of the label itself, as `^FN` data in ZPL) are replaced by it; a variable that still shows only its own name, i.e. without a value, is sent as written.
+**Modo** chooses how it prints. **Etiquetera (código)** is the behaviour above (RAW). **Driver (imagen)** prints what the viewer draws through the Windows driver of any printer (a laser, for instance), like a .NET `PrintDocument`: the app renders the label to a PNG with its real size in mm and the agent prints it at 100 % scale (see [agent/README.md](agent/README.md#print-an-image-through-the-driver)). It offers **Resolución** (203, 300 or 600 ppp: the PNG is rendered at that resolution, set it to the printer's), **Papel** (**Predeterminado del driver** or **Tamaño de la etiqueta**), **Desplazamiento X / Y (mm)** (-100 to 100, to compensate the printer's non printable margin) and a line with the page size in mm and the PNG size in pixels (a size over 16384 px a side or 100 megapixels is refused and Imprimir stays off). It prints the drawing, not the label code, so it does **not** prove that a TEC / TSC / Zebra accepts the code. The mode, resolution, paper, offsets and printer are remembered in the browser; copies are not. **Not verified on a real printer yet.**
 Several copies are sent as one print job. If the agent is not running the panel says so and **Descargar** (panel **Convertir a…**) stays as the alternative.
 Chrome asks once for permission to access the local network: allow it. **Nothing has been verified on a real printer yet**: try one label first.
 Requirements, configuration, allowed origins, security notes and troubleshooting: [agent/README.md](agent/README.md).

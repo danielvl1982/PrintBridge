@@ -23,7 +23,7 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
 ## Tasks
 - [x] P1 Agent: `POST /print-image` (PNG body, query: printer, widthMm, heightMm, dpi, offsetXmm, offsetYmm, copies), validation, PowerShell PrintDocument, tests
 - [x] P2 Browser: export the viewer SVG to a PNG at a dpi with the exact mm size (pure helpers tested), fonts / images embedded
-- [ ] P3 UI: print panel second mode "Driver (imagen)" (dpi, offsets, preview of the page size), messages, agent client call
+- [x] P3 UI: print panel second mode "Driver (imagen)" (dpi, offsets, preview of the page size), messages, agent client call
 - [ ] P4 Close: README + print-agent doc, Chrome probe with a fake agent, full `node --test`, this document finished, Engram mirror
 
 ## Findings
@@ -45,9 +45,18 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
   TPCL text attributes, strokes) are inlined in a `<style>`. They are system fonts, no web font is involved: the PNG uses what the browser resolves, as the viewer does.
   Overlay pictures are data URLs already; any other href would be fetched and embedded.
 - P2 limits: 16384 px a side, 100 megapixels (about 450 x 450 mm at 600 dpi is refused); the agent accepts up to 1000 mm and 20 MB of PNG (a large 1200 dpi PNG can exceed that).
+- P3 UI: the panel gained a `Modo` select (`Etiquetera (código)` = RAW unchanged, `Driver (imagen)`). Driver mode shows Resolución (203 / 300 / 600, default 300), Papel (default / label),
+  Desplazamiento X / Y (mm, -100..100, step 0.1, comma or dot accepted), the shared copies control and a line "Página W × H mm, imagen w × h px" (or the pixelSize Spanish error, which disables Imprimir).
+  The pure parts live in `PB.ui.printImage` (js/print-panel.js): `request` (panel values -> { path, query, url, headers, pixels } or { ok: false, error }), `pageInfo`, `errorMessage` (one Spanish message per agent code,
+  ending with the code like RAW does; spooler_error shows the agent `detail`), `parseOffset`. They call PB.renderExport lazily, so the panel keeps loading before render-export.js.
+- P3 wiring: `createPrintPanel` takes `getLabel()` (app.js `printLabel`: the live <svg> in #svgwrap and the size from its `.label-background` in 0.1 mm / 10) and an injectable `renderPng` (default
+  PB.renderExport.toPng). app.js calls `printPanel.refreshInfo()` after each refresh so the size line follows the label. The RAW path is the same behaviour (shared `post` / `send` helpers; its tests pass untouched).
+- P3 persistence: localStorage like the printer / agent URL (keys `printbridge.printMode`, `imageDpi`, `imagePaper`, `imageOffsetX`, `imageOffsetY`; an invalid stored value falls back to the default). Copies are not persisted (as before).
+- P3 CSS: only `.print-info` / `.print-tip` in css/viewer.css; the new rows reuse `.convert-bar` and the `[hidden]` rule.
 
 ## Open
-- P3 must decide where the SVG comes from (the live preview element is enough) and show the pixel size / limit errors in the panel.
+- P3 decided: the live preview <svg> is the source; the size line shows the pixel size and the limit errors.
+- The size line is computed from the label as drawn; a label whose code declares no size uses the viewer default size (the viewer warns about it).
 - The PNG is not checked against the agent's `maxImageBytes` (20 MB default) in the browser; a very large page is rejected by the agent with 413 `too_large`.
 - The `mix-blend-mode: difference` of ZPL / TSPL "reverse" areas is not covered by the probe (the shipped templates have none); it should render as in the viewer because the white background is part of the SVG.- Only a real printer can verify: the position of the origin (printable area or physical page corner) and the offsets to compensate it, `paper=label` accepted by
   the driver of a label printer, copies, and that nothing is scaled by the driver ("fit to page" options).
@@ -60,3 +69,10 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
   PASS not blank (about 100k ink pixels), PASS no border on the edge row, PASS grid and hit nodes stripped (26-28 chrome nodes in the viewer), PASS identical PNG bytes with the viewer rotated 0 / 90 / 270,
   PASS an embedded data URL picture lands upright at its place. Looked at the PNG: text, barcode with human readable line, QR and boxes as in the viewer, no grid or selection. Only console error: a refused
   connection (the print panel looking for the agent on 127.0.0.1:9631).
+- P3 done: tests/print-panel-image.test.js (13 tests: pure request / messages / size line, panel on a fake DOM and fake fetch, persistence, wiring); full suite 4314 tests, 4312 pass, 0 fail, 2 skipped. tests/print-panel.test.js only changed its app.js wiring regex.
+  Chrome probe (headless Chrome, FAKE agent on a free port with the real agent's CORS headers, nothing sent to a real printer), 25/25 PASS: connected status; default mode Etiquetera and driver options hidden; RAW still POSTs
+  the label code to /print as application/octet-stream; driver options shown and printer kept on the mode switch; size line 100 x 60 mm -> 1181 x 709 px at 300 dpi, 2362 x 1417 px at 600 dpi; with 600 dpi, offsets 2 / 3,
+  paper label and 2 copies the agent received POST /print-image image/png with query printer, widthMm=100, heightMm=60, dpi=600, offsetXmm=2, offsetYmm=3, copies=2, paper=label and a valid PNG of exactly 2362 x 1417;
+  success message in Spanish; each of bad_request / not_png / too_large / printer_not_found / spooler_error (with detail) / origin_refused shows its Spanish message; mode, dpi, paper and offsets survive a reload;
+  offset 150 is refused before any request; all controls sit in a label; Imprimir reachable with Tab; no horizontal overflow at 400 px. Looked at the screenshots (desktop and 400 px, both modes): no layout problems
+  (the Driver rows wrap at narrow widths). Only console errors: the browser logging the fake agent's 4xx / 5xx answers.
