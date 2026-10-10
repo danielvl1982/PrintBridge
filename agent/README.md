@@ -162,6 +162,7 @@ Interpolation: when the PNG has at least the printer's resolution (`dpi` >= the 
 barcode bars sharp; only a PNG with fewer dots than the printer is resampled (high quality bicubic), because nearest neighbour would make uneven bars.
 Every value is validated before PowerShell starts; the PNG goes through a temporary file and the other values through environment variables, never inside the command text.
 Like `/print`, it has the origin and Host checks, and the log line has the printer, size, dpi and copies but never the image.
+The script was dry run against the virtual `Microsoft Print to PDF` printer (printing to a file): it runs without errors and one copy gives one page, two copies two pages. That virtual driver always makes an A4 page, so `paper=label` is only honoured by drivers that accept a custom size.
 
 ```bat
 curl -X POST --data-binary @label.png -H "Content-Type: image/png" "http://127.0.0.1:9631/print-image?printer=HP%20LaserJet&widthMm=100&heightMm=50&dpi=300&paper=label"

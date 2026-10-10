@@ -1,6 +1,6 @@
 # Print the drawing through the printer driver (PrintDocument)
 
-Status: IN PROGRESS (started 2026-10-10 on branch `feat/print-image`). Requested by the user: besides sending the label language RAW to a thermal
+Status: DONE, PENDING USER TEST ON A REAL PRINTER (started 2026-10-10 on branch `feat/print-image`). Requested by the user: besides sending the label language RAW to a thermal
 printer (the print agent, odd/tasks/print-agent.md), print **what the viewer draws** through the Windows driver (laser or any normal printer), like a
 C# `PrintDocument` would. Reviews are skipped for this feature (user decision 2026-10-10).
 
@@ -24,7 +24,7 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
 - [x] P1 Agent: `POST /print-image` (PNG body, query: printer, widthMm, heightMm, dpi, offsetXmm, offsetYmm, copies), validation, PowerShell PrintDocument, tests
 - [x] P2 Browser: export the viewer SVG to a PNG at a dpi with the exact mm size (pure helpers tested), fonts / images embedded
 - [x] P3 UI: print panel second mode "Driver (imagen)" (dpi, offsets, preview of the page size), messages, agent client call
-- [ ] P4 Close: README + print-agent doc, Chrome probe with a fake agent, full `node --test`, this document finished, Engram mirror
+- [x] P4 Close: README + print-agent doc, PowerShell dry run against Microsoft Print to PDF, full `node --test`, this document finished
 
 ## Findings
 - P1: the spooler interface gained an optional `printImage(printerName, png, options)`; the HTTP flow is tested with a fake, the real one runs `IMAGE_SCRIPT`
@@ -58,9 +58,11 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
 - P3 decided: the live preview <svg> is the source; the size line shows the pixel size and the limit errors.
 - The size line is computed from the label as drawn; a label whose code declares no size uses the viewer default size (the viewer warns about it).
 - The PNG is not checked against the agent's `maxImageBytes` (20 MB default) in the browser; a very large page is rejected by the agent with 413 `too_large`.
-- The `mix-blend-mode: difference` of ZPL / TSPL "reverse" areas is not covered by the probe (the shipped templates have none); it should render as in the viewer because the white background is part of the SVG.- Only a real printer can verify: the position of the origin (printable area or physical page corner) and the offsets to compensate it, `paper=label` accepted by
+- The `mix-blend-mode: difference` of ZPL / TSPL "reverse" areas is not covered by the probe (the shipped templates have none); it should render as in the viewer because the white background is part of the SVG.
+- Only a real printer can verify: the position of the origin (printable area or physical page corner) and the offsets to compensate it, `paper=label` accepted by
   the driver of a label printer, copies, and that nothing is scaled by the driver ("fit to page" options).
-- The PowerShell `PrintPage` handler captures exceptions into a variable and cancels the job; unverified on a machine with a printer.
+- The `PrintPage` error path (exception captured, job cancelled) did not run in the dry run; the success path did.
+- A real label printer driver: does it take the custom paper (`paper=label`) and keep 100 % scale? The PDF driver ignored the custom size (A4 page).
 
 ## Progress
 - P1 done: `POST /print-image` in the agent, 19 new tests in tests/print-image.test.js (full suite 4288 tests, 4286 pass, 0 fail, 2 skipped, no printer or PowerShell print involved).
@@ -76,3 +78,45 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
   success message in Spanish; each of bad_request / not_png / too_large / printer_not_found / spooler_error (with detail) / origin_refused shows its Spanish message; mode, dpi, paper and offsets survive a reload;
   offset 150 is refused before any request; all controls sit in a label; Imprimir reachable with Tab; no horizontal overflow at 400 px. Looked at the screenshots (desktop and 400 px, both modes): no layout problems
   (the Driver rows wrap at narrow widths). Only console errors: the browser logging the fake agent's 4xx / 5xx answers.
+- P4 done: PowerShell dry run of the exact IMAGE_SCRIPT (harness outside the repo, C:/Users/danielvl/AppData/Local/Temp/ui/dryrun-image.js: runs `runPowerShell` of the agent with the script copy plus
+  `PrintToFile = $true` and `PrintFileName` after the printer name) against the virtual printer `Microsoft Print to PDF` only (verified with Get-CimInstance Win32_Printer), PNG 1366x1100 drawn into
+  100 x 60 mm, dpi 300, offset 2 / 3 mm: paper=label copies=1, paper=default copies=1, paper=label copies=2 all ended "OK" with no PowerShell error, no process left; the PDFs start with %PDF-1.7
+  (264943, 264943 and 265438 bytes); pdfinfo: 1, 1 and 2 pages (copies work), page size 595.32 x 841.92 pt (A4) for every run: the virtual driver ignores the custom paper size. Rendering the page at 254 dpi
+  (pdftoppm) and looking at it: the drawing starts at about 2 mm / 3 mm and measures about 100 x 60 mm. No bug found in IMAGE_SCRIPT, no change to the agent code.
+  Docs: README print section (what the mode is for, caveats), agent/README note, pointer in odd/tasks/print-agent.md.
+
+## Summary
+- The app can now print what the viewer draws through the Windows printer driver, besides sending the label code RAW.
+- Agent: `POST /print-image` (PNG body, query printer, widthMm, heightMm, dpi, offsets, copies, paper) with validation, `not_png` and 20 MB `maxImageBytes`.
+- Printing uses System.Drawing.Printing.PrintDocument from PowerShell, 100 % scale, millimetre units, no new dependency.
+- Browser: `PB.renderExport.toPng` renders the viewer SVG (no grid, selection or border) to an exact pixel size at 203 / 300 / 600 dpi.
+- UI: the print panel has a Modo select; Driver (imagen) adds dpi, paper, X / Y offsets, a page / pixel size line and Spanish error messages.
+- It prints the drawing, not the code: it does not prove that a TEC / TSC / Zebra accepts the label language.
+- Tests: full suite 4314 tests, 4312 pass, 0 fail, 2 skipped; Chrome probes with a fake agent, and a PowerShell dry run on Microsoft Print to PDF.
+- Not covered by any test: a physical printer (origin, margins, custom paper, driver scaling).
+- Nothing was pushed or merged; reviews were skipped by the user's decision.
+- Pending: the user's test on a real printer (below).
+
+## Commits
+`git log --oneline d6c181e..HEAD` (before the closing commit):
+- 2eb3411 feat: add the driver image mode to the print panel
+- 55a7a76 feat: export the viewer drawing to a PNG at a given dpi
+- f560c3b feat: print an image through the printer driver from the agent
+- 4c5b9ce docs: plan printing the drawing through the printer driver
+- the closing commit: docs: document the driver image print mode and close the feature
+
+## How to test on your printer
+1. Start the agent (`agentstart.bat`, or the installed background one) and check `http://127.0.0.1:9631/health` answers.
+2. Open the app, load a shipped 100 x 60 mm example and open the **Impresión** panel: it must say "Agente conectado" and list your printers.
+3. Pick the laser printer, set **Modo** to **Driver (imagen)**, **Resolución** 300, **Papel** Predeterminado del driver, offsets 0 / 0, copies 1.
+4. Click **Imprimir** and wait for the page.
+5. Check on the paper: size 1:1 (measure the 100 mm width and the 60 mm height with a ruler), position (is the top left corner clipped or shifted?) and that the barcode and QR scan.
+   To adjust: if the edges are clipped or the drawing sits too far from the corner, add the missing millimetres in **Desplazamiento X** (right) and **Y** (down), negative values move left / up; reprint and repeat until it sits where you want.
+   If the size is not 1:1, turn off "fit to page" / scaling in the driver preferences.
+
+## Open items that only a real printer can answer
+- Is the origin the printable area or the physical corner, and which offsets compensate it?
+- Does a label printer driver accept `paper=label` (custom page) and keep 100 % scale?
+- Do the copies come out as one job with the right number of pages?
+- Are the barcodes readable at 300 dpi and at 600 dpi?
+- The `PrintPage` failure path (cancelled job) was not exercised.
