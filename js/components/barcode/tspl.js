@@ -77,6 +77,8 @@
   /** Largest height / wide bar (dots) and narrow bar offered in the properties panel. */
   const MAX_DOTS = 9999;
   const MAX_NARROW = 10;
+  /** Human readable values: 0 none, 1 / 2 / 3 left / center / right (the local manual lists 0 / 1; 2 and 3 are TSC v3.0, the widest is kept). */
+  const MAX_READABLE = 3;
 
   const RATIOS = Object.freeze([2, 2.5, 3]);
   const DEFAULT_RATIO = 3;
@@ -94,7 +96,7 @@
   /** Symbologies written with a fixed wide / narrow ratio (the manual's table lists 93 with 1:2, 1:3 and 2:5, not 1:1): Code 93 uses 1:2. */
   const FIXED_RATIO = Object.freeze({ code93: 2 });
   /** The symbologies whose data this slice can validate besides EAN / UPC (PB[symbology].encode). */
-  const LINEAR = Object.freeze(['code93', 'codabar']);
+  const LINEAR = Object.freeze(['code39', 'itf', 'code93', 'codabar']);
 
   /** Symbologies with a TSPL type. */
   const EMITTABLE = Object.freeze(['code128', 'code39', 'itf', 'code93', 'codabar', 'ean13', 'ean8', 'upca', 'upce']);
@@ -164,7 +166,11 @@
       const data = String(item.data ?? '');
       let encoded = null;
       if (isWpc(item.symbology)) encoded = PB.ean.encode(item.symbology, data, { check: item.check, addon: item.addon });
-      else if (LINEAR.includes(item.symbology)) {
+      else if (item.symbology === 'code128') {
+        // Code 128 holds ASCII 0..127 (the code sets A, B and C)
+        const outside = [...new Set([...data].filter(c => c.charCodeAt(0) > 127))];
+        encoded = { ok: !outside.length, warnings: [`Code 128: solo admite caracteres ASCII 0-127, no ${outside.slice(0, 3).map(c => `"${c}"`).join(' ')}`] };
+      } else if (LINEAR.includes(item.symbology)) {
         const out = PB[item.symbology].encode(data, { check: 'none' });
         encoded = { ok: (out.widths || out.elements).length > 0, warnings: out.warnings };
       }
@@ -180,15 +186,22 @@
      */
     function emit(item, ctx) {
       if (!EMITTABLE.includes(item.symbology)) {
-        ctx.report(diag.warning(`Código de barras ${item.symbology}: sin equivalente en TSPL, no se exporta`));
+        ctx.once(`tspl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TSPL, no se exporta`));
         return [];
       }
       let type;
       let data = safeData(ctx, item.data);
-      if (item.symbology === 'code128') ({ type, data } = code128Of(ctx, data));
+      if (item.symbology === 'code128') {
+        dataWarnings(ctx, item);
+        ({ type, data } = code128Of(ctx, data));
+      }
       else type = typeOf(ctx, item);
 
-      const narrow = Math.max(1, toDots(ctx, item.module));
+      const atLeastOne = n => {
+        if (n < 1) ctx.once('tspl-barcode-min', () => diag.warning('Hay códigos de barras con altura o ancho de barra menor que 1 punto: se escribe 1 punto'));
+        return Math.max(1, n);
+      };
+      const narrow = atLeastOne(toDots(ctx, item.module));
       let wide = narrow;
       if (WIDE_NARROW.includes(item.symbology)) {
         const w = item.widths;
@@ -199,7 +212,7 @@
         wide = roundDots(narrow * FIXED_RATIO[item.symbology]);
       }
       const [x, y] = [roundDots(exactDots(ctx, item.x || 0)), roundDots(exactDots(ctx, item.y || 0))];
-      const height = Math.max(1, toDots(ctx, item.height));
+      const height = atLeastOne(toDots(ctx, item.height));
       const readable = item.humanReadable ? 1 : 0;
       // A counter writes SET COUNTER and the start value before the command, which then prints "@n"
       const counter = counterSetup(ctx, item, data);
@@ -366,16 +379,31 @@
             const known = TYPES[addOn ? addOn[1] : typeKey] || { symbology: 'unknown' };
             if (addOn && known.symbology !== 'unknown' && !isWpc(known.symbology)) ctx.report(diag.info(`${ref}: el complemento "+${typeKey.slice(-1)}" no se dibuja`));
 
+            if (cmd.args.length > 10) ctx.report(diag.warning(`${ref}: tiene ${cmd.args.length} argumentos y TSPL admite 9 (10 con la alineación): el contenido es el argumento ${hasAlign ? 10 : 9}`));
             const readable = num(cmd.args[4]);
+            if (readable === null || !Number.isInteger(readable) || readable < 0 || readable > MAX_READABLE) {
+              ctx.report(diag.warning(`${ref}: texto legible "${cmd.args[4].value}" no válido (0 a ${MAX_READABLE}: 0 no, 1 izquierda, 2 centro, 3 derecha), se dibuja sin texto`));
+            }
             const rotation = num(cmd.args[5]);
             if (rotation === null || !ROTATIONS.includes(rotation)) {
-              ctx.report(diag.warning(`${ref}: rotación "${cmd.args[5].value}" no válida, se dibuja sin rotar`));
+              ctx.report(diag.warning(`${ref}: rotación "${cmd.args[5].value}" no válida (0, 90, 180 o 270), se dibuja sin rotar`));
             }
+            // Whole dots: a fraction is read as written but drawn as the nearest whole number of dots (at least 1)
+            const wholeDots = (v, what, arg) => {
+              if (!Number.isInteger(v)) ctx.report(diag.warning(`${ref}: ${what} "${arg.value}" no es un número entero de puntos, se dibuja con ${Math.max(1, Math.round(v))}`));
+              return Math.max(1, Math.round(v));
+            };
+            const drawnHeight = wholeDots(height, 'altura', cmd.args[3]);
             const narrowValue = num(cmd.args[6]);
-            const narrow = narrowValue !== null && narrowValue > 0 ? narrowValue : 2;
-            if (narrow !== narrowValue) ctx.report(diag.warning(`${ref}: ancho estrecho "${cmd.args[6].value}" no válido, se usa 2 puntos`));
+            let narrow = 2;
+            if (narrowValue !== null && narrowValue > 0) narrow = wholeDots(narrowValue, 'ancho estrecho', cmd.args[6]);
+            else ctx.report(diag.warning(`${ref}: ancho estrecho "${cmd.args[6].value}" no válido, se usa 2 puntos`));
             const wide = num(cmd.args[7]);
+            let drawnWide = null;
+            if (wide !== null && wide > 0) drawnWide = wholeDots(wide, 'ancho de barra ancha', cmd.args[7]);
+            else ctx.report(diag.warning(`${ref}: ancho de barra ancha "${cmd.args[7].value}" no válido (puntos enteros, 1 o más), se usa ${narrow * 3} puntos`));
 
+            helpers.counterRefsWarning(ctx, ref, cmd.args[hasAlign ? 9 : 8]);
             // A counter with an assigned start value shows it (the printer increments it per label); else the literal text
             const shown = ctx.counterContent(cmd.args[hasAlign ? 9 : 8]);
             let data = shown ? shown.data : contentOf(ctx, cmd.args[hasAlign ? 9 : 8]);
@@ -384,11 +412,11 @@
 
             const { x, y } = ctx.pos(px, py);
             const wideNarrow = WIDE_NARROW.includes(known.symbology);
-            const dotWide = (wide !== null && wide > 0 ? wide : narrow * 3) * ctx.dot;
+            const dotWide = (drawnWide ?? narrow * 3) * ctx.dot;
             const item = {
               kind: 'barcode', ref, source: sourceOf(cmd), x, y, raw: { x: String(px), y: String(py) },
               symbology: known.symbology, module: narrow * ctx.dot, rotation: ROTATIONS.includes(rotation) ? rotation : 0,
-              height: height * ctx.dot,
+              height: drawnHeight * ctx.dot,
               ...(wideNarrow && {
                 widths: { narrowBar: narrow * ctx.dot, narrowSpace: narrow * ctx.dot, wideBar: dotWide, wideSpace: dotWide },
                 interCharGap: narrow * ctx.dot,

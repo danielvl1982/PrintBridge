@@ -78,9 +78,14 @@
   /** TPCL notation of FNC1 in the data of a barcode. */
   const FNC1_NOTATION = '>8';
 
-  /** Largest value of the 2-digit dot fields (module, bar and space widths). */
+  /** Largest value of the 2-digit dot fields of the widths form (bar and space widths): 01..99 (B-SV4 6.3.9, B-452-R 6.3.10, B-452-TS12 6.12). */
   const MAX_DOTS = 99;
-
+  /** Largest 1-module width of the generic form (WPC, Code 93, Code 128, postal): 01..15. */
+  const MAX_MODULE = 15;
+  /** Height of the bar code: 0000..1000 (0.1 mm); 0000 draws nothing. */
+  const MAX_HEIGHT = 1000;
+  /** Types written with the generic form (the manual's first format): WPC, Code 93, Code 128 and the postal / UCC-EAN128 ones. */
+  const GENERIC_TYPE_CHARS = new Set([...Object.keys(WPC_TYPES), '9', 'A', 'C', 'N', 'R', 'S', 'U', 'V', 'W']);
   /** Format options of a freshly inserted Code128 barcode; {rot1} is the 1-digit rotation code. */
   const VARIABLE = Object.freeze({ format: 'XB', data: 'RB', name: 'CODIGOBARRAS', tail: '9,1,02,{rot1},0080,+0000000000,000,0,00' });
 
@@ -89,6 +94,7 @@
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
       ROTATIONS, ROTATION_STEPS, MAX_COORD, DIGITS, wrap, safeData, coordText, allocId,
       COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
+      fitBarcodeData, barcodeNumberWarning, rangeWarning, BARCODE_DATA_MAX,
     } = helpers;
 
     const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
@@ -134,7 +140,7 @@
       read: raw => (raw === '1' ? true : raw === '0' ? false : undefined),
       write: v => (typeof v === 'boolean' ? (v ? '1' : '0') : null),
     });
-    const barcodeHeight = group => numberField('height', 'Alto (0,1 mm)', group, 1, MAX_COORD, item => item.height);
+    const barcodeHeight = group => numberField('height', 'Alto (0,1 mm)', group, 1, MAX_HEIGHT, item => item.height);
 
     /**
      * Adds a Code128 XB format command plus its RB data command with a unique <#CODIGOBARRAS{k}#> variable, rotated
@@ -153,12 +159,24 @@
       return insertCommand(withFormat, `{${data}${id};${placeholder}|}`);
     }
 
-    /** Width in dots (0.1 mm -> dots at the resolution) as 2 digits, at least `min`, at most 99 (warns once if it was clamped). */
-    function dotsText(ctx, value, min) {
+    /**
+     * Width in dots (0.1 mm -> dots at the resolution) as 2 digits, at least `min`, at most `max` (warns once if it was clamped): the
+     * widths of the widths form go 01..99, the 1-module width of the generic form 01..15.
+     */
+    function dotsText(ctx, value, min, max = MAX_DOTS) {
       const raw = Number.isFinite(value) ? ctx.dot(value) : min;
-      const dots = Math.min(MAX_DOTS, Math.max(min, raw));
-      if (dots !== raw) ctx.once('tpcl-barcode-dots', () => diag.warning(`Hay códigos de barras con módulo o anchos fuera de ${min}..${MAX_DOTS} puntos: se ajustan al límite de TPCL`));
+      const dots = Math.min(max, Math.max(min, raw));
+      const range = `${String(min).padStart(2, '0')}..${max}`;
+      if (dots !== raw && max === MAX_MODULE) ctx.once('tpcl-barcode-module', () => diag.warning(`Hay códigos de barras con un módulo fuera de ${range} puntos: se ajusta al límite de TPCL`));
+      else if (dots !== raw) ctx.once('tpcl-barcode-dots', () => diag.warning(`Hay códigos de barras con módulo o anchos fuera de ${range} puntos: se ajustan al límite de TPCL`));
       return String(dots).padStart(2, '0');
+    }
+
+    /** Height 0.1 mm as 4 digits, at most 1000 (warns once if it was clamped). */
+    function heightText(ctx, value) {
+      const raw = Math.max(1, clampCoord(Number.isFinite(value) ? value : 0));
+      if (raw > MAX_HEIGHT) ctx.once('tpcl-barcode-height', () => diag.warning(`Hay códigos de barras con una altura fuera de 1..${MAX_HEIGHT} (0,1 mm): se ajusta al límite de TPCL`));
+      return pad4(Math.min(MAX_HEIGHT, raw));
     }
 
     /** Rotation digit 0..3: the nearest quarter turn, with a warning once if the item was not on one. */
@@ -182,6 +200,10 @@
     /** Data of an RB command: framing-safe, with FNC1 in the TPCL notation (a literal ">8" would read back as FNC1). */
     function barcodeText(ctx, data) {
       const value = safeData(ctx, data);
+      if (value.length > BARCODE_DATA_MAX && !PB.variables.namesIn(value).length) {
+        ctx.once('tpcl-barcode-data', () => diag.warning(`Hay datos de código de barras de más de ${BARCODE_DATA_MAX} caracteres: la impresora descarta el resto, se escriben los ${BARCODE_DATA_MAX} primeros`));
+        return barcodeText(ctx, value.slice(0, BARCODE_DATA_MAX));
+      }
       if (value.includes(FNC1_NOTATION)) {
         ctx.once('tpcl-fnc1-literal', () => diag.warning('Hay datos de código de barras con ">8", que TPCL lee como FNC1: no se puede escribir literalmente'));
       }
@@ -196,7 +218,7 @@
      */
     function emit(item, ctx) {
       if (!TYPE_CODES[item.symbology]) {
-        ctx.report(diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
+        ctx.once(`tpcl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
         return [];
       }
       const [x, y] = [coordText(ctx, item.x), coordText(ctx, item.y)];
@@ -208,7 +230,7 @@
     }
 
     /** The symbologies with their own encoder in this slice besides EAN / UPC (PB[symbology].encode). */
-    const LINEAR = Object.freeze(['code93', 'codabar', 'msi', 'industrial25']);
+    const LINEAR = Object.freeze(['code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25']);
 
     /** One warning per symbology when the data of an EAN / UPC / Code 93 / NW7 / MSI / Industrial 2 of 5 barcode cannot be encoded (a variable stands for its value, which is not known here). */
     function dataWarning(ctx, item) {
@@ -216,7 +238,11 @@
       if (PB.variables.namesIn(data).length) return;
       let encoded = null;
       if (isWpc(item.symbology)) encoded = PB.ean.encode(item.symbology, data, { check: item.check, addon: item.addon });
-      else if (LINEAR.includes(item.symbology)) {
+      else if (item.symbology === 'code128') {
+        // Code 128 holds ASCII 0..127 (the code sets A, B and C)
+        const outside = [...new Set([...data].filter(c => c.charCodeAt(0) > 127))];
+        encoded = { ok: !outside.length, warnings: [`Code 128: solo admite caracteres ASCII 0-127, no ${outside.slice(0, 3).map(c => `"${c}"`).join(' ')}`] };
+      } else if (LINEAR.includes(item.symbology)) {
         const out = PB[item.symbology].encode(data, { check: 'none' });
         encoded = { ok: (out.widths || out.elements).length > 0, warnings: out.warnings };
       }
@@ -224,15 +250,19 @@
     }
 
     /** The WPC guard bar length as 3 digits (0.1 mm, 0..100; 000 = none). */
-    const guardText = item => String(Math.min(MAX_GUARD, Math.max(0, Math.round(Number.isFinite(item.guard) ? item.guard : 0)))).padStart(3, '0');
+    function guardText(ctx, item) {
+      const raw = Math.max(0, Math.round(Number.isFinite(item.guard) ? item.guard : 0));
+      if (raw > MAX_GUARD) ctx.once('tpcl-barcode-guard', () => diag.warning(`Hay códigos de barras con una barra guardiana fuera de 000..${MAX_GUARD} (0,1 mm): se ajusta al límite de TPCL`));
+      return String(Math.min(MAX_GUARD, raw)).padStart(3, '0');
+    }
 
     /** The values of a command that do not depend on its form: rotation digit, height, readable flag and module (dots, 2 digits). */
     function sharedValues(item, ctx) {
       return {
         rotation: rotationDigit(ctx, item.rotation),
-        height: pad4(Math.max(1, clampCoord(Number.isFinite(item.height) ? item.height : 0))),
+        height: heightText(ctx, item.height),
         readable: item.humanReadable ? '1' : '0',
-        module: dotsText(ctx, item.module, 1),
+        module: dotsText(ctx, item.module, 1, FORM_OF[item.symbology] === 'generic' ? MAX_MODULE : MAX_DOTS),
       };
     }
 
@@ -247,23 +277,25 @@
       const type = keep.type || typeChar(item.symbology, item.addon);
       if (FORM_OF[item.symbology] === 'generic') {
         const [inc, zero] = [hasCounter(item) ? emitCounterToken(ctx, item.counter.step) : '0', item.zeroSuppress > 0 ? zeroDigits(item.zeroSuppress) : '00'];
-        const check = hasGenericCheck(item.symbology) ? checkCode(ctx, item.symbology, item.check) : (keep.checkDigit ?? '0');
-        return `${type},${check},${module},${rotation},${height},${inc},${keep.guard ?? (isWpc(item.symbology) ? guardText(item) : '000')},${readable},${zero}`;
+        const check = hasGenericCheck(item.symbology) ? checkCode(ctx, item.symbology, item.check) : (keep.checkDigit ?? '1');
+        return `${type},${check},${module},${rotation},${height},${inc},${keep.guard ?? (isWpc(item.symbology) ? guardText(ctx, item) : '000')},${readable},${zero}`;
       }
       const w = item.widths;
       if (!w) ctx.once('tpcl-ratio', () => diag.info(`Código de barras sin anchos explícitos: se escriben con relación ${DEFAULT_RATIO}:1 a partir del módulo`));
       const wide = w ? null : dotsText(ctx, item.module * DEFAULT_RATIO, 1);
+      // Every width is 01..99; the two fixed ones are written 00: the inter-character space of ITF / MSI and the wide space of Industrial 2 of 5
       const [narrowBar, narrowSpace, wideBar, wideSpace] = w
-        ? [dotsText(ctx, w.narrowBar, 1), dotsText(ctx, w.narrowSpace, 0), dotsText(ctx, w.wideBar, 0), dotsText(ctx, w.wideSpace, 0)]
-        : [module, module, wide, wide];
-      // The gap defaults to the module, ITF and MSI have none (00); Industrial 2 of 5 has no wide space (00)
-      const gap = dotsText(ctx, item.interCharGap ?? (NO_GAP.includes(item.symbology) ? 0 : item.module), 0);
-      const wideSpaceText = item.symbology === NO_WIDE_SPACE ? '00' : wideSpace;
+        ? [dotsText(ctx, w.narrowBar, 1), dotsText(ctx, w.narrowSpace, 1), dotsText(ctx, w.wideBar, 1), item.symbology === NO_WIDE_SPACE ? '00' : dotsText(ctx, w.wideSpace, 1)]
+        : [module, module, wide, item.symbology === NO_WIDE_SPACE ? '00' : wide];
+      let gap = '00';
+      if (NO_GAP.includes(item.symbology)) {
+        if (item.interCharGap > 0) ctx.once('tpcl-barcode-gap', () => diag.warning('Hay códigos de barras ITF o MSI con espacio entre caracteres: en TPCL es fijo (00), se escribe 00'));
+      } else gap = dotsText(ctx, item.interCharGap ?? item.module, 1);
       const check = checkCode(ctx, item.symbology, item.check);
       // The increment sits right after the height (manual: llll(,mnnnnnnnnnn,p,qq)(,r)); a zero suppression is written after the readable flag
       const inc = hasCounter(item) ? `,${emitCounterToken(ctx, item.counter.step)}` : '';
       const zero = item.zeroSuppress > 0 ? `,${zeroDigits(item.zeroSuppress)}` : '';
-      return `${type},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpaceText},${gap},${rotation},${height}${inc},${readable}${zero}${keep.startStop ? `,${keep.startStop}` : ''}`;
+      return `${type},${check},${narrowBar},${narrowSpace},${wideBar},${wideSpace},${gap},${rotation},${height}${inc},${readable}${zero}${keep.startStop ? `,${keep.startStop}` : ''}`;
     }
 
     // --- Type selector: the symbology and check digit fields rewrite the whole format command ---
@@ -366,6 +398,35 @@
       return `${head[0]}${parameters(next, ctx, sharedValues(next, ctx), keep)}${suffix}|}`;
     }
 
+    /** The parameters of a command up to its `=data` (inline data, null when there is none) or `;links`. */
+    function splitInline(raw) {
+      const at = raw.search(/[=;]/);
+      if (at < 0) return [raw, null];
+      return [raw.slice(0, at), raw[at] === '=' ? raw.slice(at + 1) : null];
+    }
+
+    /** Height llll: 4 digits 0000..1000; 0000 draws nothing on the printer (B-452-R 6.3.10 (7)). */
+    function heightProblems(ref, raw) {
+      if (raw === '0000') return [diag.warning(`${ref}: altura "0000": con altura 0000 la impresora no dibuja el código de barras, se dibuja con la altura por defecto`)];
+      return [rangeWarning(ref, 'altura', raw, 0, MAX_HEIGHT, 4)];
+    }
+    /** Height as drawn: the nearest valid one (at most 1000); a missing or 0 height keeps the default 100. */
+    const drawnHeight = raw => Math.min(MAX_HEIGHT, +raw || 100);
+
+    /** Problems of the optional parameters (increment, readable flag, zero suppression, unknown tokens) as written. */
+    function optionalProblems(ref, { inc, readable, zero, optional, allowed = [], genericIncrement = false }) {
+      const out = [];
+      if (inc !== undefined && inc !== '' && !(genericIncrement && inc === '0') && !COUNTER_TOKEN.test(inc)) {
+        out.push(diag.warning(`${ref}: incremento "${inc}" no válido (signo y 10 dígitos, de +0000000000 a +9999999999): la impresora puede no aceptarlo`));
+      }
+      if (readable !== undefined && readable !== '' && !/^[01]$/.test(readable)) out.push(diag.warning(`${ref}: texto legible "${readable}" fuera de 0, 1: la impresora puede no aceptarlo`));
+      if (zero !== undefined && zero !== '') out.push(rangeWarning(ref, 'ceros suprimidos', zero, 0, ZERO_MAX, 2));
+      for (const token of optional) {
+        if (!DIGITS.test(token) && !allowed.some(re => re.test(token))) out.push(diag.warning(`${ref}: parámetro opcional "${token}" desconocido`));
+      }
+      return out;
+    }
+
     return {
       // Parse handlers: { pattern, handle(match, cmd, ctx) }
       handlers: [
@@ -378,28 +439,44 @@
           handle(m, cmd, ctx) {
             const ref = 'XB' + m[1];
             const symbology = symbologyOf(m[4]);
-            const [e, ff, gg, hh, ii, jj, k, height, ...rest] = m[5].split(',');
+            const [head, inline] = splitInline(m[5]);
+            const [e, ff, gg, hh, ii, jj, k, height, ...rest] = head.split(',');
             // The manual puts the increment right after the height; the older form goes straight to the readable flag
-            const [inc, readable, ...optional] = COUNTER_TOKEN.test(rest[0] ?? '') ? rest : [undefined, ...rest];
+            const hasIncrement = COUNTER_TOKEN.test(rest[0] ?? '') || /^[+-]/.test(rest[0] ?? '');
+            const [inc, readable, ...optional] = hasIncrement ? rest : [undefined, ...rest];
             const dots = [ff, gg, hh, ii, jj];
-            const validWidths = dots.every(v => DIGITS.test(v)) && +ff > 0;
-            const [narrowBar, narrowSpace, wideBar, wideSpace, interCharGap] = dots.map(v => +v * ctx.dot);
+            const validWidths = dots.every(v => DIGITS.test(v));
+            // Every width is 01..99, except the fixed 00 ones (the wide space of Industrial 2 of 5, the character space of ITF / MSI): the
+            // drawing uses the nearest valid width, native keeps what was written
+            const minimum = [1, 1, 1, m[4] === 'O' ? 0 : 1, m[4] === '1' || m[4] === '2' ? 0 : 1];
+            const [narrowBar, narrowSpace, wideBar, wideSpace, interCharGap] = dots.map((v, i) => Math.min(MAX_DOTS, Math.max(minimum[i], +v)) * ctx.dot);
             const startStop = optional.find(v => /^[TPN]$/.test(v)) ?? null;
+            const zero = optional.find(v => DIGITS.test(v));
+            const labels = ['ancho de barra estrecha', 'ancho de espacio estrecho', 'ancho de barra ancha', 'ancho de espacio ancho', 'ancho del espacio entre caracteres'];
+            const problems = [
+              barcodeNumberWarning(ref, m[1]),
+              rangeWarning(ref, 'tipo de dígito de control', e, 1, 5),
+              ...dots.map((v, i) => rangeWarning(ref, labels[i], v, minimum[i], MAX_DOTS, 2)),
+              rangeWarning(ref, 'rotación', k, 0, 3),
+              ...heightProblems(ref, height),
+              ...optionalProblems(ref, { inc, readable, zero, optional, allowed: [/^[TPN]$/] }),
+            ].filter(Boolean);
+            problems.forEach(d => ctx.report(d));
             if (!validWidths) ctx.report(diag.warning(`${ref}: anchos de barra y espacio no válidos, se dibuja con el módulo y relación 3:1`));
             if (m[4] === 'B') ctx.report(diag.warning(`${ref}: Code39 con todo el ASCII (tipo B) no soportado por el visor: solo se dibujan los caracteres del Code39 estándar`));
             if (startStop) ctx.report(diag.warning(`${ref}: opción de inicio/parada "${startStop}" no verificada por el visor, se dibuja con inicio y parada automáticos`));
             ctx.addField(ref, {
               kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-              symbology, module: (+ff || 2) * ctx.dot, rotation: ROTATIONS[k] ?? 0, height: +height || 100,
+              symbology, module: (+ff || 2) * ctx.dot, rotation: ROTATIONS[k] ?? 0, height: drawnHeight(height),
               ...(validWidths && { widths: { narrowBar, narrowSpace, wideBar, wideSpace }, interCharGap }),
               check: CHECK_OPTIONS[symbology][e] ?? 'unsupported',
               native: {
                 type: m[4], checkDigit: e, narrowBar: +ff, narrowSpace: +gg, wideBar: +hh, wideSpace: +ii, interCharGap: +jj,
-                startStop, zeroSuppression: optional.find(v => DIGITS.test(v)) ?? null,
+                startStop, zeroSuppression: zero ?? null,
                 ...(symbology === 'code39' && { fullAscii: m[4] === 'B' }),
               },
               ...counterFields(ctx, inc, optional.find(v => /^\d{2}$/.test(v))),
-              humanReadable: readable === '1', data: null,
+              humanReadable: readable === '1', data: inline == null ? null : fitBarcodeData(ctx, ref, 'barcode', inline),
             });
           },
         },
@@ -410,17 +487,33 @@
           pattern: /^XB(\d+);(\d+),(\d+),(?!T,\w,\d|Q,\d+,\d+,\d+,[0-3](?:[,=;]|$))([^,]),(.*)$/,
           handle(m, cmd, ctx) {
             const ref = 'XB' + m[1];
-            const p = m[5].split(',');
+            const [head, inline] = splitInline(m[5]);
+            const p = head.split(',');
             const wpc = Object.hasOwn(WPC_TYPES, m[4]) ? WPC_TYPES[m[4]] : null;
+            // The other types of the generic form (postal, UCC/EAN-128) are checked like Code 128; PDF417 and the like have other parameters
+            const checked = GENERIC_TYPE_CHARS.has(m[4]);
+            if (checked) {
+              [
+                barcodeNumberWarning(ref, m[1]),
+                rangeWarning(ref, 'tipo de dígito de control', p[0], 1, 5),
+                rangeWarning(ref, 'módulo', p[1], 1, MAX_MODULE, 2),
+                rangeWarning(ref, 'rotación', p[2], 0, 3),
+                ...heightProblems(ref, p[3]),
+                ...(p.length < 4 ? [diag.warning(`${ref}: faltan parámetros (dígito de control, módulo, rotación y altura): la impresora puede no aceptarlo`)] : []),
+                ...optionalProblems(ref, { inc: p[4], readable: p[6], zero: p[7], optional: [], genericIncrement: true }),
+                ...(wpc && p[5] !== undefined && p[5] !== '' ? [rangeWarning(ref, 'barra guardiana', p[5], 0, MAX_GUARD, 3)] : []),
+              ].filter(Boolean).forEach(d => ctx.report(d));
+            }
             ctx.addField(ref, {
               kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },
-              symbology: symbologyOf(m[4]), module: (+p[1] || 2) * ctx.dot, rotation: ROTATIONS[p[2]] ?? 0, height: +p[3] || 100,
+              symbology: symbologyOf(m[4]), module: (checked && DIGITS.test(p[1]) ? Math.min(MAX_MODULE, Math.max(1, +p[1])) : +p[1] || 2) * ctx.dot,
+              rotation: ROTATIONS[p[2]] ?? 0, height: checked ? drawnHeight(p[3]) : +p[3] || 100,
               // WPC types: the add-on is part of the type, the check digit option and the guard bar length (0.1 mm) are neutral fields
-              ...(wpc && { addon: wpc.addon, check: CHECK_OPTIONS[wpc.symbology][p[0]] ?? 'unsupported', guard: DIGITS.test(p[5]) ? +p[5] : 0 }),
+              ...(wpc && { addon: wpc.addon, check: CHECK_OPTIONS[wpc.symbology][p[0]] ?? 'unsupported', guard: DIGITS.test(p[5]) ? Math.min(MAX_GUARD, +p[5]) : 0 }),
               ...(symbologyOf(m[4]) === 'code93' && { check: CHECK_OPTIONS.code93[p[0]] ?? 'unsupported' }),
               native: { type: m[4], module: +p[1] || 2, ...((wpc || symbologyOf(m[4]) === 'code93') && { checkDigit: p[0] }) },
               ...counterFields(ctx, p[4], p[7]),
-              humanReadable: p[6] === '1', data: null,
+              humanReadable: p[6] === '1', data: inline == null ? null : fitBarcodeData(ctx, ref, 'barcode', inline),
             });
           },
         },
@@ -447,7 +540,7 @@
           reemit,
           fields: [
             symbologyField, checkField, addonField,
-            numberField('module', 'Módulo (puntos)', 1, 1, 99, item => item.native.module),
+            numberField('module', 'Módulo (puntos)', 1, 1, MAX_MODULE, item => item.native.module),
             barcodeHeight(3), rotationField(2), counterField(4, false), humanReadableField(5), zeroField(6),
           ],
         },

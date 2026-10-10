@@ -139,8 +139,8 @@
       return { bitmap: true, height: cellH * hMult, width: cellW * wMult, advance: (cellW + gap) * wMult, hMult, wMult };
     }
     if (height === null && width === null) [height, width] = [SCALABLE_DEFAULT.height, SCALABLE_DEFAULT.width];
-    const hh = clamp(Math.round(height !== null ? height : width), 1, MAX_DOTS);
-    const ww = clamp(Math.round(width !== null ? width : height), 1, MAX_DOTS);
+    const hh = clamp(Math.round(height !== null ? height : width), MIN_SCALABLE, MAX_DOTS);
+    const ww = clamp(Math.round(width !== null ? width : height), MIN_SCALABLE, MAX_DOTS);
     return { bitmap: false, height: hh, width: ww, advance: ww * SCALABLE_ADVANCE, hMult: null, wMult: null };
   }
 
@@ -220,7 +220,7 @@
     const {
       sourceOf, int, ROTATIONS, rotationOf, orientationOf, exactDots, roundDots, dataCommands, fo, ft,
       numberField, stringSelectField, contentField, serialFields, insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots, reverseField,
-      paramField, argEdit, flagEdits,
+      paramField, argEdit, flagEdits, fitCoord,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -266,13 +266,16 @@
       const b = item.block;
       const lines = Number.isInteger(b.lines) && b.lines > 0 ? b.lines : Math.max(1, PB.slices.text.wrapBlock(item.data, b, item.font).lines.length);
       const fb = item.native && item.native.fb;
-      return {
-        width: clamp(roundDots(exactDots(ctx, b.width)), 1, MAX_FB),
-        lines: clamp(lines, 1, MAX_FB),
-        space: clamp(roundDots(exactDots(ctx, b.lineSpace || 0)), -MAX_FB, MAX_FB),
-        letter: Object.keys(BLOCK_ALIGN).find(k => BLOCK_ALIGN[k] === b.align) || 'L',
-        indent: fb && Number.isInteger(fb.indent) ? clamp(fb.indent, 0, MAX_FB) : 0,
+      const wanted = {
+        width: roundDots(exactDots(ctx, b.width)), lines, space: roundDots(exactDots(ctx, b.lineSpace || 0)), indent: fb && Number.isInteger(fb.indent) ? fb.indent : 0,
       };
+      const fixed = {
+        width: clamp(wanted.width, 1, MAX_FB), lines: clamp(wanted.lines, 1, MAX_FB), space: clamp(wanted.space, -MAX_FB, MAX_FB), indent: clamp(wanted.indent, 0, MAX_FB),
+      };
+      if (Object.keys(fixed).some(k => fixed[k] !== wanted[k])) {
+        ctx.once('zpl-fb-range', () => diag.warning('Hay bloques de texto fuera de los rangos de ^FB (ancho 1..9999, líneas 1..9999, interlineado -9999..9999, sangría 0..9999 puntos): se ajustan al límite'));
+      }
+      return { ...fixed, letter: Object.keys(BLOCK_ALIGN).find(k => BLOCK_ALIGN[k] === b.align) || 'L' };
     }
 
     /**
@@ -328,11 +331,11 @@
       let origin;
       if (fromFo) {
         const off = baselineOffset(degrees, cell.height, fb ? fb.width : lengthOf(item.data, cell.advance), name);
-        origin = `^FO${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
+        origin = `^FO${fitCoord(ctx, baseline.x - off.x)},${fitCoord(ctx, baseline.y - off.y)}`;
       } else if (fb) {
         // ^FT is the baseline of the last possible line: (lines - 1) pitches along the lines after the first baseline
         const off = lastLineOffset(degrees, fb.lines, cell.height + fb.space);
-        origin = `^FT${Math.max(0, baseline.x - off.x)},${Math.max(0, baseline.y - off.y)}`;
+        origin = `^FT${fitCoord(ctx, baseline.x - off.x)},${fitCoord(ctx, baseline.y - off.y)}`;
       } else {
         origin = ft(ctx, item.x || 0, item.y || 0);
       }
@@ -352,13 +355,19 @@
       const cmd = field.block;
       const arg = i => (cmd.args[i] && cmd.args[i].raw !== '' ? cmd.args[i] : null);
       const width = arg(0) ? int(arg(0)) : 0;
+      // Out of range or not a whole number: reported with the range, drawn at the nearest limit (see below); the field keeps what was written
+      [['ancho', 0, 0, MAX_FB, ' puntos'], ['líneas', 1, 1, MAX_FB, ''], ['interlineado', 2, -MAX_FB, MAX_FB, ' puntos'], ['sangría', 4, 0, MAX_FB, ' puntos']].forEach(([label, i, min, max, unit]) => {
+        const a = arg(i);
+        const v = a ? int(a) : null;
+        if (a && (v === null || v < min || v > max)) ctx.report(diag.warning(`^FB: ${label} "${a.raw.slice(0, 20)}" fuera de ${min}..${max}${unit} o no es un número entero`));
+      });
       if (!(width > 0)) {
         ctx.once('zpl-fb-width', () => diag.info('^FB sin ancho válido (0 o no numérico): la impresora no imprime el texto, el visor lo dibuja como una línea de texto'));
         return null;
       }
       const whole = (i, def, min, max) => { const v = arg(i) ? int(arg(i)) : null; return v === null ? def : clamp(v, min, max); };
       const letter = arg(3) ? arg(3).raw.toUpperCase() : 'L';
-      if (!(letter in BLOCK_ALIGN)) ctx.once('zpl-fb-align', () => diag.info('^FB: justificación no válida (L, C, R o J), se dibuja a la izquierda'));
+      if (!(letter in BLOCK_ALIGN)) ctx.once('zpl-fb-align', () => diag.warning('^FB: justificación no válida (L, C, R o J), se dibuja a la izquierda'));
       if (field.serial) ctx.once('zpl-fb-sn', () => diag.info('^FB con ^SN: la guía dice que el campo no se imprime; el visor lo dibuja con el valor inicial'));
       return {
         width: Math.min(width, MAX_FB), lines: whole(1, 1, 1, MAX_FB), space: whole(2, 0, -MAX_FB, MAX_FB), indent: whole(4, 0, 0, MAX_FB),
@@ -401,10 +410,36 @@
       };
     }
 
+    /**
+     * The h and w of an ^A against the guide (Volume One, page 13; Volume Two, page 63): a scalable font takes 0 (the standard) or 10..32000 dots, a bitmapped
+     * one a whole multiple (1..10 times) of its matrix. A value outside is reported with the valid ones; cellOf draws it at the nearest valid size and the
+     * item keeps what was written (native.height / native.width).
+     */
+    function checkSizes(ctx, cmd, name) {
+      const matrix = fontsOf(ctx.dpi)[name];
+      [['alto', 1, 0], ['ancho', 2, 1]].forEach(([label, i, k]) => {
+        const a = cmd.args[i];
+        if (!a || a.raw === '') return;
+        const v = int(a);
+        if (v === 0) return;
+        const shown = `^A: ${label} "${a.raw.slice(0, 20)}"`;
+        if (matrix) {
+          const std = matrix[k];
+          const nearest = v !== null && v > 0 ? clamp(Math.round(v / std), 1, MAX_MULTIPLIER) * std : null;
+          if (v !== null && v === nearest) return;
+          ctx.report(diag.warning(`${shown} no es un múltiplo entero de 1 a ${MAX_MULTIPLIER} veces la matriz de la fuente ${name} (${std} puntos), ${nearest ? `se dibuja con ${nearest}` : 'se usa el tamaño estándar'}`));
+        } else if (v === null || v < MIN_SCALABLE || v > MAX_DOTS) {
+          ctx.report(diag.warning(`${shown} fuera de 0 (tamaño estándar) o ${MIN_SCALABLE}..${MAX_DOTS} puntos, ${v !== null && v > 0 ? `se dibuja con ${clamp(v, MIN_SCALABLE, MAX_DOTS)}` : 'se usa el tamaño estándar'}`));
+        }
+      });
+    }
+
     /** ^Afo,h,w: the font letter and the orientation are glued in the first argument; what is missing comes from ^CF / ^FW. */
     function readA(ctx, cmd) {
       const raw = cmd.args[0] ? cmd.args[0].raw : '';
       const fontArg = /^[A-Za-z0-9]/.test(raw) ? raw[0].toUpperCase() : null;
+      if (raw !== '' && fontArg === null) ctx.report(diag.warning(`^A: fuente "${raw.slice(0, 10)}" no válida (A..Z o 0..9), se usa la fuente por defecto`));
+      checkSizes(ctx, cmd, fontArg || ctx.font.name);
       let rotation = rotationOf(ctx.orientation);
       let orientationArg = null;
       if (raw.length > 1) {
@@ -419,7 +454,32 @@
     // Edit
 
     const rotationOptions = ROTATIONS.map(value => ({ value, label: `${value}°` }));
-    const sizeField = (key, label, arg) => numberField(key, label, 'A', arg, 0, MAX_DOTS, item => (item.native && item.native[key] != null ? item.native[key] : undefined));
+    /**
+     * A size of ^A in dots: 0 (the standard) up to 32000. What is written is a valid size of the font in force (the one the same edit sets, or the
+     * field's): a scalable font takes 0 or 10..32000, a bitmapped one 0 or a whole multiple (1..10 times) of its matrix at the resolution.
+     */
+    function sizeField(key, label, arg) {
+      const field = paramField({
+        key, label, type: 'number', cmd: 'A', arg, min: 0, max: MAX_DOTS, step: 1,
+        read: raw => (INTEGER.test(raw) ? Number(raw) : undefined),
+        write: v => (typeof v === 'number' && Number.isFinite(v) ? String(Math.round(v)) : null),
+        model: item => (item.native && item.native[key] != null ? item.native[key] : undefined),
+      });
+      return {
+        ...field,
+        edits(text, found, item, value, opts) {
+          if (typeof value !== 'number' || !Number.isFinite(value)) return null;
+          const a = found.field.find('A');
+          const letter = (opts && opts.changes && typeof opts.changes.font === 'string' ? opts.changes.font : a && a.args[0] ? a.args[0].raw[0] : '').toUpperCase();
+          const matrix = fontsOf((opts && opts.dpi) || PB.config.resolutions[0])[letter];
+          const whole = Math.round(value);
+          let snapped = clamp(whole, 0, MAX_DOTS);
+          if (matrix) snapped = whole <= 0 ? 0 : clamp(Math.round(whole / matrix[arg - 1]), 1, MAX_MULTIPLIER) * matrix[arg - 1];
+          else if (snapped > 0) snapped = clamp(snapped, MIN_SCALABLE, MAX_DOTS);
+          return field.edits(text, found, item, snapped);
+        },
+      };
+    }
 
     /** The font letter and the orientation share the first argument of ^A: each field rewrites only its character. */
     const fontField = {

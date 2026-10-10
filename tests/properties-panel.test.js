@@ -115,3 +115,27 @@ test('radio fields: the panel renders one radio input per option in a group, che
     if (saved) Object.defineProperty(globalThis, 'document', saved); else delete globalThis.document;
   }
 });
+
+// V15: a number typed in the panel that the app had to adjust is always reported
+test('adjustmentNotice: a value clamped to the maximum reports the range and the value used', () => {
+  const field = { type: 'number', label: 'Grosor', min: 1, max: 99, value: 99 };
+  const notice = PB.ui.adjustmentNotice(field, 150, 99);
+  assert.equal(notice.level, 'warning');
+  assert.match(notice.text, /Grosor: 150 está fuera del rango 1\.\.99; se usa 99/);
+});
+
+test('adjustmentNotice: a value clamped to the minimum, and a rounded one, are reported', () => {
+  assert.match(PB.ui.adjustmentNotice({ type: 'number', label: 'Ancho', min: 1, max: 9999 }, -5, 1).text, /-5 está fuera del rango 1\.\.9999; se usa 1/);
+  assert.match(PB.ui.adjustmentNotice({ type: 'number', label: 'Ancho', min: 1, max: 9999 }, 2.6, 3).text, /Ancho: 2\.6 se ajusta a 3/);
+});
+
+test('adjustmentNotice: nothing is reported when the value was kept, or the field is not a number', () => {
+  assert.equal(PB.ui.adjustmentNotice({ type: 'number', label: 'X', min: 0, max: 10 }, 5, 5), null);
+  assert.equal(PB.ui.adjustmentNotice({ type: 'number', label: 'X', min: 0, max: 10 }, 5, 5.0000000001), null);
+  assert.equal(PB.ui.adjustmentNotice({ type: 'select', label: 'X' }, 5, 6), null);
+  assert.equal(PB.ui.adjustmentNotice({ type: 'number', label: 'X' }, 5, undefined), null);
+});
+
+test('adjustmentNotice: a field without a range still says what was used', () => {
+  assert.match(PB.ui.adjustmentNotice({ type: 'number', label: 'X' }, 5, 7).text, /X: 5 se ajusta a 7/);
+});

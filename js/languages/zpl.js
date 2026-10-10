@@ -77,11 +77,16 @@
  *
  * ---- Not drawn / not verified ----------------------------------------------------------------------------------------------------
  * ^PO I (inverted 180) is reported and not applied. ^FO's third parameter (justification, later guides) is accepted and ignored. ^LS / ^LT
- * are applied as the guide describes (shift left / label top), not verified. The ^PW / ^LL size is rounded to 0.1 mm. The configuration commands
+ * are applied as the guide describes (shift left / label top), not verified. The ^PW / ^LL size is rounded to 0.1 mm. Ranges of the guide (V9):
+ * ^PW 2..32000, ^LL 1..32000, ^FO / ^FT 0..32000, ^LH 0..32000, ^LS -9999..9999, ^LT -120..120: a value outside is read as written (native), drawn at the
+ * nearest limit and reported with the range; the emit and the Formato row (fitSize / sizeLimitsFor) limit what they write and report it once. The configuration commands
  * of CONFIG_NAMES (^MM ^MN ^MT ^PR ~SD ^MD ^PM ^PQ ...) are listed in one info per label. Character set: the guide's ^CI table is about code
  * pages (default 0, USA 1; 13 = CP850); it does not mention UTF-8, so the viewer reads and writes the text as UTF-8 (the app decodes files
  * that way) and a non-ASCII emit reports one info. ^CC / ^CT / ^CD prefix changes are read by the tokenizer but the emitter always writes
  * the standard prefixes and never escapes the changed ones.
+ * Text ranges (V10): ^A h, w 0 (standard) or 10..32000 dots for a scalable font, whole multiples (1..10) of the matrix for a bitmapped one; ^CF f A..Z 0..9, h, w
+ * 0..32000; ^FW N R I B; ^FB a 0..9999, b 1..9999, c -9999..9999, d L C R J, e 0..9999; ^FD / ^FV up to 3072 characters; ^FN 0..9999; ^SN 12 digits indexed.
+ * Typed values outside are read as written, drawn at the nearest valid one and reported; the emit cuts / limits what it writes and reports it once.
  */
 (function (PB) {
   'use strict';
@@ -91,6 +96,21 @@
   /** Valid ZPL orientations and their rotation in degrees, clockwise (the guide: N normal, R rotated 90, I inverted 180, B bottom-up 270). */
   const ORIENTATIONS = Object.freeze({ N: 0, R: 90, I: 180, B: 270 });
   const ROTATIONS = Object.freeze([0, 90, 180, 270]);
+
+  /**
+   * Ranges of the guide (Volume One, 2003) for the label setup, in dots: ^PW 2 .. the width of the label (printer dependent: 32000 is the widest this
+   * viewer accepts), ^LL 1 .. 32000, the origin of a field (^FO / ^FT) 0 .. 32000. Out of range: read as written (native), drawn and written at the nearest limit.
+   */
+  const PW_RANGE = Object.freeze([2, 32000]);
+  const LL_RANGE = Object.freeze([1, 32000]);
+  const COORD_RANGE = Object.freeze([0, zplEdit.COORD_MAX]);
+  /** ^BYw,r,h (V1 4302+; V2 3941+ lists the height as 1..9999, the bar codes themselves take 1..32000 and "the value set by ^BY"). */
+  const BY_MODULE_RANGE = Object.freeze([1, 10]);
+  const BY_RATIO_RANGE = Object.freeze([2, 3]);
+  const BY_HEIGHT_RANGE = Object.freeze([1, 32000]);
+  const rangeText = ([min, max]) => `${min}..${max}`;
+  const limit = (v, [min, max]) => Math.min(max, Math.max(min, v));
+  const COORD_NOTE = `Hay campos con una posición fuera de ${rangeText(COORD_RANGE)} puntos (^FO / ^FT): ZPL no admite coordenadas negativas ni mayores, se escriben en el límite`;
 
   /** Names of the printer configuration commands that are recognised and not drawn (either prefix). FA (field allocate, Volume Two page 43) only reserves memory. */
   const CONFIG_NAMES = Object.freeze([
@@ -278,9 +298,17 @@
     return zplEdit.encodeData(value);
   }
 
+  /** Data cut to the 3072 characters of ^FD / ^FV (the guide gives no behaviour for more; one warning per emit). */
+  function fitData(ctx, data) {
+    const text = data == null ? '' : String(data);
+    if (text.length <= zplEdit.MAX_DATA) return text;
+    ctx.once('zpl-data-length', () => diag.warning(`Hay datos de más de ${zplEdit.MAX_DATA} caracteres (máximo de ^FD / ^FV): se cortan al límite`));
+    return text.slice(0, zplEdit.MAX_DATA);
+  }
+
   /** The data command of a field: "^FDtext" or "^FH^FDa_5Eb" when the text needs the hex escapes (tag: 'FD' or 'FV'). */
   function fieldData(ctx, data, tag = 'FD') {
-    const { hex, text } = safeData(ctx, data);
+    const { hex, text } = safeData(ctx, fitData(ctx, data));
     return `${hex ? '^FH' : ''}^${tag}${text}`;
   }
 
@@ -296,7 +324,7 @@
    *   - anything else: ^FD (or ^FH^FD when the data needs the hex escapes). A zero suppression without a counter has no ZPL form (info).
    */
   function dataCommands(ctx, item, data = item.data) {
-    const text = data == null ? '' : String(data);
+    const text = fitData(ctx, data);
     const fn = item.native && item.native.fn;
     if (fn && item.data === `<#FN${fn.n}#>`) {
       return `^FN${fn.n}${typeof fn.prompt === 'string' ? `"${fn.prompt}"` : ''}${fn.default === undefined ? '' : fieldData(ctx, fn.default)}`;
@@ -323,9 +351,19 @@
     return `^SN${text},${step},${item.zeroSuppress > 0 ? 'N' : 'Y'}`;
   }
 
-  /** ^FOx,y / ^FTx,y for a position in 0.1 mm (never below 0). */
-  const fo = (ctx, x, y) => `^FO${toDots(ctx, x)},${toDots(ctx, y)}`;
-  const ft = (ctx, x, y) => `^FT${toDots(ctx, x)},${toDots(ctx, y)}`;
+  /** A coordinate in dots limited to the origin range 0..32000 of ^FO / ^FT; one warning per emit when it had to change. */
+  function fitCoord(ctx, dots) {
+    const fixed = limit(Number.isFinite(dots) ? dots : 0, COORD_RANGE);
+    if (fixed !== dots) ctx.once('zpl-coordinate', () => diag.warning(COORD_NOTE));
+    return fixed;
+  }
+
+  /** 0.1 mm -> whole dots of a field origin (see fitCoord). */
+  const coordDots = (ctx, mm10) => fitCoord(ctx, roundDots(exactDots(ctx, Number.isFinite(mm10) ? mm10 : 0)));
+
+  /** ^FOx,y / ^FTx,y for a position in 0.1 mm (limited to 0..32000, reported once). */
+  const fo = (ctx, x, y) => `^FO${coordDots(ctx, x)},${coordDots(ctx, y)}`;
+  const ft = (ctx, x, y) => `^FT${coordDots(ctx, x)},${coordDots(ctx, y)}`;
 
   // ---------------------------------------------------------------------------------------------------------------
   // Helpers of the palette `build` hooks
@@ -358,7 +396,12 @@
    */
   function byValues(cmd) {
     const [w, r, h] = [int(cmd.args[0]), num(cmd.args[1]), int(cmd.args[2])];
-    const out = { module: w !== null && w >= 1 && w <= 10 ? w : undefined, ratio: r !== null && r >= 2 && r <= 3 ? r : undefined, height: h !== null && h >= 1 ? h : undefined };
+    // A number out of range is applied at the nearest limit (the ratio also rounded to 0.1); `limited` / the handler report it
+    const out = {
+      module: w !== null ? limit(w, BY_MODULE_RANGE) : undefined,
+      ratio: r !== null ? limit(Math.round(r * 10) / 10, BY_RATIO_RANGE) : undefined,
+      height: h !== null ? limit(h, BY_HEIGHT_RANGE) : undefined,
+    };
     out.invalid = cmd.args.some(a => a.raw !== '') && out.module === undefined && out.ratio === undefined && out.height === undefined;
     return out;
   }
@@ -367,7 +410,7 @@
   const SLICE_HELPERS = Object.freeze({
     commands, byValues, isImmediate: id => Boolean(handlerFor(id, true)), argEdit: zplEdit.argEdit,
     sourceOf, argValue, num, int, ROTATIONS, ORIENTATIONS, rotationOf, orientationOf,
-    roundDots, exactDots, toDots, safeData, fieldData, dataCommands, fo, ft,
+    roundDots, exactDots, toDots, fitCoord, coordDots, safeData, fieldData, dataCommands, fo, ft, limited, rangeText,
     insertCommand, freePlaceholder, itemRotation, dropDots, lengthDots,
     encodeData: zplEdit.encodeData, decodeData: zplEdit.decodeData,
     numberField: zplEdit.numberField, selectField: zplEdit.selectField, stringSelectField: zplEdit.stringSelectField,
@@ -379,20 +422,51 @@
   // Handlers of the setup commands (all immediate)
 
   const brief = cmd => cmd.raw.slice(0, 40);
-  const invalid = (ctx, label, cmd) => ctx.report(diag.warning(`${label} no válido: ${brief(cmd)}`));
+
+  /**
+   * Checks of the configuration commands the viewer ignores but whose values the guide ranges (Volume One, 2003): ^PQ quantity 1..99999999, pause
+   * 0..99999999 (0 = no pause), replicates 0..99999999, override Y | N; ^MD -30..30; ^PR speeds A..E and 2..12 (7 does not exist); ^PM Y | N.
+   * Each returns the problems as text (an omitted or empty argument takes its default and is fine).
+   */
+  const PQ_MAX = 99999999;
+  const PRINT_SPEEDS = /^(?:[A-E]|[2-6]|[8-9]|1[0-2])$/i;
+  const argText = (cmd, i) => (cmd.args[i] ? cmd.args[i].raw : '');
+  const wholeIn = (cmd, i, label, [min, max]) => {
+    const raw = argText(cmd, i);
+    if (raw === '') return [];
+    const v = int(cmd.args[i]);
+    return v !== null && v >= min && v <= max ? [] : [`${label} "${raw.slice(0, 20)}" fuera de ${rangeText([min, max])}`];
+  };
+  const CONFIG_CHECKS = Object.freeze({
+    PQ: cmd => [
+      ...wholeIn(cmd, 0, 'cantidad', [1, PQ_MAX]), ...wholeIn(cmd, 1, 'pausa', [0, PQ_MAX]), ...wholeIn(cmd, 2, 'réplicas', [0, PQ_MAX]),
+      ...(['', 'Y', 'N'].includes(argText(cmd, 3).toUpperCase()) ? [] : [`anulación de pausa "${argText(cmd, 3).slice(0, 10)}" no válida (Y o N)`]),
+    ],
+    MD: cmd => wholeIn(cmd, 0, 'oscuridad', [-30, 30]),
+    PR: cmd => [0, 1, 2].flatMap(i => (argText(cmd, i) === '' || PRINT_SPEEDS.test(argText(cmd, i)) ? [] : [`velocidad "${argText(cmd, i).slice(0, 10)}" no válida (A a E, 2 a 6, 8 a 12)`])),
+    PM: cmd => (['', 'Y', 'N'].includes(argText(cmd, 0).toUpperCase()) ? [] : [`valor "${argText(cmd, 0).slice(0, 10)}" no válido (Y o N)`]),
+  });
+  const invalid = (ctx, label, cmd, valid) => ctx.report(diag.warning(`${label} no válido: ${brief(cmd)}${valid ? ` (${valid})` : ''}`));
+
+  /** Reports a whole-number argument outside its range; returns it limited (the nearest valid value). */
+  function limited(ctx, cmd, label, v, range, unit = 'puntos') {
+    const fixed = limit(v, range);
+    if (fixed !== v) ctx.report(diag.warning(`${cmd.id}: ${label ? `${label} ` : ''}${v} fuera de ${rangeText(range)} ${unit}, se usa ${fixed}`));
+    return fixed;
+  }
 
   /** 0.1 mm of a number of dots, rounded to 0.1 mm (the neutral size is never finer than that). */
   const toTenthMm = (dots, dot) => Math.round(dots * dot + 1e-6);
 
   const HANDLERS = [
     {
-      // ^PWw: print width in dots (2 .. the label width)
+      // ^PWw: print width in dots (2 .. the label width): outside the range it is drawn at the nearest limit, native keeps what was written
       pattern: /^\^PW$/,
       immediate: true,
       handle(m, cmd, ctx) {
         const w = int(cmd.args[0]);
-        if (w === null || w < 2 || w > 32000) { invalid(ctx, '^PW', cmd); return; }
-        ctx.model.size.width = toTenthMm(w, ctx.dot);
+        if (w === null) { invalid(ctx, '^PW', cmd, `número entero de ${rangeText(PW_RANGE)} puntos`); return; }
+        ctx.model.size.width = toTenthMm(limited(ctx, cmd, 'ancho', w, PW_RANGE), ctx.dot);
         ctx.model.size.tolerance = ctx.dot;
         ctx.model.size.native.pw = w;
         ctx.model.size.native.pwRaw = cmd.raw;
@@ -404,8 +478,8 @@
       immediate: true,
       handle(m, cmd, ctx) {
         const l = int(cmd.args[0]);
-        if (l === null || l < 1 || l > 32000) { invalid(ctx, '^LL', cmd); return; }
-        ctx.model.size.height = toTenthMm(l, ctx.dot);
+        if (l === null) { invalid(ctx, '^LL', cmd, `número entero de ${rangeText(LL_RANGE)} puntos`); return; }
+        ctx.model.size.height = toTenthMm(limited(ctx, cmd, 'largo', l, LL_RANGE), ctx.dot);
         ctx.model.size.tolerance = ctx.dot;
         ctx.model.size.native.ll = l;
         ctx.model.size.native.llRaw = cmd.raw;
@@ -416,7 +490,12 @@
       pattern: /^\^(LH|LS|LT)$/,
       immediate: true,
       handle(m, cmd, ctx) {
-        if (ctx.offsets.feed(cmd) === false) invalid(ctx, `^${m[1]}`, cmd);
+        if (ctx.offsets.feed(cmd) === false) { invalid(ctx, `^${m[1]}`, cmd, m[1] === 'LH' ? 'x, y: números enteros de 0..32000 puntos' : `número entero de ${rangeText(zplEdit.OFFSET_LIMITS[m[1]])} puntos`); return; }
+        // A value outside the guide's range is applied at the nearest limit by the offsets (shared with the editing engines); say so
+        (m[1] === 'LH' ? [['x', 0], ['y', 1]] : [['', 0]]).forEach(([axis, i]) => {
+          const v = int(cmd.args[i]);
+          if (v !== null) limited(ctx, cmd, axis, v, zplEdit.OFFSET_LIMITS[m[1]]);
+        });
       },
     },
     {
@@ -438,10 +517,13 @@
       handle(m, cmd, ctx) {
         const name = cmd.args[0] && /^[A-Za-z0-9]$/.test(cmd.args[0].raw) ? cmd.args[0].raw.toUpperCase() : null;
         const [h, w] = [int(cmd.args[1]), int(cmd.args[2])];
-        if (name === null && h === null && w === null) {
-          if (cmd.args.some(a => a.raw !== '')) invalid(ctx, '^CF', cmd);
-          return;
-        }
+        // Guide (V1 4520+): font A..Z 0..9, height and width 0..32000 dots; a value outside is reported (the cells clamp it when they draw)
+        if (cmd.args[0] && cmd.args[0].raw !== '' && name === null) ctx.report(diag.warning(`^CF: fuente "${cmd.args[0].raw.slice(0, 10)}" no válida (A..Z o 0..9)`));
+        [['alto', 1, h], ['ancho', 2, w]].forEach(([label, i, v]) => {
+          const a = cmd.args[i];
+          if (a && a.raw !== '' && (v === null || v < 0 || v > zplEdit.COORD_MAX)) ctx.report(diag.warning(`^CF: ${label} "${a.raw.slice(0, 20)}" fuera de 0..32000 puntos o no es un número entero`));
+        });
+        if (name === null && h === null && w === null) return;
         const f = ctx.font;
         // explicit: a ^CF gave sizes, so an ^A of another font without sizes uses them (Volume Two, page 63); the power-up default A 9 x 5 does not
         ctx.font = {
@@ -459,7 +541,7 @@
       handle(m, cmd, ctx) {
         const r = cmd.args[0] ? cmd.args[0].raw.toUpperCase() : '';
         if (r === '') return;
-        if (rotationOf(r) === null) invalid(ctx, '^FW', cmd);
+        if (rotationOf(r) === null) invalid(ctx, '^FW', cmd, 'orientación N, R, I o B');
         else ctx.orientation = r;
       },
     },
@@ -469,7 +551,7 @@
       immediate: true,
       handle(m, cmd, ctx) {
         const a = int(cmd.args[0]);
-        if (a === null || a < 0 || a > 24) invalid(ctx, '^CI', cmd);
+        if (a === null || a < 0 || a > 24) invalid(ctx, '^CI', cmd, 'conjunto de caracteres 0..24');
         else ctx.charset = a;
       },
     },
@@ -479,7 +561,22 @@
       immediate: true,
       handle(m, cmd, ctx) {
         const v = byValues(cmd);
-        if (v.invalid) { invalid(ctx, '^BY', cmd); return; }
+        if (v.invalid) { invalid(ctx, '^BY', cmd, 'módulo 1..10, relación 2.0..3.0 y altura 1..32000, números'); return; }
+        // Out of range: applied at the nearest limit (byValues) and reported; not a number: ignored and reported
+        [['módulo', 0, BY_MODULE_RANGE, 'puntos'], ['altura', 2, BY_HEIGHT_RANGE, 'puntos']].forEach(([label, i, range, unit]) => {
+          const a = cmd.args[i];
+          if (!a || a.raw === '') return;
+          const n = int(a);
+          if (n === null) ctx.report(diag.warning(`^BY: ${label} "${a.raw.slice(0, 20)}" no es un número entero (${rangeText(range)} ${unit}), se ignora`));
+          else limited(ctx, cmd, label, n, range, unit);
+        });
+        const ratioArg = cmd.args[1];
+        if (ratioArg && ratioArg.raw !== '') {
+          const r = num(ratioArg);
+          if (r === null) ctx.report(diag.warning(`^BY: relación "${ratioArg.raw.slice(0, 20)}" no es un número (2.0..3.0 en pasos de 0.1), se ignora`));
+          else if (r < 2 || r > 3) ctx.report(diag.warning(`^BY: relación ${ratioArg.raw} fuera de 2.0..3.0, se usa ${limit(r, BY_RATIO_RANGE).toFixed(1)}`));
+          else if (Math.abs(Math.round(r * 10) / 10 - r) > 1e-9) ctx.report(diag.warning(`^BY: relación ${ratioArg.raw} no es múltiplo de 0.1 (2.0..3.0 en pasos de 0.1), se usa ${(Math.round(r * 10) / 10).toFixed(1)}`));
+        }
         ctx.by = { module: v.module ?? ctx.by.module, ratio: v.ratio ?? ctx.by.ratio, height: v.height ?? ctx.by.height };
       },
     },
@@ -510,7 +607,11 @@
       // Printer configuration: recognised, not drawn (one info per label lists them)
       pattern: new RegExp(`^[\\^~](?:${CONFIG_NAMES.join('|')})$`),
       immediate: true,
-      handle(m, cmd, ctx) { ctx.ignored.add(cmd.id); },
+      handle(m, cmd, ctx) {
+        ctx.ignored.add(cmd.id);
+        const check = cmd.control ? null : CONFIG_CHECKS[cmd.name];
+        if (check) for (const problem of check(cmd)) ctx.report(diag.warning(`${cmd.id}: ${problem}`));
+      },
     },
   ];
 
@@ -566,7 +667,8 @@
           this.once('zpl-no-origin', () => diag.info('Hay campos sin ^FO ni ^FT: se colocan en el origen de la etiqueta (0,0)'));
           return { ...this.pos(0, 0), kind: 'default' };
         }
-        return { ...this.pos(field.origin.x, field.origin.y), kind: field.origin.kind };
+        const at = v => limit(Math.round(v), COORD_RANGE); // ^FO / ^FT 0..32000 whole dots: the field.origin keeps what was written
+        return { ...this.pos(at(field.origin.x), at(field.origin.y)), kind: field.origin.kind };
       },
     };
   }
@@ -600,7 +702,9 @@
       const a = cmd.args[i];
       if (!a || a.raw === '') return 0;
       const v = num(a);
-      if (v === null) { invalid(ctx, `^${cmd.name}`, cmd); return 0; }
+      if (v === null) { invalid(ctx, `^${cmd.name}`, cmd, `x, y: números enteros de ${rangeText(COORD_RANGE)} puntos`); return 0; }
+      const fixed = limit(Math.round(v), COORD_RANGE);
+      if (fixed !== v) ctx.report(diag.warning(`${cmd.id}: ${i === 0 ? 'x' : 'y'} ${a.raw.slice(0, 20)} no es un número entero de ${rangeText(COORD_RANGE)} puntos, se usa ${fixed}`));
       return v;
     });
     field.origin = { cmd, kind: cmd.name, x, y };
@@ -661,6 +765,7 @@
   function readSerial(ctx, cmd) {
     const [a, b, c] = [0, 1, 2].map(i => cmd.args[i]);
     const start = a && a.raw !== '' ? a.raw : '1';
+    if (/\d{13}/.test(start)) ctx.report(diag.warning(`^SN: el valor inicial tiene más de 12 dígitos seguidos, solo se incrementan los 12 de la derecha`));
     let step = 1;
     if (b && b.raw !== '') {
       const n = int(b);
@@ -682,7 +787,7 @@
   function readFn(ctx, cmd) {
     const m = /^\s*(\d*)\s*(?:"([^"]*)")?\s*$/.exec(cmd.raw.slice(1 + cmd.name.length));
     const n = m ? (m[1] === '' ? 0 : Number(m[1])) : NaN;
-    if (!m || n > FN_MAX) { invalid(ctx, '^FN', cmd); return null; }
+    if (!m || n > FN_MAX) { invalid(ctx, '^FN', cmd, `número de campo 0..${FN_MAX}`); return null; }
     return { cmd, n, prompt: m[2] };
   }
 
@@ -737,6 +842,7 @@
       if (id === '^FR') field.reverse = true;
       else if (id === '^FB') field.block = cmd;
       else if (cmd.data) {
+        if ((id === '^FD' || id === '^FV') && cmd.args[0].raw.length > zplEdit.MAX_DATA) ctx.report(diag.warning(`${id}: ${cmd.args[0].raw.length} caracteres, la guía admite hasta ${zplEdit.MAX_DATA}`));
         field.data = { cmd, kind: cmd.name, value: cmd.args[0].value, raw: cmd.args[0].raw, start: cmd.args[0].start, end: cmd.args[0].end, hex: !!cmd.hex };
         field.serial = null;
       } else if (id === '^FN') field.fn = readFn(ctx, cmd);
@@ -804,14 +910,21 @@
   // ---------------------------------------------------------------------------------------------------------------
   // Emit: neutral model -> ZPL text
 
+  /** Width or length in dots limited to its range, with one warning (naming the command and the range) when it had to change. */
+  function fitLength(ctx, dots, range, command, label) {
+    const fixed = limit(dots, range);
+    if (fixed !== dots) ctx.report(diag.warning(`El ${label} de la etiqueta (${dots} puntos) está fuera del rango de ${command} de ZPL (${rangeText(range)}), se escribe ${fixed}`));
+    return fixed;
+  }
+
   /** ^XA, then ^PW and ^LL when the model knows the size (else omitted with a warning). ^LH is never written: the parser folds it into the coordinates. */
   function headerLines(model, ctx) {
     const size = (model && model.size) || {};
     const out = ['^XA'];
     const width = Number.isFinite(size.width);
     const height = Number.isFinite(size.height);
-    if (width) out.push(`^PW${Math.max(1, roundDots(exactDots(ctx, size.width)))}`);
-    if (height) out.push(`^LL${Math.max(1, roundDots(exactDots(ctx, size.height)))}`);
+    if (width) out.push(`^PW${fitLength(ctx, roundDots(exactDots(ctx, size.width)), PW_RANGE, '^PW', 'ancho')}`);
+    if (height) out.push(`^LL${fitLength(ctx, roundDots(exactDots(ctx, size.height)), LL_RANGE, '^LL', 'largo')}`);
     if (!width || !height) ctx.report(diag.warning('La etiqueta no declara su tamaño: no se escribe ^PW / ^LL, indique el tamaño antes de exportar'));
     // ^POI (printed rotated 180 degrees) is written back as it was read; a TSPL DIRECTION 0 has no ZPL counterpart here and is reported
     const native = size.native || {};
@@ -838,10 +951,40 @@
   // ---------------------------------------------------------------------------------------------------------------
   // Size writing: resolved size (0.1 mm: { w, h, p, dpi? }) -> ^PW / ^LL
 
-  /** ^PW and ^LL in dots at size.dpi (the app adds the resolution to the size it hands over; the first configured one otherwise). */
-  function sizeCommands(size) {
+  /**
+   * Widest label the Formato row offers (0.1 mm): 32000 dots at the resolution. { width, height: [min, max] } with the generic 5 mm minimum
+   * (^PW 2 dots and ^LL 1 dot are valid but not a label). The static `sizeLimits` are the widest of the configured resolutions.
+   */
+  const sizeLimitsFor = dpi => {
+    const max = Math.round(PW_RANGE[1] * units.dotSize(dpi || PB.config.resolutions[0]));
+    return { width: [50, max], height: [50, max] };
+  };
+  const SIZE_LIMITS = sizeLimitsFor(Math.min(...PB.config.resolutions));
+
+  /**
+   * Resolved size (0.1 mm: w, h, p; dpi when the app adds it) with the width and the length limited to ^PW 2..32000 and ^LL 1..32000 dots at that
+   * resolution: { size, diagnostics } (one warning when something changed). Used by the Formato row (PB.sizes.apply) and by sizeCommands.
+   */
+  function fitSize(size) {
     const dot = units.dotSize(size.dpi || PB.config.resolutions[0]);
-    return [`^PW${Math.max(1, roundDots(size.w / dot))}`, `^LL${Math.max(1, roundDots(size.h / dot))}`];
+    const fit = (mm10, range) => {
+      if (!Number.isFinite(mm10)) return mm10;
+      const dots = roundDots(mm10 / dot);
+      return limit(dots, range) === dots ? mm10 : limit(dots, range) * dot;
+    };
+    const [w, h] = [fit(size.w, PW_RANGE), fit(size.h, LL_RANGE)];
+    if (w === size.w && h === size.h) return { size, diagnostics: [] };
+    return {
+      size: { ...size, w, h },
+      diagnostics: [diag.warning(`El tamaño de la etiqueta se ajusta a los rangos de ZPL (^PW ${rangeText(PW_RANGE)} puntos, ^LL ${rangeText(LL_RANGE)} puntos)`)],
+    };
+  }
+
+  /** ^PW and ^LL in dots at size.dpi (the app adds the resolution to the size it hands over; the first configured one otherwise), within the ranges. */
+  function sizeCommands(wanted) {
+    const size = fitSize(wanted).size;
+    const dot = units.dotSize(size.dpi || PB.config.resolutions[0]);
+    return [`^PW${limit(roundDots(size.w / dot), PW_RANGE)}`, `^LL${limit(roundDots(size.h / dot), LL_RANGE)}`];
   }
 
   /**
@@ -913,6 +1056,14 @@
   /** Tokenizer and driver, exposed for the slices' tests and the app. */
   PB.zpl = Object.freeze({ commands, run, createContext, SLICE_HELPERS, CONFIG_NAMES });
 
+  /** Why a w x h dots picture cannot be a ^GF command (1..99999 bytes of image), or null when it fits. */
+  function imageSizeProblem(w, h) {
+    const image = PB.slices.image.zpl;
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) return `${w}×${h} puntos no es un tamaño de imagen válido`;
+    if (image.totalBytes({ w, h }) > image.MAX_BYTES) return `${w}×${h} puntos supera el máximo de ^GF (bytes de imagen 1..${image.MAX_BYTES}: total, bytes enviados y bytes por fila)`;
+    return null;
+  }
+
   /**
    * ^FO..^GFA..^FS for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral bitmap, 1 = black; dpi), ready for
    * insertCommand. A bitmap over the 99999 bytes of ^GF is refused with an error (the app shows it as the reason the image was not inserted).
@@ -920,21 +1071,24 @@
   function imageCommand({ xMm, yMm, w, h, data, dpi }) {
     const image = PB.slices.image.zpl;
     const bitmap = { w, h, data };
-    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) throw new Error(`${w}×${h} puntos no es un tamaño de imagen válido`);
-    if (image.totalBytes(bitmap) > image.MAX_BYTES) {
-      throw new Error(`${w}×${h} puntos supera el máximo de ^GF (${image.MAX_BYTES} bytes de imagen)`);
-    }
-    const dots = mm => {
+    const problem = imageSizeProblem(w, h);
+    if (problem) throw new Error(problem);
+    if (!data || data.length !== w * h) throw new Error(`los datos de la imagen no son de w×h puntos (${w}×${h})`);
+    // ^FO takes 0..32000 dots (vol 1 5907+): a position outside it is refused, never moved silently
+    const dots = (mm, name) => {
       const tenths = units.fromMm(mm);
-      return Number.isFinite(tenths) ? Math.max(0, roundDots(tenths / units.dotSize(dpi))) : 0;
+      if (!Number.isFinite(tenths)) return 0;
+      const value = roundDots(tenths / units.dotSize(dpi));
+      if (value < 0 || value > zplEdit.COORD_MAX) throw new Error(`la posición ${name} (${value} puntos) debe estar en ${rangeText(COORD_RANGE)} puntos (^FO)`);
+      return value;
     };
-    return image.graphicField(dots(xMm), dots(yMm), bitmap);
+    return image.graphicField(dots(xMm, 'X'), dots(yMm, 'Y'), bitmap);
   }
 
   // UTF-8 (the default): see the note on ^CI in the header. The ^GF data is ASCII hexadecimal, so the file stays plain text.
   PB.languages.register({
-    id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize,
-    insertCommand, insertImage: true, imageCommand, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
+    id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize, fitSize, sizeLimits: SIZE_LIMITS, sizeLimitsFor,
+    insertCommand, insertImage: true, imageCommand, imageSizeProblem, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

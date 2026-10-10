@@ -42,7 +42,7 @@ for (const [dpi, table] of [[203, M203], [300, M300], [254, M203], [600, M203]])
 }
 
 test('the fonts P..V are letter fonts of the manual: read mono with no "no definition" information; GS and the digits still are not', () => {
-  for (const name of 'PQRSTUV') assert.deepEqual(parseAt(`^FT10,10^A${name}N,30,30^FDx^FS`, 254).diagnostics, [], name);
+  for (const name of 'PQRSTUV') assert.deepEqual(parseAt(`^FT10,10^A${name}N^FDx^FS`, 254).diagnostics, [], name);
   const gs = parseAt('^FT10,10^A5N,30,30^FDx^FS', 254);
   assert.deepEqual(gs.diagnostics.map(d => d.level), ['info']);
 });

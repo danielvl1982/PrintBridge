@@ -13,6 +13,8 @@
   PB.slices = PB.slices || {};
   PB.slices.line = PB.slices.line || {};
 
+  const { diagnostics: diag } = PB;
+
   /** Line size in 0.1 mm: [width, height]. */
   const SIZE = Object.freeze([400, 0]);
 
@@ -78,7 +80,8 @@
   });
 
   function tpcl(helpers) {
-    const { sourceOf, numberField, MAX_COORD } = helpers;
+    const { sourceOf, numberField, coordDigitsWarning, MAX_COORD } = helpers;
+    const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
     const baseFields = [
       numberField('x2', 'Final X (0,1 mm)', 1, 0, MAX_COORD, item => item.x2),
       numberField('y2', 'Final Y (0,1 mm)', 2, 0, MAX_COORD, item => item.y2),
@@ -86,7 +89,7 @@
       {
         key: 'rect', label: 'Tipo', type: 'select', group: 3, model: item => (item.rect ? 'box' : 'line'),
         options: [{ value: 'line', label: 'Línea' }, { value: 'box', label: 'Caja' }],
-        read: raw => (raw === '0' ? 'line' : 'box'),
+        read: raw => (raw === '0' || raw === '2' ? 'line' : 'box'),
         write: v => (v === 'line' ? '0' : v === 'box' ? '1' : null),
       },
     ];
@@ -96,9 +99,20 @@
         // Line or rectangle: LC;x1,y1,x2,y2,<0 line | 1 rectangle>,<thickness in dots>
         pattern: /^LC;(\d+),(\d+),(\d+),(\d+),(\d),(\d+)(?:,(\d+))?/,
         handle(m, cmd, ctx) {
-          const rect = m[5] !== '0';
+          // Types (B-452-R, B-452-TS12): 0 line, 1 rectangle, 2 dashed line, 3 dashed rectangle. Beyond 3 the nearest valid one (3) is drawn
+          const type = +m[5];
+          const rect = type === 1 || type >= 3;
+          const thickness = clampInt(+m[6], 1, MAX_THICKNESS);
+          const coords = coordDigitsWarning('LC', [['x1', m[1]], ['y1', m[2]], ['x2', m[3]], ['y2', m[4]]]);
+          if (coords) ctx.report(coords);
+          if (type > 3) ctx.report(diag.warning(`LC: tipo ${m[5]} fuera de 0..3: se dibuja como 3 (rectángulo discontinuo), la impresora puede no aceptarlo`));
+          else if (type === 2) ctx.report(diag.info('LC: tipo 2 (línea discontinua): el visor la dibuja continua, la impresora salta puntos'));
+          else if (type === 3) ctx.report(diag.info('LC: tipo 3 (rectángulo con líneas discontinuas): el visor lo dibuja continuo, la impresora salta puntos'));
+          // 1 to 9 or 01 to 99 dots: the value as written is kept, 0 and more than 99 are drawn as the nearest valid thickness
+          if (m[6].length > 2 || +m[6] < 1 || +m[6] > MAX_THICKNESS) ctx.report(diag.warning(`LC: grosor ${m[6]} fuera de 1..${MAX_THICKNESS} (puntos, 1 o 2 dígitos): se dibuja con ${thickness}, la impresora puede no aceptarlo`));
+          if (m[7] !== undefined && m[7].length !== 3) ctx.report(diag.warning(`LC: radio "${m[7]}" debe llevar 3 dígitos (0,1 mm): la impresora puede no aceptarlo`));
           const item = {
-            kind: 'line', ref: 'LC', source: sourceOf(cmd), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4], rect, width: +m[6] * ctx.dot, native: { width: +m[6] },
+            kind: 'line', ref: 'LC', source: sourceOf(cmd), x1: +m[1], y1: +m[2], x2: +m[3], y2: +m[4], rect, width: thickness * ctx.dot, native: { width: +m[6], type },
           };
           // Rounded corners: rectangles only (0.1 mm already); a radius on a line is ignored
           if (rect && m[7] !== undefined) { item.radius = +m[7]; item.native.radius = +m[7]; }

@@ -93,7 +93,10 @@ test('optional parameters in any order and subset', () => {
   assert.deepEqual(one(qr('X', { extra: 'J2,M1,' })).native, { cell: 4, mode: 'A', rotation: 0, model: 1, justification: 2 });
   assert.deepEqual(one(qr('X', { extra: 'S3,' })).native, { cell: 4, mode: 'A', rotation: 0, mask: 3 });
   assert.equal(one(qr('X', { extra: 'Q9,Z,' })).data, 'X');
-  assert.equal(parse(qr('X', { extra: 'Q9,' })).diagnostics.length, 0);
+  // V7: an unknown optional parameter is ignored but now reported
+  const unknown = parse(qr('X', { extra: 'Q9,' })).diagnostics;
+  assert.equal(unknown.length, 1);
+  assert.match(unknown[0].text, /Q9/);
 });
 
 test('mode M is not confused with the model option M2', () => {

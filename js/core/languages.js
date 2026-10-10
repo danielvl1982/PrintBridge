@@ -12,6 +12,8 @@
  * insertImage (optional, boolean): the language can take the preview image as a command (TPCL SG, written with
  *   insertCommand); only then does the palette offer the Imagen entry and the image panel write the image into the label.
  *   imageCommand (optional) builds that command from the neutral bitmap (1 = black; TSPL BITMAP and ZPL ^GF, throws if too large);
+ *   imageSizeProblem (optional) -> (w, h in dots) -> a Spanish reason the picture does not fit the language's graphic command (SG, BITMAP, ^GF), or null; imageCommand throws it
+ *   and the app asks it before rasterizing the preview, so each language keeps its own limit.
  *   without it the app writes the TPCL SG command.
  * moveItem (optional): the text with only the position of that item's command moved by dx/dy (0.1 mm); unchanged
  *   if the item has no source.

@@ -61,7 +61,7 @@
       };
       const [w, h] = [size(item.width), size(item.height)];
       const clear = item.mode === 'clear';
-      return `${S.place(item, roundDots(dots(item.x)), roundDots(dots(item.y)), h)}${S.gb(w, h, Math.min(w, h), { white: clear })}${clear ? '' : '^FR'}^FS`;
+      return `${S.place(ctx, item, roundDots(dots(item.x)), roundDots(dots(item.y)), h)}${S.gb(w, h, Math.min(w, h), { white: clear })}${clear ? '' : '^FR'}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------

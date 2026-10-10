@@ -467,7 +467,7 @@ const note = diag => ({ must: [], may: [], skipped: [], diag, note: true });
 /** Both at once: items left out and fields that change in the others (diag: one regex or a list, each must match a diagnostic). */
 const both = (skipped, must, diag) => ({ must, may: [], skipped, diag });
 
-const FONTS = /Las fuentes (TPCL|TSPL|ZPL) no coinciden|redondea a puntos enteros/;
+const FONTS = /Las fuentes (TPCL|TSPL|ZPL) no coinciden|redondea a puntos enteros|PV\) con ancho o alto fuera de 0020\.\.0850/;
 const NO_CHECK = /dígito de control/;
 const ADDON = /complemento/;
 const ZERO_TSPL = /ceros suprimidos/;
@@ -535,12 +535,12 @@ const RULES = [
   [/^mixed$/, [S2T, Z2T], skip(['ellipse', 'ellipse'], ELLIPSE_TPCL)],
   // ---- the example labels
   [/^example-(spool-99x55|barcodes-code39-itf-code128)$/, [T2S], deg(['font'], FONTS)],
-  [/^example-tspl-label-100x60$/, [S2T, S2Z], deg(['font'], FONTS)],
+  [/^example-tspl-label-100x60$/, [S2T, S2Z], deg(['font'], FONTS, ['font.size', 'font.width'])], // a 1.5 mm text is outline (PV) 2 mm in TPCL (0020 minimum)
   // The templates (same label in three languages): the title and lines change font family when the language has no equivalent
   [/^example-template-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],
   [/^example-template-tspl$/, [S2T, S2Z], deg(['font'], FONTS)],
   [/^example-template-zpl$/, [Z2S], deg(['font'], FONTS, ['font.width'])],
-  [/^example-zpl-label-100x60$/, [Z2T], deg(['font', 'reverse'], FONTS)],
+  [/^example-zpl-label-100x60$/, [Z2T], deg(['font', 'reverse'], FONTS, ['font.size', 'font.width'])],
   [/^example-zpl-label-100x60$/, [Z2S], deg(['font', 'reverse'], FONTS, ['font.width'])],
 ];
 

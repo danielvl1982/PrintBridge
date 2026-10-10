@@ -24,8 +24,8 @@
   /** FNC1 in the TPCL notation of a barcode's data. */
   const FNC1_NOTATION = />8/g;
 
-  /** Control commands that draw nothing. */
-  const CONTROL_COMMANDS = Object.freeze(['C', 'XS', 'AX', 'XQ']);
+  /** Control commands that draw nothing and have no parameters to check ({AX and {XS have their own handlers). */
+  const CONTROL_COMMANDS = Object.freeze(['C', 'XQ']);
 
   const DIGITS = /^\d+$/;
 
@@ -38,20 +38,168 @@
   /** Item -> position of the command in the source text (a single span: the format command). */
   const sourceOf = cmd => ({ spans: [{ start: cmd.start, end: cmd.end }], label: `{${cmd.raw}|}` });
 
+  // --- Label setup ranges (0.1 mm). Sources: B-452-R 2012 6.3.1 (pitch 0100..9999, width 0100..1057, length 0060..9970), B-SV4 2004 6.3.1
+  // (print width up to 108 mm, the widest of the manuals), B-452-TS12 ES 6.3. Only the widest value any manual allows is used. ---
+
+  /** {D limits [min, max]: pitch (aaaa), effective print width (bbbb) and effective print length (cccc). */
+  const SIZE_LIMITS = Object.freeze({ pitch: Object.freeze([100, 9999]), width: Object.freeze([100, 1080]), height: Object.freeze([60, 9970]) });
+  const rangeText = ([lo, hi]) => `${pad4(lo)}..${pad4(hi)}`;
+  const clampTo = (n, [lo, hi]) => Math.min(hi, Math.max(lo, n));
+  /** The pitch has to leave at least 2 mm after the print length (B-SV4 note 8, B-452-TS12 note 5). */
+  const MIN_GAP = 20;
+
+  /**
+   * Diagnostics of a parsed {D command (match of its pattern + pitch and length already limited to the ranges). A gap under 2 mm is only
+   * information: the printer fixes it itself (and the app writes it when the source has no pitch); the rest are warnings.
+   */
+  function dProblems(m, { pitch, height }) {
+    const out = [];
+    if (![4, 5].includes(m[1].length) || m[2].length !== 4 || ![4, 5].includes(m[3].length)) {
+      out.push(diag.warning('D: paso y alto con 4 o 5 dígitos, ancho con 4 (0,1 mm): la impresora puede no aceptarlo'));
+    }
+    for (const [name, raw, range] of [['paso', m[1], SIZE_LIMITS.pitch], ['ancho', m[2], SIZE_LIMITS.width], ['alto', m[3], SIZE_LIMITS.height]]) {
+      if (+raw < range[0] || +raw > range[1]) out.push(diag.warning(`D: ${name} ${raw} fuera de ${rangeText(range)} (0,1 mm): la impresora lo ajusta al límite`));
+    }
+    if (pitch < height) out.push(diag.warning(`D: el paso (${pad4(pitch)}) es menor que el alto (${pad4(height)}): la impresora da error de comando`));
+    else if (pitch - height < MIN_GAP) out.push(diag.info(`D: paso - alto = ${pitch - height} (0,1 mm), menos de 2 mm: la impresora reduce el alto efectivo a paso - 2 mm`));
+    return out;
+  }
+
+  /**
+   * {D size (resolved, 0.1 mm: w, h, p) limited to the manual ranges, the pitch at least the length: { size, diagnostics }.
+   * One warning when something had to be changed. Used by the Formato row (PB.sizes.apply), applySize and the emit.
+   */
+  function fitSize(size) {
+    const num = v => (Number.isFinite(v) ? Math.round(v) : null);
+    const h0 = num(size.h);
+    const h = clampTo(h0 ?? SIZE_LIMITS.height[0], SIZE_LIMITS.height);
+    const w0 = num(size.w);
+    const w = clampTo(w0 ?? SIZE_LIMITS.width[0], SIZE_LIMITS.width);
+    const p0 = num(size.p) ?? h0;
+    const p = Math.max(h, clampTo(p0 ?? h, SIZE_LIMITS.pitch));
+    const changed = h !== h0 || w !== w0 || p !== p0;
+    const note = `El tamaño de la etiqueta se ajusta a los rangos de {D} de TPCL (paso ${rangeText(SIZE_LIMITS.pitch)}, ancho ${rangeText(SIZE_LIMITS.width)}, alto ${rangeText(SIZE_LIMITS.height)}, en 0,1 mm; el paso no puede ser menor que el alto)`;
+    return { size: { ...size, w, h, p }, diagnostics: changed ? [diag.warning(note)] : [] };
+  }
+
+  /**
+   * {AX;abbb,cddd,eff(,ghhh)|} problems as warning texts (none when valid). Ranges: feed 000..500 and cut 000..500 (B-SV4 6.3.2: 500 and 350,
+   * B-452-R 6.3.2: 500 and 500, B-452-TS12 ES 6.4: 100 and 100: the widest), back feed 00..99, correction 000..100 (0.1 %, TS12 only).
+   */
+  function axProblems(raw) {
+    const m = /^AX;([+-])(\d{3}),([+-])(\d{3}),([+-])(\d{2})(?:,([+-])(\d{3}))?$/.exec(raw.replace(/\s+/g, ''));
+    if (!m) return ['AX no válido: se esperaba {AX;±bbb,±ddd,±ff(,±hhh)|} (signo y 3, 3, 2 y 3 dígitos): la impresora puede no aceptarlo'];
+    const out = [];
+    for (const [name, value, max, unit] of [['alimentación', m[2], 500, '0,1 mm'], ['corte', m[4], 500, '0,1 mm'], ['corrección', m[8], 100, '0,1 %']]) {
+      if (value !== undefined && +value > max) out.push(`AX: ${name} ${value} fuera de 000..${String(max).padStart(3, '0')} (${unit}): la impresora puede no aceptarlo`);
+    }
+    return out;
+  }
+
+  /**
+   * {XS;I,aaaa,bbbcdefgh|} problems as warning texts (none when valid): count 0001..9999, cut interval 000..100, sensor 0..5, mode C|D|E,
+   * speed 1..9|A, ribbon 0..2, rotation 0..3, status response 0..1 (B-SV4 6.3.13, B-452-R 6.3.14, B-452-TS12 ES 6.16: the widest).
+   */
+  function xsProblems(raw) {
+    const m = /^XS;I,(\d{4}),(\d{3})(\d)([A-Za-z])([0-9A-Za-z])(\d)(\d)(\d)$/.exec(raw.replace(/\s+/g, ''));
+    if (!m) return ['XS no válido: se esperaba {XS;I,aaaa,bbbcdefgh|} (cantidad de 4 dígitos y 9 caracteres de condiciones): la impresora puede no aceptarlo'];
+    const checks = [
+      ['cantidad de etiquetas', m[1], +m[1] >= 1, '0001..9999'],
+      ['intervalo de corte', m[2], +m[2] <= 100, '000..100'],
+      ['sensor', m[3], +m[3] <= 5, '0..5'],
+      ['modo de emisión', m[4], /^[CDE]$/.test(m[4]), 'C, D o E'],
+      ['velocidad', m[5], /^[1-9A]$/.test(m[5]), '1..9 o A'],
+      ['cinta', m[6], +m[6] <= 2, '0..2'],
+      ['giro', m[7], +m[7] <= 3, '0..3'],
+      ['respuesta de estado', m[8], +m[8] <= 1, '0..1'],
+    ];
+    return checks.filter(([, , ok]) => !ok).map(([name, value, , range]) => `XS: ${name} ${value} fuera de ${range}: la impresora puede no aceptarlo`);
+  }
+
+  /**
+   * Warning for the coordinates of a command whose digits are fixed: X exactly 4 digits, Y 4 or 5 (B-SV4 / B-452-R LC and XR).
+   * coords: [[name, digits as written]] with names starting x or y. Returns a diagnostic or null.
+   */
+  function coordDigitsWarning(ref, coords) {
+    const bad = coords.filter(([name, raw]) => !(name.startsWith('x') ? /^\d{4}$/ : /^\d{4,5}$/).test(raw));
+    if (!bad.length) return null;
+    const list = bad.map(([name, raw]) => `${name}="${raw}"`).join(', ');
+    return diag.warning(`${ref}: ${list} fuera del formato (X con 4 dígitos, Y con 4 o 5, en 0,1 mm): la impresora puede no aceptarlo`);
+  }
+
+  /** Longest data string of a PC / PV text (B-SV4 6.3.7, B-452-R 6.3.8, B-452-TS12 6.10: "Max. 255 digits", the excess is discarded). */
+  const TEXT_DATA_MAX = 255;
+
+  /** Data of a field as the printer keeps it: cut to `max` characters, with a warning when something was discarded. */
+  function fitData(ctx, ref, data, max) {
+    const value = data == null ? data : String(data);
+    if (value == null || value.length <= max) return value;
+    ctx.report(diag.warning(`${ref}: datos de ${value.length} caracteres: la impresora descarta lo que pase de ${max} (máximo del manual), se dibujan los ${max} primeros`));
+    return value.slice(0, max);
+  }
+  const fitTextData = (ctx, ref, data) => fitData(ctx, ref, data, TEXT_DATA_MAX);
+
+  /**
+   * Longest data of a 1D barcode (B-SV4 6.3.12, B-452-R 6.3.13, B-452-TS12 6.15: "bar codes other than the above: 126 digits") and of
+   * QR / Data Matrix (2000), the excess is discarded. Data with variables is left alone: its value is not known here.
+   */
+  const BARCODE_DATA_MAX = 126;
+  const MATRIX_DATA_MAX = 2000;
+  function fitBarcodeData(ctx, ref, kind, data) {
+    if (data != null && PB.variables.namesIn(String(data)).length) return data;
+    return fitData(ctx, ref, data, kind === 'barcode' ? BARCODE_DATA_MAX : MATRIX_DATA_MAX);
+  }
+
+  /**
+   * Warning for a numeric parameter of a command as written (digits): outside min..max or without the `digits` the manual fixes.
+   * The range is shown with that many digits ("01..15"). A diagnostic or null.
+   */
+  function rangeWarning(ref, label, raw, min, max, digits = 1) {
+    const text = String(raw ?? '');
+    const shown = n => String(n).padStart(digits, '0');
+    if (/^\d+$/.test(text) && +text >= min && +text <= max && (digits === 1 || text.length === digits)) return null;
+    return diag.warning(`${ref}: ${label} "${text}" fuera de ${shown(min)}..${shown(max)}${digits > 1 ? ` (${digits} dígitos)` : ''}: la impresora puede no aceptarlo`);
+  }
+
+  /** Bar code number of an XB command: exactly 2 digits, 00..31 (B-SV4 6.3.9, B-452-R 6.3.10, B-452-TS12 6.12). A diagnostic or null. */
+  const BARCODE_NUMBER_MAX = 31;
+  function barcodeNumberWarning(ref, digits) {
+    if (/^\d{2}$/.test(digits) && +digits <= BARCODE_NUMBER_MAX) return null;
+    return diag.warning(`${ref}: número de código de barras "${digits}" fuera de 00..${BARCODE_NUMBER_MAX} (2 dígitos): la impresora puede no aceptarlo`);
+  }
+
   const HANDLERS = [
     {
       // Label size: D<pitch>,<width>,<length>
       pattern: /^D(\d+),(\d+),(\d+)/,
       handle(m, cmd, ctx) {
-        Object.assign(ctx.model.size, { pitch: +m[1], width: +m[2], height: +m[3] });
+        // The printer changes a value beyond the limits to the limit itself (B-SV4 note 8): the label is drawn that way, the
+        // command as written stays in native.dRaw and the warnings say what the printer will do
+        const size = ctx.model.size;
+        const pitch = clampTo(+m[1], SIZE_LIMITS.pitch);
+        const width = clampTo(+m[2], SIZE_LIMITS.width);
+        const height = clampTo(+m[3], SIZE_LIMITS.height);
+        dProblems(m, { pitch, height }).forEach(d => ctx.report(d));
+        Object.assign(size, { pitch, width, height });
         // pitch = height + gap: the gap is what the pitch leaves after the label
-        ctx.model.size.gap = +m[1] > +m[3] ? +m[1] - +m[3] : null;
-        ctx.model.size.native.dRaw = cmd.raw;
+        size.gap = pitch > height ? pitch - height : null;
+        size.native.dRaw = cmd.raw;
       },
     },
     {
-      pattern: /^AX;/,
-      handle(m, cmd, ctx) { ctx.model.size.native.axRaw = cmd.raw; },
+      // Position fine adjustment: kept as written (it is printer specific), checked against the manual ranges
+      pattern: /^AX(;|$)/,
+      handle(m, cmd, ctx) {
+        ctx.model.size.native.axRaw = cmd.raw;
+        for (const text of axProblems(cmd.raw)) ctx.report(diag.warning(text));
+      },
+    },
+    {
+      // Issue command: the viewer prints nothing, but a value the printer does not accept is reported
+      pattern: /^XS(;|$)/,
+      handle(m, cmd, ctx) {
+        for (const text of xsProblems(cmd.raw)) ctx.report(diag.warning(text));
+      },
     },
     {
       // Data of a field: RCnn (bitmap text), RVnn (outline text), RBnn (barcode / QR)
@@ -59,7 +207,8 @@
       handle(m, cmd, ctx) {
         const target = DATA_TARGET[m[1]] + m[2];
         const field = ctx.fields[target];
-        if (field) field.data = field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3];
+        if (field && field.kind === 'text') field.data = fitTextData(ctx, target, m[3]);
+        else if (field) field.data = fitBarcodeData(ctx, target, field.kind, field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3]);
         else ctx.report(diag.error(`R${m[1]}${m[2]} no tiene un ${target} definido antes`));
       },
     },
@@ -103,10 +252,10 @@
   // TPCL format rules that do not prevent drawing but that the printer may reject.
   // Each rule is independent: to add one, add it to RULES.
   const RULES = [
-    // Coordinates with 4 digits
+    // Coordinates with 4 digits (text: Y may have 4 or 5, B-SV4 6.3.7 / 6.3.8 and B-452-R 6.3.8 / 6.3.9)
     item => ['x', 'y']
-      .filter(k => item.raw && item.raw[k] != null && item.raw[k].length !== 4)
-      .map(k => diag.warning(`${item.ref}: ${k}="${item.raw[k]}" no tiene 4 dígitos (la impresora puede no aceptarlo)`)),
+      .filter(k => item.raw && item.raw[k] != null && !(k === 'y' && item.kind === 'text' ? /^\d{4,5}$/ : /^\d{4}$/).test(item.raw[k]))
+      .map(k => diag.warning(`${item.ref}: ${k}="${item.raw[k]}" no tiene ${k === 'y' && item.kind === 'text' ? '4 o 5' : '4'} dígitos (la impresora puede no aceptarlo)`)),
   ];
 
   /** D command (without braces) matching a resolved size: D<pitch>,<width>,<length>. */
@@ -114,7 +263,7 @@
 
   /** The {D…|} line that declares the size (the {AX…|} adjustment is printer specific and is never written here). */
   function sizeCommands(size) {
-    return [`{${dCommand(size)}|}`];
+    return [`{${dCommand(fitSize(size).size)}|}`];
   }
 
   /** Writes the size in the text, replacing the {D…|} command or adding it at the start. An existing {AX…|} is left untouched. */
@@ -268,6 +417,9 @@
   function allocId(ctx, namespace) {
     const id = ctx.ids.next(namespace);
     if (id.length > 2) ctx.once('tpcl-ids', () => diag.warning('Hay más de 100 campos del mismo tipo: los números de campo superan los 2 dígitos de TPCL'));
+    if (namespace === 'XB' && +id > BARCODE_NUMBER_MAX) {
+      ctx.once('tpcl-xb-number', () => diag.warning(`Hay más de ${BARCODE_NUMBER_MAX + 1} códigos de barras, QR o Data Matrix: sus números van de 00 a ${BARCODE_NUMBER_MAX} en TPCL, la impresora puede no aceptar los demás`));
+    }
     return id;
   }
 
@@ -284,14 +436,20 @@
     } else {
       // Pitch = height + gap: a label that only knows its gap (TSPL) still gets its pitch
       const gap = Number.isFinite(size.gap) && size.gap > 0 ? size.gap : null;
-      const pitch = size.pitch ?? (gap == null ? size.height : size.height + gap);
+      const wanted = size.pitch ?? (gap == null ? size.height : size.height + gap);
+      // Never written out of the {D ranges: limited (and reported once) like the Formato row does
+      const fit = fitSize({ w: size.width, h: size.height, p: wanted });
+      fit.diagnostics.forEach(d => ctx.report(d));
+      const { w, h, p: pitch } = fit.size;
       const m = native.dRaw && /^D(\d+),(\d+),(\d+)/.exec(native.dRaw);
-      const unchanged = !!m && +m[1] === pitch && +m[2] === size.width && +m[3] === size.height;
-      out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w: size.width, h: size.height })));
-      const ax = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : null;
-      if (ax) out.push(wrap(ax));
-      else ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
-      if (size.pitch == null && gap == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta, compruebe el valor en su impresora'));
+      const unchanged = !!m && +m[1] === pitch && +m[2] === w && +m[3] === h;
+      out.push(wrap(unchanged ? native.dRaw : dCommand({ p: pitch, w, h })));
+      const source = native.axRaw && (unchanged || !native.dRaw) ? native.axRaw : null;
+      const axBad = source ? axProblems(source) : [];
+      if (axBad.length) ctx.report(diag.warning(`No se escribe {AX…|}: el de la etiqueta de origen no es válido en TPCL (${axBad.join('; ')})`));
+      if (source && !axBad.length) out.push(wrap(source));
+      else if (!axBad.length) ctx.report(diag.info('No se escribe {AX…|}: la etiqueta de origen no lo declara, compruebe el ajuste en su impresora'));
+      if (size.pitch == null && gap == null) ctx.report(diag.info('El paso de etiqueta (pitch) no está especificado: se usa la altura de la etiqueta (la impresora reduce el alto efectivo a paso - 2 mm), compruebe el valor en su impresora'));
     }
     if (native.direction === 0 || native.invert === true) {
       ctx.report(diag.info('La etiqueta de origen se imprime girada 180° (DIRECTION 0 de TSPL o ^POI de ZPL): el visor la dibuja sin girar y el giro no se escribe en el destino, compruebe la orientación en su impresora'));
@@ -366,9 +524,9 @@
    * Passed once to each slice's `languages.tpcl` factory.
    */
   const SLICE_HELPERS = Object.freeze({
-    sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder,
+    sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder, coordDigitsWarning,
     ROTATIONS, ROTATION_STEPS, ROTATION_CODES, MAX_COORD, DIGITS,
-    wrap, safeData, coordText, allocId,
+    wrap, safeData, coordText, allocId, fitTextData, TEXT_DATA_MAX, fitData, fitBarcodeData, BARCODE_DATA_MAX, MATRIX_DATA_MAX, barcodeNumberWarning, rangeWarning,
     COUNTER_TOKEN, COUNTER_MAX, ZERO_MAX, counterToken, emitCounterToken, zeroDigits, readCounterStep, counterFields,
   });
 
@@ -527,6 +685,33 @@
     return out;
   }
 
+  /** Why a w x h dots picture cannot be an SG command (width 1..9999, height 1..99999, 512 KB of dot data), or null when it fits. */
+  function imageSizeProblem(w, h) {
+    const { SG_LIMITS: limits } = PB.images;
+    if (!Number.isInteger(w) || !Number.isInteger(h) || w < 1 || h < 1) return `${w}×${h} puntos no es un tamaño de imagen válido`;
+    if (w > limits.maxWidth || h > limits.maxHeight) return `${w}×${h} puntos supera el máximo de SG (ancho ${limits.maxWidth}, alto ${limits.maxHeight})`;
+    if (PB.images.sgBytes(w, h) > limits.maxBytes) return `${w}×${h} puntos supera el búfer de imagen de la impresora (512 KB)`;
+    return null;
+  }
+
+  /**
+   * SG command for the preview picture ({ xMm, yMm } in mm, empty or invalid = 0; w, h in dots; data = neutral bitmap, 1 = black), ready for
+   * insertCommand. A position outside 0..999.9 mm (X has 4 digits in 0.1 mm) or a size the printer cannot hold (width 1..9999, height 1..99999,
+   * 512 KB of dot data) is refused with an error: the app shows it as the reason the image was not inserted.
+   */
+  function imageCommand({ xMm, yMm, w, h, data }) {
+    const tenths = mm => PB.units.fromMm(mm);
+    for (const [name, mm] of [['X', xMm], ['Y', yMm]]) {
+      const value = tenths(mm);
+      if (Number.isFinite(value) && (value < 0 || value > MAX_COORD)) {
+        throw new Error(`la posición ${name} debe estar entre 0 y 999,9 mm (TPCL la escribe con 4 dígitos en 0,1 mm)`);
+      }
+    }
+    const problem = imageSizeProblem(w, h);
+    if (problem) throw new Error(problem);
+    return PB.images.buildSG({ xMm, yMm, w, h, data: PB.images.bitmapToNibble(data, w, h) });
+  }
+
   PB.languages.register({
     id: 'tpcl',
     name: 'TPCL (Toshiba TEC)',
@@ -535,8 +720,12 @@
     validate: model => model.items.flatMap(item => ALL_RULES.flatMap(rule => rule(item))),
     sizeCommands,
     applySize,
+    fitSize,
+    sizeLimits: { width: [...SIZE_LIMITS.width], height: [...SIZE_LIMITS.height], pitch: [...SIZE_LIMITS.pitch] },
     insertCommand,
-    insertImage: true, // the app writes the preview image as a TPCL SG command (images.buildSG); see js/core/languages.js
+    insertImage: true, // the app writes the preview image as a TPCL SG command (imageCommand, which checks the limits); see js/core/languages.js
+    imageCommand,
+    imageSizeProblem,
     moveItem,
     updateItem,
     describeItem,

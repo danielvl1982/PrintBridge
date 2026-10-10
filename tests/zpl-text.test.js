@@ -319,7 +319,9 @@ test('updateItem writes only the targeted argument of the field', () => {
   assert.equal(update(hello, { height: 50 }), LABEL.replace('^A0N,40,30', '^A0N,50,30'));
   assert.equal(update(hello, { width: 0 }), LABEL.replace('^A0N,40,30', '^A0N,40,0'));
   assert.equal(update(hello, { content: 'Bye' }), LABEL.replace('^FDHello', '^FDBye'));
-  assert.equal(update(hello, { height: 60, width: 55, rotation: 270, font: 'D' }), LABEL.replace('^A0N,40,30', '^ADB,60,55'));
+  assert.equal(update(hello, { height: 54, width: 60, rotation: 270, font: 'D' }), LABEL.replace('^A0N,40,30', '^ADB,54,60'));
+  // a bitmapped size is written as a whole multiple of the matrix (D is 18 x 10), a scalable one as 0 or 10..32000
+  assert.equal(update(hello, { height: 60, width: 55, rotation: 270, font: 'D' }), LABEL.replace('^A0N,40,30', '^ADB,54,60'));
   // invalid values and unknown keys change nothing
   assert.equal(update(hello, { font: 'ZZ', rotation: 45, height: 'x', nothing: 1 }), LABEL);
   assert.equal(update(hello, { height: 99999 }), LABEL.replace('^A0N,40,30', '^A0N,32000,30'));

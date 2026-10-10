@@ -90,6 +90,7 @@
       const t = S.thickness(ctx, item.width, 1, MAX_BOX, 'zpl-gb-thickness', `Hay grosores de línea de más de ${MAX_BOX} puntos: ZPL (^GB / ^GD) admite de 1 a ${MAX_BOX}, se ajustan al máximo`);
       const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
       const size = span => Math.min(MAX_BOX, Math.max(t.dots, roundDots(span + t.exact)));
+      if ([x2 - x1, y2 - y1].some(span => roundDots(Math.abs(span) + t.exact) > MAX_BOX)) ctx.once('zpl-shape-size', () => diag.warning(S.TOO_LONG));
       const [w, h] = [size(Math.abs(x2 - x1)), size(Math.abs(y2 - y1))];
       const radius = Number.isFinite(item.radius) ? exactDots(ctx, item.radius) : 0;
       const short = Math.min(w, h);
@@ -99,7 +100,7 @@
       }
       const left = roundDots(Math.min(x1, x2) - t.exact / 2);
       const top = roundDots(Math.min(y1, y2) - t.exact / 2);
-      return `${S.place(item, left, top, h)}${S.gb(w, h, t.dots, { white: item.white === true, rounding })}${S.fr(item)}^FS`;
+      return `${S.place(ctx, item, left, top, h)}${S.gb(w, h, t.dots, { white: item.white === true, rounding })}${S.fr(item)}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------

@@ -58,9 +58,9 @@ test('GAP and BLINE are stored in size.gap / native in the same units', () => {
   assert.equal(gap.gap, 30);
   assert.equal(gap.native.gapRaw, 'GAP 3 mm,0 mm');
   assert.equal(parse('GAP 0.12,0').size.gap, 0.12 * 254);
-  const bline = parse('BLINE 2 mm,0').size;
-  assert.equal(bline.gap, 20);
-  assert.equal(bline.native.blineRaw, 'BLINE 2 mm,0');
+  const bline = parse('BLINE 3 mm,0').size; // the manual's minimum height is 2.54 mm
+  assert.equal(bline.gap, 30);
+  assert.equal(bline.native.blineRaw, 'BLINE 3 mm,0');
 });
 
 test('CRLF, LF and CR line endings give the same commands', () => {

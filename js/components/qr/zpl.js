@@ -102,7 +102,7 @@
 
   function zpl(helpers) {
     const {
-      sourceOf, int, fieldData, fo, ft, exactDots, roundDots, insertCommand, freePlaceholder, dropDots, numberField, paramField, encodeData,
+      sourceOf, int, fieldData, fo, ft, exactDots, roundDots, insertCommand, freePlaceholder, dropDots, numberField, paramField, encodeData, limited,
     } = helpers;
 
     // -------------------------------------------------------------------------------------------------------------
@@ -140,8 +140,9 @@
       let mag = defaultMag(ctx.dpi);
       if (arg(2) !== '') {
         const v = int(arg(2));
-        if (v !== null && v >= MAG_RANGE[0] && v <= MAG_RANGE[1]) mag = v;
-        else ctx.report(diag.warning(`${ref}: factor de magnificación "${arg(2)}" no válido (1..10), se usa ${mag}`));
+        // The guide: 1..10; outside is drawn at the nearest limit, anything that is not a whole number at the default
+        if (v === null) ctx.report(diag.warning(`${ref}: factor de magnificación "${arg(2).slice(0, 20)}" no válido (número entero de 1..10), se usa ${mag}`));
+        else mag = limited(ctx, cmd, 'factor de magnificación', v, MAG_RANGE);
       }
 
       const value = field.data.value;

@@ -23,6 +23,20 @@
   }
 
   /**
+   * The aviso for a number the user typed in a field when the label ends up holding another value (clamped to the
+   * field's min / max, snapped to its step, rounded by the language), or null when the value was kept (or the field is
+   * not a number, or the language reports nothing back). Applies to every field generically, so no edit is adjusted silently.
+   */
+  function adjustmentNotice(field, typed, used) {
+    if (!field || field.type !== 'number' || typeof typed !== 'number' || typeof used !== 'number' || !Number.isFinite(used)) return null;
+    if (Math.abs(typed - used) < 1e-9) return null;
+    const outside = (field.min !== undefined && typed < field.min) || (field.max !== undefined && typed > field.max);
+    const range = field.min !== undefined && field.max !== undefined ? `${field.min}..${field.max}` : field.min !== undefined ? `desde ${field.min}` : `hasta ${field.max}`;
+    const text = outside ? `${field.label}: ${typed} está fuera del rango ${range}; se usa ${used}` : `${field.label}: ${typed} se ajusta a ${used}`;
+    return PB.diagnostics.warning(text);
+  }
+
+  /**
    * Test values of the variables an item uses: [{ name, value, usedIn }] in order of appearance. value is the current test
    * value ('' if none); usedIn is how many objects of the model use the variable. They are app-level (state.values), not
    * part of the label code, so they are not fields of the language.
@@ -178,6 +192,7 @@
 
   PB.ui = PB.ui || {};
   PB.ui.coerceFieldValue = coerceFieldValue;
+  PB.ui.adjustmentNotice = adjustmentNotice;
   PB.ui.variableFieldsFor = variableFieldsFor;
   PB.ui.createPropertiesPanel = createPropertiesPanel;
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

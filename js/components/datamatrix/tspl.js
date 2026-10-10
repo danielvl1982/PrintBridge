@@ -39,7 +39,7 @@
 
   function tspl(helpers) {
     const {
-      sourceOf, num, quoted, exactDots, roundDots, safeData, numberField, textField, insertCommand, freePlaceholder, dropDots,
+      sourceOf, num, quoted, counterRefsWarning, exactDots, roundDots, safeData, numberField, textField, insertCommand, freePlaceholder, dropDots,
     } = helpers;
 
     /** Adds DMATRIX x,y,w,h,4,s,s,"<#DATAMATRIX{k}#>" at the drop point: the size of the symbol the placeholder needs (never rotated). */
@@ -132,6 +132,7 @@
               } else {
                 native.xm = xm;
                 if (!(xm > 0)) ctx.report(diag.warning(`${ref}: módulo "${xm}" no válido, el código se ajusta al ancho y alto`));
+                else if (!Number.isInteger(xm)) ctx.report(diag.warning(`${ref}: módulo "${xm}" no es un número entero de puntos, se dibuja con ${Math.max(1, Math.round(xm))}`));
                 [native.rows, native.cols] = [rows, cols];
                 if (rows === 0 && cols === 0) { /* automatic */ } else if (rows === cols && SIDES.includes(rows)) size = rows;
                 else ctx.report(diag.warning(`${ref}: tamaño ${rows}×${cols} no soportado (solo símbolos cuadrados de ${SIDES[0]}×${SIDES[0]} a ${SIDES.at(-1)}×${SIDES.at(-1)}), se elige el menor que cabe`));
@@ -141,6 +142,7 @@
             }
 
             const last = cmd.args[cmd.args.length - 1];
+            counterRefsWarning(ctx, ref, last);
             let data = last.value;
             if (COUNTER.test(last.raw)) {
               data = last.raw;
@@ -153,7 +155,7 @@
             const { x, y } = ctx.pos(px, py);
             ctx.addItem({
               kind: 'datamatrix', ref, source: sourceOf(cmd), x, y, area: { width: ctx.len(w), height: ctx.len(h) },
-              cell: native.xm > 0 ? native.xm * ctx.dot : null, rotation: 0, ...(size && { size }), ecc: 200, symbology: 'datamatrix', native, data,
+              cell: native.xm > 0 ? Math.max(1, Math.round(native.xm)) * ctx.dot : null, rotation: 0, ...(size && { size }), ecc: 200, symbology: 'datamatrix', native, data,
             });
           },
         },

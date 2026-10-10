@@ -153,6 +153,7 @@
    *  - language: already known language of the label (if not, it is detected).
    *  - notices: extra messages to show along with those of the label.
    */
+  let shown = []; // what the avisos frame holds after the last refresh
   function refresh({ language = null, notices = [] } = {}) {
     try {
       const { model, area, diagnostics, language: used } = analyze(editor.text(), { language });
@@ -160,22 +161,26 @@
       const opts = options();
       const drawing = svgRenderer.render(model, area, opts);
       variablesPanel.setNames(variables.namesInModel(model));
-      sizePanel.setLanguage(model.language);
+      const sized = languages.get(model.language) || {};
+      // A language whose limits depend on the resolution (ZPL: dots) offers them for the one selected
+      sizePanel.setLanguage(model.language, sized.sizeLimitsFor ? sized.sizeLimitsFor(Number($('dpi').value)) : sized.sizeLimits);
       sizePanel.showArea(area);
       sizePanel.selectFor({ ...model.size, pitch: sizes.declaredPitch(model.size) });
       lastModel = model;
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
       updateProperties();
-      messages.show([
+      shown = [
         ...notices,
         ...diagnostics,
         ...area.diagnostics,
         ...(used ? layout.analyze(svgEl, model, area, { markOverlaps: $('optOverlap').checked }) : []),
         ...drawing.diagnostics,
-      ]);
+      ];
+      messages.show(shown);
     } catch (error) {
-      messages.show([...notices, diag.error(`Error al procesar la etiqueta: ${error.message}`)]);
+      shown = [...notices, diag.error(`Error al procesar la etiqueta: ${error.message}`)];
+      messages.show(shown);
     }
   }
 
@@ -227,6 +232,7 @@
     const item = index != null && lastModel.items[index];
     if (!language || !language.updateItem || !item) return;
     const text = editor.text();
+    const before = shown.map(m => m.text);
     const updated = language.updateItem(text, item, { [key]: value }, { dpi: Number($('dpi').value) });
     if (updated !== text) {
       if (!editor.replaceText(updated)) editor.setText(updated);
@@ -235,6 +241,25 @@
     }
     // Also when nothing changed (value out of range or equal): the form goes back to what the code says
     updateProperties();
+    reportAdjustment(key, value, before);
+  }
+
+  /**
+   * A number typed in the form that the label ended up holding differently (clamped, snapped, rounded) is always reported
+   * in the avisos, once, unless the edit already produced a warning of its own about that value (`before`: the texts shown before the edit).
+   */
+  function reportAdjustment(key, typed, before) {
+    const index = preview.selected();
+    const language = sourceLanguage();
+    const item = index != null && lastModel.items[index];
+    if (!language || !language.describeItem || !item || typeof typed !== 'number') return;
+    const field = (language.describeItem(item, editor.text()) || { fields: [] }).fields.find(f => f.key === key);
+    const notice = ui.adjustmentNotice(field, typed, field && field.value);
+    // A warning of the language about this very value (it names the number typed) is the aviso: no second one. Layout errors (overflow, overlap) are not
+    const own = m => m.level !== 'info' && !before.includes(m.text) && /fuera de|se usa/.test(m.text) && new RegExp(`(^|[^0-9.])${String(typed).replace('.', '[.,]')}($|[^0-9])`).test(m.text);
+    if (!notice || shown.some(own)) return;
+    shown = [notice, ...shown];
+    messages.show(shown);
   }
 
   /**
@@ -313,7 +338,7 @@
     // The resolution travels with the size: ZPL writes it in dots (TPCL and TSPL ignore it)
     const result = sizes.apply(languages.detect(text), text, { ...size, dpi: Number($('dpi').value) });
     editor.setText(result.text);
-    refresh({ notices: result.supported ? [] : [diag.warning('No se puede escribir el tamaño: el lenguaje de la etiqueta no lo admite o no se reconoce')] });
+    refresh({ notices: result.supported ? result.diagnostics || [] : [diag.warning('No se puede escribir el tamaño: el lenguaje de la etiqueta no lo admite o no se reconoce')] });
   }
 
   /** Reads a picture file as a data URL and measures its natural size in pixels. */
@@ -365,8 +390,18 @@
     refresh();
   }
 
-  /** Largest width or height (dots) of an SG command: its fields have 4 digits. */
-  const MAX_SG_DOTS = 9999;
+  /** Largest width or height (dots) of a picture whose label language declares no `imageSizeProblem` (the SG limit of TPCL: 4 digits). */
+  const MAX_DEFAULT_DOTS = 9999;
+
+  /** The language the picture would be written in: the label's own, TPCL when it is not recognized (as insertImage does). */
+  const imageLanguage = () => languages.detect(editor.text()) || languages.get('tpcl');
+
+  /** Why a w x h dots picture cannot be written in the label's language (its own limits: SG, BITMAP, ^GF), or null. */
+  function imageSizeProblem(w, h) {
+    const language = imageLanguage();
+    if (typeof language.imageSizeProblem === 'function') return language.imageSizeProblem(w, h);
+    return w > MAX_DEFAULT_DOTS || h > MAX_DEFAULT_DOTS ? `${w}×${h} puntos supera el máximo de ${MAX_DEFAULT_DOTS}` : null;
+  }
 
   /** The bytes of the label in the editor as Descargar writes them (PB.convert.toBytes in the label's own language) with the assigned variables replaced; throws a Spanish Error when there is nothing to print. */
   function labelBytes() {
@@ -425,7 +460,8 @@
     const { converted, href } = state.image;
     const { w, h, threshold, key } = conversionParams();
     if (converted && converted.bitmap && converted.key === key) return Promise.resolve(converted.bitmap);
-    if (w > MAX_SG_DOTS || h > MAX_SG_DOTS) return Promise.reject(new Error(`${w}×${h} puntos supera el máximo de ${MAX_SG_DOTS}`));
+    const problem = imageSizeProblem(w, h);
+    if (problem) return Promise.reject(new Error(problem));
     return rasterize(href, w, h, threshold).then(data => ({ w, h, data }));
   }
 

@@ -14,7 +14,7 @@ const DOT = { 203: PB.units.dotSize(203), 300: PB.units.dotSize(300) };
 const HEAD = 'SIZE 100 mm,60 mm\r\nCLS\r\n';
 const TAIL = 'PRINT 1,1\r\n';
 const doc = (...lines) => HEAD + lines.join('\r\n') + '\r\n' + TAIL;
-const tdoc = (...cmds) => `{D0600,0800,0600|}\n{C|}\n${cmds.join('\n')}\n{XS;I,0001,0002C4100|}\n`;
+const tdoc = (...cmds) => `{D0630,0800,0600|}\n{C|}\n${cmds.join('\n')}\n{XS;I,0001,0002C4100|}\n`;
 const parseS = (text, dpi = 203) => tspl.parse(text, { dpi });
 const parseP = text => tpcl.parse(text, { dpi: 203 });
 const near = (a, b, label) => assert.ok(Math.abs(a - b) < 1e-6, `${label}: ${a} vs ${b}`);

@@ -38,9 +38,12 @@
       if (item.white === true) ctx.once('tspl-ellipse-white', () => diag.warning('Hay elipses o círculos en blanco (color W de ZPL): TSPL no tiene color de trazo, se escriben en negro'));
       else if (item.reverse === true) ctx.once('tspl-ellipse-reverse', () => diag.warning('Hay elipses o círculos con impresión inversa (^FR o ^LR de ZPL): TSPL no la tiene en estas formas, se escriben normales'));
       const dots = v => exactDots(ctx, Number.isFinite(v) ? v : 0);
-      const [x, y] = [item.x, item.y].map(v => Math.max(0, roundDots(dots(v))));
-      const [w, h] = [item.width, item.height].map(v => Math.max(1, roundDots(dots(v))));
-      const thickness = Math.max(1, roundDots(dots(item.thickness)));
+      const rawXY = [item.x, item.y].map(v => roundDots(dots(v)));
+      if (rawXY.some(v => v < 0)) ctx.once('tspl-shape-negative', () => diag.warning('Hay elementos con posición negativa: TSPL no admite coordenadas negativas en estas formas, se escriben en 0'));
+      const [x, y] = rawXY.map(v => Math.max(0, v));
+      const rawSize = [item.width, item.height, item.thickness].map(v => roundDots(dots(v)));
+      if (rawSize.some(v => v < 1)) ctx.once('tspl-shape-min', () => diag.warning('Hay formas con grosor, ancho o alto menor de 1 punto: TSPL necesita al menos 1 punto, se escriben con 1 punto'));
+      const [w, h, thickness] = rawSize.map(v => Math.max(1, v));
       return item.ref === 'CIRCLE' && w === h ? `CIRCLE ${x},${y},${w},${thickness}` : `ELLIPSE ${x},${y},${w},${h},${thickness}`;
     }
 

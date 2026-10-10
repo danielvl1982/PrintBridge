@@ -193,8 +193,10 @@ test('tpcl SG: data with ";" ":" "<" "=" ">" "?" is kept raw (not split on ; or 
 test('tpcl SG: a size above the 9999-dot limit is reported and not drawn (nothing is allocated)', () => {
   const model = tpcl.parse(sg('00', { w: 99999, h: 99999 }));
   assert.equal(model.items.filter(i => i.kind === 'image').length, 0);
-  assert.equal(model.diagnostics.length, 1);
-  assert.match(model.diagnostics[0].text, /9999/);
+  // V4: the 5-digit width also warns about the format (width has exactly 4 digits), then the size is refused with the limits
+  assert.equal(model.diagnostics.length, 2);
+  assert.match(model.diagnostics[0].text, /ancho "99999"/);
+  assert.match(model.diagnostics[1].text, /9999/);
 });
 
 test('tpcl SG: a D suffix makes x/y dots, converted with the dpi', () => {

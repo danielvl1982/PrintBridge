@@ -25,7 +25,23 @@
   /** Luminance (0-255) below which a pixel is black unless another threshold is given: 50 %. */
   const DEFAULT_THRESHOLD = 128;
 
+  /**
+   * Limits of the TPCL SG command: width exactly 4 digits (1..9999 dots), height 4 or 5 digits (1..99999; B-SV4 6.3.21, B-452-R 6.3.22; the
+   * Spanish B-452-TS12 says 4) and the 512 KB image buffer ("the graphic width for only the smaller value of either the designated value or
+   * the max. buffer size (512 KB) is drawn"), counted here as bytes of dot data, ((w + 7) >> 3) * h.
+   */
+  const SG_LIMITS = Object.freeze({ maxWidth: 9999, maxHeight: 99999, maxBytes: 512 * 1024 });
+
+  /** Bytes of dot data of a w x h bitmap (rows padded to whole bytes). */
+  const sgBytes = (w, h) => rowBytes(w) * h;
+
   PB.images = Object.freeze({
+    SG_LIMITS,
+    /** Bytes of dot data of an SG image of w x h dots (what the 512 KB image buffer holds). */
+    sgBytes,
+    /** Bytes per bitmap row: dots padded up to a multiple of 8. */
+    rowBytes,
+
     /**
      * Bitmap -> nibble data (TPCL SG): rows top to bottom, 4 dots per char with the leftmost dot in the highest bit,
      * rows padded to a multiple of 8 dots with white. Length = ((w+7)>>3) * h * 2.

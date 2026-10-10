@@ -52,8 +52,12 @@ function assertSameLabel(original, converted, dpi) {
         }
         assert.equal(y.data, x.data, `${at} data`);
         assert.equal(y.rotation, x.rotation, `${at} rotation`);
-        near(x.font.size, y.font.size, HALF_POINT, `${at} font size`);
-        near(x.font.size * x.font.scaleX, y.font.size * y.font.scaleX, HALF_POINT, `${at} character width`);
+        {
+          // An outline (PV) text is at least 0020 (2 mm) wide and tall in TPCL
+          const floor = /^PV/.test(y.ref || '') ? 20 : 0;
+          near(Math.max(x.font.size, floor), y.font.size, HALF_POINT, `${at} font size`);
+          near(Math.max(x.font.size * x.font.scaleX, floor), y.font.size * y.font.scaleX, HALF_POINT, `${at} character width`);
+        }
         break;
       case 'line':
         for (const k of ['x1', 'y1', 'x2', 'y2', 'width']) near(x[k], y[k], dot, `${at} ${k}`);
@@ -106,11 +110,13 @@ const INFO_AX = ['info', 'No se escribe {AX'];
 const INFO_PITCH = ['info', 'El paso de etiqueta (pitch) no está especificado'];
 const INFO_FONTS_TPCL = ['info', 'Las fuentes TPCL no coinciden'];
 const INFO_XS = ['info', 'Parámetros de {XS} por defecto'];
+// The 1.5 mm text of the TSPL example is an outline text of 2 mm in TPCL (PV minimum 0020)
+const WARN_PV_SIZE = ['warning', 'Hay textos vectoriales (PV) con ancho o alto fuera de 0020..0850'];
 
 const CASES = [
   { example: spool, from: 'tpcl', to: 'tspl', expected: [INFO_FONTS_TSPL, INFO_SIZE_TSPL, INFO_VARIABLES] },
   { example: barcodes, from: 'tpcl', to: 'tspl', expected: [INFO_FONTS_TSPL, INFO_VARIABLES] },
-  { example: tsplExample, from: 'tspl', to: 'tpcl', expected: [INFO_AX, INFO_FONTS_TPCL, INFO_XS] },
+  { example: tsplExample, from: 'tspl', to: 'tpcl', expected: [INFO_AX, INFO_FONTS_TPCL, WARN_PV_SIZE, INFO_XS] },
 ];
 
 for (const dpi of [203, 300]) {
@@ -129,7 +135,7 @@ for (const dpi of [203, 300]) {
       const { result } = cross(example.source, to, dpi);
       const actual = result.diagnostics.map((d, i) => [d.level, d.text.slice(0, (expected[i] || ['', ''])[1].length)]);
       assert.deepEqual(actual, expected);
-      assert.equal(levels(result.diagnostics, 'warning', 'error').length, 0, 'only info diagnostics for the examples');
+      assert.equal(levels(result.diagnostics, 'warning', 'error').length, expected.filter(([level]) => level === 'warning').length, 'only info diagnostics for the examples, besides the documented warnings');
     });
   }
 }
@@ -303,14 +309,16 @@ test('every cross conversion of the examples reports no error diagnostics and le
   }
 });
 
-test('a TSPL BLOCK with a vector-only font (PV) goes to TPCL as one line with one warning', () => {
+test('a TSPL BLOCK with a vector-only font (PV) goes to TPCL as one line with one block warning', () => {
   const source = ['SIZE 100 mm,60 mm', 'GAP 3 mm,0 mm', 'DIRECTION 1', 'CLS', 'BLOCK 40,30,300,100,"1",0,1,1,4,2,"first line\\[R]second line"', 'PRINT 1,1'].join('\r\n');
   const { result, converted } = cross(source, 'tpcl', 203);
   assert.equal(converted.items.length, 1);
   assert.equal(converted.items[0].block, undefined);
   assert.equal(converted.items[0].data, 'first line second line');
-  assert.deepEqual(levels(result.diagnostics, 'warning').map(d => d.text), [levels(result.diagnostics, 'warning')[0].text]);
-  assert.match(levels(result.diagnostics, 'warning')[0].text, /necesita una fuente de mapa de bits [(]PC[)]/);
+  const warnings = levels(result.diagnostics, 'warning').map(d => d.text);
+  assert.equal(warnings.filter(t => /necesita una fuente de mapa de bits [(]PC[)]/.test(t)).length, 1);
+  // the small TSPL font is also outside the PV minimum (0020), which is reported separately
+  assert.ok(warnings.every(t => /necesita una fuente de mapa de bits|PV[)] con ancho o alto fuera de 0020/.test(t)));
 });
 
 test('a ZPL ^FB block goes to TSPL as BLOCK and back to ZPL as ^FB with the same parameters (both resolutions)', () => {

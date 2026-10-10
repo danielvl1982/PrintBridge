@@ -214,7 +214,7 @@
   const STORED = Object.freeze({ DG: 'descarga de gráfico', DY: 'descarga de objeto', IM: 'mover imagen', IL: 'cargar imagen', XG: 'recuperar imagen' });
 
   function zpl(helpers) {
-    const { int, toDots } = helpers;
+    const { int, fitCoord, roundDots, exactDots } = helpers;
 
     /** One count of ^GF: a whole number from 1 to 99999 (out of range: the nearest limit, reported); null when it is missing or not a number. */
     function readCount(ctx, cmd, index, label) {
@@ -240,7 +240,7 @@
       if (format !== 'A') { ctx.report(diag.warning(`^GF: formato "${format.slice(0, 10)}" no válido (A, B o C), no se dibuja`)); return; }
       const [sent, total, bytesPerRow] = [readCount(ctx, cmd, 1, 'bytes enviados'), readCount(ctx, cmd, 2, 'total de bytes'), readCount(ctx, cmd, 3, 'bytes por fila')];
       if (sent === null || total === null || bytesPerRow === null) {
-        ctx.report(diag.warning(`^GF: falta alguno de los bytes enviados, el total o los bytes por fila (o no son números), el comando se ignora: ${cmd.raw.slice(0, 40)}`));
+        ctx.report(diag.warning(`^GF: falta alguno de los bytes enviados, el total o los bytes por fila, o no son números enteros (${MIN_COUNT}..${MAX_COUNT}): el comando se ignora: ${cmd.raw.slice(0, 40)}`));
         return;
       }
       const dataArg = cmd.args[4];
@@ -297,8 +297,12 @@
         ctx.once('zpl-image-size', () => diag.warning(`Hay imágenes que superan el máximo de ^GF (${MAX_COUNT} bytes de imagen): no se exportan`));
         return [];
       }
-      const [x, y] = [toDots(ctx, item.x || 0), toDots(ctx, item.y || 0)];
-      const origin = item.native && item.native.origin === 'FT' ? `^FT${x},${y + bm.h}` : `^FO${x},${y}`;
+      // Origins are limited to the 0..32000 of ^FO / ^FT (vol 1 5907+, 6021+) and reported once, never clamped silently
+      const dots = mm10 => roundDots(exactDots(ctx, Number.isFinite(mm10) ? mm10 : 0));
+      const x = fitCoord(ctx, dots(item.x));
+      const fromTop = item.native && item.native.origin === 'FT';
+      const y = fitCoord(ctx, dots(item.y) + (fromTop ? bm.h : 0));
+      const origin = fromTop ? `^FT${x},${y}` : `^FO${x},${y}`;
       return [`${origin}${graphicCommand(bm, { compress: Boolean(item.native && item.native.compressed) })}^FS`];
     }
 

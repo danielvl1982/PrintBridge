@@ -41,7 +41,9 @@
       if (item.white === true) ctx.once('tspl-shape-white', () => diag.warning('Hay líneas o cajas en blanco (color W de ZPL): TSPL no tiene color de trazo, se escriben en negro'));
       else if (item.reverse === true) ctx.once('tspl-shape-reverse', () => diag.warning('Hay líneas o cajas con impresión inversa (^FR o ^LR de ZPL): TSPL no la tiene en estas formas, se escriben normales'));
       const [x1, y1, x2, y2] = [item.x1, item.y1, item.x2, item.y2].map(v => exactDots(ctx, v || 0));
-      const thickness = Math.max(1, roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0)));
+      const rawThickness = roundDots(exactDots(ctx, Number.isFinite(item.width) ? item.width : 0));
+      if (rawThickness < 1) ctx.once('tspl-shape-min', () => diag.warning('Hay formas con grosor, ancho o alto menor de 1 punto: TSPL necesita al menos 1 punto, se escriben con 1 punto'));
+      const thickness = Math.max(1, rawThickness);
       const [left, top, right, bottom] = [Math.min(x1, x2), Math.min(y1, y2), Math.max(x1, x2), Math.max(y1, y2)].map(roundDots);
       const radius = Number.isFinite(item.radius) ? roundDots(exactDots(ctx, item.radius)) : 0;
       return `BOX ${left},${top},${right},${bottom},${thickness}${radius > 0 ? `,${radius}` : ''}`;
@@ -77,6 +79,8 @@
               ctx.report(diag.warning(`BOX con valores no válidos: ${cmd.raw.slice(0, 40)}`));
               return;
             }
+            // The corners are the upper left and the lower right one (manual): an end before the start is read as written and drawn as the rectangle they span
+            if (ex < px || ey < py) ctx.report(diag.warning(`BOX: el punto final (${cmd.args[2].raw},${cmd.args[3].raw}) está antes del inicial (${cmd.args[0].raw},${cmd.args[1].raw}): se esperan la esquina superior izquierda y la inferior derecha, se dibuja el rectángulo que forman`));
             const native = { width: thickness, kind: 'BOX' };
             const radius = cmd.args.length > 5 ? num(cmd.args[5]) : null;
             if (radius !== null) native.radius = radius;

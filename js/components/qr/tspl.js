@@ -32,9 +32,9 @@
   /** Optional parameter: prefix letter + value. Native field and accepted range of each one. */
   const OPTION = /^([JMSXL])\s*(\d+)$/i;
   const OPTIONS = Object.freeze({
-    J: { field: 'justification', ok: v => v >= 1 && v <= 9 },
-    M: { field: 'model', ok: v => v === 1 || v === 2 },
-    S: { field: 'mask', ok: v => v >= 0 && v <= 8 },
+    J: { field: 'justification', name: 'justificación', range: '1 a 9', ok: v => v >= 1 && v <= 9 },
+    M: { field: 'model', name: 'modelo', range: '1 o 2', ok: v => v === 1 || v === 2 },
+    S: { field: 'mask', name: 'máscara', range: '0 a 8', ok: v => v >= 0 && v <= 8 },
     X: { field: 'area', ok: () => true },
     L: { field: 'length', ok: () => true },
   });
@@ -71,7 +71,7 @@
 
   function tspl(helpers) {
     const {
-      sourceOf, num, ROTATIONS, quoted, exactDots, roundDots, safeData, numberField, selectField, textField,
+      sourceOf, num, ROTATIONS, quoted, counterRefsWarning, exactDots, roundDots, safeData, numberField, selectField, textField,
       insertCommand, freePlaceholder, dropDots,
     } = helpers;
 
@@ -139,7 +139,7 @@
             if (px === null || py === null) { ctx.report(diag.warning(`QRCODE con coordenadas no válidas: ${cmd.raw.slice(0, 40)}`)); return; }
 
             const eccKey = cmd.args[2].value.toUpperCase();
-            if (!(eccKey in ECC_LEVELS)) ctx.report(diag.info(`${ref}: corrección de errores "${cmd.args[2].value}" desconocida, se dibuja con ${DEFAULT_ECC}`));
+            if (!(eccKey in ECC_LEVELS)) ctx.report(diag.warning(`${ref}: corrección de errores "${cmd.args[2].value}" no válida (L, M, Q o H), se dibuja con ${DEFAULT_ECC}`));
 
             const cellValue = num(cmd.args[3]);
             const cellDots = cellValue !== null && cellValue > 0 ? cellValue : DEFAULT_CELL;
@@ -150,6 +150,13 @@
             if (modeKey !== 'A' && modeKey !== 'M') ctx.report(diag.warning(`${ref}: modo "${cmd.args[4].value}" no válido, se usa A (automático)`));
 
             const rotation = num(cmd.args[5]);
+            // Cell width: whole dots 1..MAX_CELL; read as written, drawn as the nearest valid one
+            let drawnCell = cellDots;
+            if (cellValue !== null && cellValue > 0) {
+              drawnCell = Math.min(MAX_CELL, Math.max(1, Math.round(cellValue)));
+              if (!Number.isInteger(cellValue)) ctx.report(diag.warning(`${ref}: ancho de celda "${cmd.args[3].value}" no es un número entero de puntos, se dibuja con ${drawnCell}`));
+              else if (cellValue > MAX_CELL) ctx.report(diag.warning(`${ref}: ancho de celda ${cellValue} fuera de 1 a ${MAX_CELL} puntos, se dibuja con ${MAX_CELL}`));
+            }
             const native = { cell: cellDots, mode, rotation: ROTATIONS.includes(rotation) ? rotation : 0 };
             if (rotation === null || !ROTATIONS.includes(rotation)) {
               ctx.report(diag.warning(`${ref}: rotación "${cmd.args[5].value}" no válida, se dibuja sin rotar`));
@@ -162,10 +169,13 @@
             for (const arg of cmd.args.slice(6, -1)) {
               const opt = OPTION.exec(arg.value);
               const spec = opt && OPTIONS[opt[1].toUpperCase()];
-              if (spec && spec.ok(+opt[2])) native[spec.field] = +opt[2];
+              if (!spec) ctx.report(diag.warning(`${ref}: parámetro opcional "${arg.value}" no reconocido (J, M, S, X o L seguidos de un número), se ignora`));
+              else if (spec.ok(+opt[2])) native[spec.field] = +opt[2];
+              else ctx.report(diag.warning(`${ref}: ${spec.name} "${arg.value}" fuera de ${spec.range}, se ignora`));
             }
 
             const last = cmd.args[cmd.args.length - 1];
+            counterRefsWarning(ctx, ref, last);
             let data = last.value;
             if (COUNTER.test(last.raw)) {
               data = last.raw;
@@ -182,7 +192,7 @@
             const { x, y } = ctx.pos(px, py);
             ctx.addItem({
               kind: 'qr', ref, source: sourceOf(cmd), x, y, raw: { x: String(px), y: String(py), cell: String(cellDots) },
-              ecc: ECC_LEVELS[eccKey] ?? DEFAULT_ECC, cell: cellDots * ctx.dot, symbology: 'qr', native, data,
+              ecc: ECC_LEVELS[eccKey] ?? DEFAULT_ECC, cell: drawnCell * ctx.dot, symbology: 'qr', native, data,
             });
           },
         },

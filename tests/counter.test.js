@@ -199,7 +199,7 @@ test('emit: a TSPL-origin counter and a barcode counter reach the TPCL tokens', 
     { kind: 'barcode', x: 100, y: 400, rotation: 0, symbology: 'code39', module: 20, height: 80, humanReadable: true, data: 'A1', counter: { step: -2 } },
   ] };
   const out = tpcl.emit(model, { dpi: 203 }).text;
-  assert.match(out, /\{XB00;0100,0200,9,0,\d\d,0,0080,\+0000000005,000,1,04\|\}/);
+  assert.match(out, /\{XB00;0100,0200,9,1,\d\d,0,0080,\+0000000005,000,1,04\|\}/);
   assert.match(out, /\{XB01;0100,0400,3,1,\d\d,\d\d,\d\d,\d\d,\d\d,0,0080,-0000000002,1\|\}/);
 });
 

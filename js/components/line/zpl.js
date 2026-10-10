@@ -57,7 +57,7 @@
    * readRounding, appearance, origin. Geometry: radiusFor, degreeOf. Emit: place, gb, flags, clampThickness. Edit: colorField, rounding, groups.
    */
   function shape(helpers) {
-    const { int, exactDots, roundDots, setArgs, paramField, reverseField } = helpers;
+    const { int, exactDots, roundDots, setArgs, paramField, reverseField, fitCoord } = helpers;
 
     // ---- Parse ------------------------------------------------------------------------------------------------------------------
 
@@ -129,10 +129,10 @@
       return { exact, dots: clamp(roundDots(exact), min, max) };
     }
 
-    /** ^FOx,y, or ^FTx,y+h when the item came from an ^FT field (x, y = the top-left corner in dots; never below 0). */
-    function place(item, x, y, h) {
-      const [px, py] = [Math.max(0, x), Math.max(0, y)];
-      return item.native && item.native.origin === 'FT' ? `^FT${px},${py + h}` : `^FO${px},${py}`;
+    /** ^FOx,y, or ^FTx,y+h when the item came from an ^FT field (x, y = the top-left corner in dots; limited to 0..32000, reported once). */
+    function place(ctx, item, x, y, h) {
+      const [px, py] = [fitCoord(ctx, x), fitCoord(ctx, y)];
+      return item.native && item.native.origin === 'FT' ? `^FT${px},${fitCoord(ctx, py + h)}` : `^FO${px},${py}`;
     }
 
     /** ^GBw,h,t[,c[,r]]: the colour letter only when it is not the default or the rounding follows. */
@@ -212,8 +212,10 @@
 
     const whole = (v, fallback, min, max) => (typeof v === 'number' && Number.isFinite(v) ? clamp(Math.round(v), min, max) : fallback);
 
+    const TOO_LONG = `Hay líneas o cajas de más de ${MAX_BOX} puntos de largo: ZPL (^GB / ^GD) admite hasta ${MAX_BOX}, se ajustan al máximo`;
+
     return {
-      MAX_BOX, MAX_ROUND, MIN_DIAGONAL, MIN_ROUND_SIZE, MIN_ROUND_THICKNESS, COLOR_OPTIONS, ORIENTATION_OPTIONS, ROUNDING_OPTIONS,
+      MAX_BOX, TOO_LONG, MAX_ROUND, MIN_DIAGONAL, MIN_ROUND_SIZE, MIN_ROUND_THICKNESS, COLOR_OPTIONS, ORIENTATION_OPTIONS, ROUNDING_OPTIONS,
       readDots, readColor, readRounding, appearance, origin, base, radiusFor, degreeOf, thickness, place, gb, fr,
       colorField, reverse, roundingField, boxValues, group, whole, clamp, longer, shorter, boxEdits,
     };
@@ -276,20 +278,22 @@
           return [];
         }
         const border = Math.min(span, t.dots);
+        if (span > MAX_BOX) ctx.once('zpl-shape-size', () => diag.warning(S.TOO_LONG));
         const length = bound(Math.max(span, border), border, MAX_BOX);
         const [w, h] = horizontal ? [length, t.dots] : [t.dots, length];
         const left = horizontal ? Math.min(x1, x2) : (x1 + x2) / 2 - t.exact / 2;
         const top = horizontal ? (y1 + y2) / 2 - t.exact / 2 : Math.min(y1, y2);
-        return `${S.place(item, roundDots(left), roundDots(top), h)}${S.gb(w, h, border, { white })}${S.fr(item)}^FS`;
+        return `${S.place(ctx, item, roundDots(left), roundDots(top), h)}${S.gb(w, h, border, { white })}${S.fr(item)}^FS`;
       }
       const sizes = [Math.abs(dx), Math.abs(dy)].map(v => roundDots(v));
       if (sizes.some(v => v < MIN_DIAGONAL)) ctx.once('zpl-gd-min', () => diag.warning(`Hay líneas diagonales de menos de ${MIN_DIAGONAL} puntos de ancho o alto: ZPL (^GD) admite de ${MIN_DIAGONAL} a ${MAX_BOX}, se ajustan`));
+      if (sizes.some(v => v > MAX_BOX)) ctx.once('zpl-shape-size', () => diag.warning(S.TOO_LONG));
       const [w, h] = sizes.map(v => bound(v, MIN_DIAGONAL, MAX_BOX));
       const leaning = dx * dy < 0 ? 'R' : 'L';
       const args = [w, h, t.dots];
       if (white || leaning === 'L') args.push(white ? 'W' : 'B');
       if (leaning === 'L') args.push('L');
-      return `${S.place(item, roundDots(Math.min(x1, x2)), roundDots(Math.min(y1, y2)), h)}^GD${args.join(',')}${S.fr(item)}^FS`;
+      return `${S.place(ctx, item, roundDots(Math.min(x1, x2)), roundDots(Math.min(y1, y2)), h)}^GD${args.join(',')}${S.fr(item)}^FS`;
     }
 
     // -------------------------------------------------------------------------------------------------------------

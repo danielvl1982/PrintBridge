@@ -59,6 +59,11 @@
   const INTEGER = /^[+-]?\d+$/;
   const DECIMAL = /^[+-]?(\d+\.?\d*|\.\d+)$/;
 
+  /** Field origin (^FO, ^FT) 0 to 32000 dots; ^LH 0 to 32000, ^LS -9999 to 9999 and ^LT -120 to 120 (ZPL II Programming Guide Volume One, 2003). */
+  const COORD_MAX = 32000;
+  const OFFSET_LIMITS = Object.freeze({ LH: Object.freeze([0, 32000]), LS: Object.freeze([-9999, 9999]), LT: Object.freeze([-120, 120]) });
+  const limited = (v, [min, max]) => Math.min(max, Math.max(min, v));
+
   /** Largest ^FD / ^FV data of the guide (3072 characters). */
   const MAX_DATA = 3072;
 
@@ -323,7 +328,8 @@
    * Follows the ^LH, ^LS and ^LT commands fed to it (the same rules the parser uses): lh = { x, y } in dots, ls = shift left, lt = shift
    * down; offset() is what they add to the later coordinates, { x: lh.x - ls, y: lh.y + lt }. feed(cmd) returns true when the command
    * was one of the three and was applied, false when it was one and its value is not valid (nothing changes), null for any other command.
-   * An omitted or empty ^LH argument keeps its previous value; at least one value is needed.
+   * An omitted or empty ^LH argument keeps its previous value; at least one value is needed. A value outside the guide's range (OFFSET_LIMITS)
+   * is applied at the nearest limit (the parser reports it).
    */
   function createOffsets() {
     let lh = { x: 0, y: 0 };
@@ -338,13 +344,13 @@
         if (cmd.id === '^LH') {
           const [x, y] = [whole(cmd.args[0]), whole(cmd.args[1])];
           if (x === null && y === null) return false;
-          lh = { x: x === null ? lh.x : x, y: y === null ? lh.y : y };
+          lh = { x: x === null ? lh.x : limited(x, OFFSET_LIMITS.LH), y: y === null ? lh.y : limited(y, OFFSET_LIMITS.LH) };
           return true;
         }
         if (cmd.id === '^LS' || cmd.id === '^LT') {
           const v = whole(cmd.args[0]);
           if (v === null) return false;
-          if (cmd.id === '^LS') ls = v; else lt = v;
+          if (cmd.id === '^LS') ls = limited(v, OFFSET_LIMITS.LS); else lt = limited(v, OFFSET_LIMITS.LT);
           return true;
         }
         return null;
@@ -366,7 +372,8 @@
     }
     const offset = offsets.offset();
     const dot = units.dotSize(dpi);
-    return { x: Math.max(0, roundDots(point.x / dot - offset.x)), y: Math.max(0, roundDots(point.y / dot - offset.y)) };
+    const dots = v => Math.min(COORD_MAX, Math.max(0, roundDots(v)));
+    return { x: dots(point.x / dot - offset.x), y: dots(point.y / dot - offset.y) };
   }
 
   /** Replaces [start, end) ranges of text with values; ranges must not overlap (insertions at the same place keep their order). */
@@ -472,7 +479,7 @@
         if (current === null) continue;
         const offset = found.offset[axis];
         const target = (current + offset) * dot + delta[axis]; // 0.1 mm, where the item should land
-        const dots = Math.max(0, roundDots(target / dot - offset));
+        const dots = Math.min(COORD_MAX, Math.max(0, roundDots(target / dot - offset)));
         if (a) {
           if (String(dots) !== a.raw && !(a.raw === '' && dots === 0)) edits.push({ start: a.start, end: a.end, value: String(dots) });
         } else if (dots !== 0) {
@@ -575,7 +582,7 @@
   }
 
   PB.zplEdit = Object.freeze({
-    createZplEditing, createOffsets, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable,
+    createZplEditing, createOffsets, COORD_MAX, OFFSET_LIMITS, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable,
     numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField, reverseField, setArgs, flagEdits, serialFields,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

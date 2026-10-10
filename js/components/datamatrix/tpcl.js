@@ -29,6 +29,7 @@
   /** The rectangular codes of the manual, as X x Y cells (iiijjj), which the viewer does not generate. */
   const RECTANGLES = Object.freeze(['018008', '032008', '026012', '036012', '036016', '048016']);
 
+  /** 1-cell width 00..99 dots (00 draws nothing). */
   const MAX_CELL_DOTS = 99;
   const pad3 = n => String(n).padStart(3, '0');
 
@@ -50,8 +51,31 @@
   function tpcl(helpers) {
     const {
       sourceOf, insertCommand, pad4, clampCoord, numberField, rotationField, nextId, freePlaceholder, ROTATION_STEPS, ROTATIONS,
-      wrap, safeData, coordText, allocId,
+      wrap, safeData, coordText, allocId, fitBarcodeData, barcodeNumberWarning, MATRIX_DATA_MAX,
     } = helpers;
+
+    /**
+     * Problems of the parameters of an XB type Q command as written (B-SV4 6.3.9, B-452-R 6.3.10, B-452-TS12 6.12): ECC type 00..14 or 20,
+     * cell 00..99 (a larger one is drawn as 99), format ID 00..06 or 11..16, number of cells, connection setting.
+     */
+    function problems(ref, { ecc, cell, formatId, cells, connection }) {
+      const out = [];
+      if (!(+ecc <= 14 || +ecc === 20)) out.push(diag.warning(`${ref}: tipo de ECC "${ecc}" fuera de 00..14 o 20: la impresora puede no aceptarlo`));
+      if (+cell > MAX_CELL_DOTS) out.push(diag.warning(`${ref}: módulo "${cell}" fuera de 00..${MAX_CELL_DOTS}: la impresora puede no aceptarlo, se dibuja con ${MAX_CELL_DOTS}`));
+      if (!(+formatId <= 6 || (+formatId >= 11 && +formatId <= 16))) out.push(diag.warning(`${ref}: formato ID "${formatId}" fuera de 00..06 o 11..16: la impresora puede no aceptarlo`));
+      if (cells && !(cells.x === '000' && cells.y === '000') && !RECTANGLES.includes(cells.x + cells.y)) {
+        const [x, y] = [+cells.x, +cells.y];
+        const valid = +ecc === 20 ? x === y && x % 2 === 0 && x >= 10 && x <= 144 : x === y && x % 2 === 1 && x >= 9 && x <= 49;
+        if (!valid) out.push(diag.warning(`${ref}: número de celdas ${x}×${y} no válido (${+ecc === 20 ? 'ECC200: pares de 10..144, cuadrado o uno de los rectangulares del manual' : 'ECC0 a ECC140: impares de 9..49, cuadrado'}): la impresora lo pone en automático`));
+      }
+      if (connection) {
+        const [, kk, ll, id1, id2] = /^J(\d{2})(\d{2})(\d{3})(\d{3})$/.exec(connection);
+        if (+kk < 1 || +kk > 16 || +ll < 2 || +ll > 16 || +id1 < 1 || +id1 > 254 || +id2 < 1 || +id2 > 254) {
+          out.push(diag.warning(`${ref}: conexión "${connection}" fuera de rango (kk 01..16, ll 02..16, ID 1 y 2 001..254): la impresora puede no aceptarlo`));
+        }
+      }
+      return out;
+    }
 
     /** Adds an XB type Q command plus its RB data command with a unique <#DATAMATRIX{k}#> variable, rotated to look upright in the view. */
     function build(text, point, options) {
@@ -88,9 +112,14 @@
       }
       const cells = SIDES.includes(item.size) ? `,C${pad3(item.size)}${pad3(item.size)}` : '';
       const id = allocId(ctx, 'XB');
+      const data = safeData(ctx, item.data);
+      const named = PB.variables.namesIn(data).length > 0;
+      if (data.length > MATRIX_DATA_MAX && !named) {
+        ctx.once('tpcl-matrix-data', () => diag.warning(`Hay Data Matrix con datos de más de ${MATRIX_DATA_MAX} caracteres: la impresora descarta el resto, se escriben los ${MATRIX_DATA_MAX} primeros`));
+      }
       return [
         wrap(`XB${id};${x},${y},Q,20,${String(cell).padStart(2, '0')},00,${rotationDigit(ctx, item.rotation)}${cells}`),
-        wrap(`RB${id};${safeData(ctx, item.data)}`),
+        wrap(`RB${id};${named ? data : data.slice(0, MATRIX_DATA_MAX)}`),
       ];
     }
 
@@ -120,9 +149,10 @@
               native.connection = connection;
               ctx.report(diag.warning(`${ref}: enlace de símbolos (${connection}) no soportado por el visor, se dibuja como un símbolo único`));
             }
+            [barcodeNumberWarning(ref, m[1]), ...problems(ref, { ecc: m[4], cell: m[5], formatId: m[6], cells: native.cells, connection })].filter(Boolean).forEach(d => ctx.report(d));
             ctx.addField(ref, {
               kind: 'datamatrix', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3], cell: m[5] },
-              rotation: ROTATIONS[m[7]], cell: +m[5] * ctx.dot, ...(size && { size }), ecc: +m[4] * 10, symbology: 'datamatrix', native, data: inline,
+              rotation: ROTATIONS[m[7]], cell: Math.min(MAX_CELL_DOTS, +m[5]) * ctx.dot, ...(size && { size }), ecc: +m[4] * 10, symbology: 'datamatrix', native, data: inline == null ? null : fitBarcodeData(ctx, ref, 'datamatrix', inline),
             });
           },
         },
