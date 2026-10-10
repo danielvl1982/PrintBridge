@@ -21,13 +21,23 @@ C# `PrintDocument` would. Reviews are skipped for this feature (user decision 20
 - One writer at a time, one commit per task, no push, no review ceremony (skipped by the user).
 
 ## Tasks
-- [ ] P1 Agent: `POST /print-image` (PNG body, query: printer, widthMm, heightMm, dpi, offsetXmm, offsetYmm, copies), validation, PowerShell PrintDocument, tests
+- [x] P1 Agent: `POST /print-image` (PNG body, query: printer, widthMm, heightMm, dpi, offsetXmm, offsetYmm, copies), validation, PowerShell PrintDocument, tests
 - [ ] P2 Browser: export the viewer SVG to a PNG at a dpi with the exact mm size (pure helpers tested), fonts / images embedded
 - [ ] P3 UI: print panel second mode "Driver (imagen)" (dpi, offsets, preview of the page size), messages, agent client call
 - [ ] P4 Close: README + print-agent doc, Chrome probe with a fake agent, full `node --test`, this document finished, Engram mirror
 
 ## Findings
+- P1: the spooler interface gained an optional `printImage(printerName, png, options)`; the HTTP flow is tested with a fake, the real one runs `IMAGE_SCRIPT`
+  (PowerShell + `PrintDocument`) with the values in environment variables (`PB_*`) and the PNG in a temp file. Image limit: new config key `maxImageBytes`
+  (default 20 MB), independent of `maxBytes`. New code: `not_png` 415; PrintDocument / PowerShell failures reuse `spooler_error` 502 with `detail`.
+- Interpolation: NearestNeighbor when the PNG dpi is at least the printer's dpi (the browser renders at the printer resolution, so pixels map 1:1 and barcode bars
+  stay sharp), HighQualityBicubic only when the PNG has fewer dots than the printer (a non integer upscale with nearest neighbour gives uneven bars).
+  `PixelOffsetMode.Half` avoids a half pixel shift. The image is drawn into the rectangle widthMm x heightMm, so the PNG metadata dpi is irrelevant.
 
 ## Open
+- Only a real printer can verify: the position of the origin (printable area or physical page corner) and the offsets to compensate it, `paper=label` accepted by
+  the driver of a label printer, copies, and that nothing is scaled by the driver ("fit to page" options).
+- The PowerShell `PrintPage` handler captures exceptions into a variable and cancels the job; unverified on a machine with a printer.
 
 ## Progress
+- P1 done: `POST /print-image` in the agent, 19 new tests in tests/print-image.test.js (full suite 4288 tests, 4286 pass, 0 fail, 2 skipped, no printer or PowerShell print involved).

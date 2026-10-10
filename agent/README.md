@@ -5,7 +5,8 @@ printer with one click (the **Print** button of the print panel). A web page can
 by itself, so the page talks to this agent, and the agent hands the bytes to the Windows print spooler.
 
 It is one file (`printbridge-agent.js`), has **no npm dependencies**, listens only on `127.0.0.1` and sends the bytes exactly as they
-arrive (TPCL, TSPL and ZPL, including the binary `BITMAP` data of TSPL images).
+arrive (TPCL, TSPL and ZPL, including the binary `BITMAP` data of TSPL images). It can also print a PNG of the drawing through the Windows printer driver
+(`POST /print-image`, see [Print an image](#print-an-image-through-the-driver)).
 
 > Status: the HTTP protocol, the origin checks and the app panel are covered by automated tests with a fake spooler, and the printer
 > listing and `install.ps1` (download, start, Scheduled Task, uninstall) were run on a real Windows machine. **Sending a job to a real
@@ -88,7 +89,8 @@ the agent starts, so restart it after editing. A missing key keeps its default; 
 | `port` | `9631` | TCP port on `127.0.0.1`. If you change it, change the **Agente** field of the print panel too. |
 | `allowedOrigins` | `["https://danielvl1982.github.io", "http://localhost", "http://127.0.0.1"]` | Web origins (scheme + host + port) allowed to call the agent. `http://localhost` and `http://127.0.0.1` without a port accept any port; every other entry must match exactly. |
 | `allowFileOrigin` | `false` | Also accept pages opened from a file (`file://`, whose origin is `null`). See the risk below. |
-| `maxBytes` | `5242880` (5 MB) | Largest request body accepted; bigger ones get `too_large`. |
+| `maxBytes` | `5242880` (5 MB) | Largest request body accepted by `/print`; bigger ones get `too_large`. |
+| `maxImageBytes` | `20971520` (20 MB) | Largest PNG accepted by `/print-image` (a 600 dpi A4 is several MB); bigger ones get `too_large`. |
 
 ### Allowed origins, and why
 
@@ -126,6 +128,7 @@ All answers are JSON, except the 204 of the preflight. Errors look like `{ "ok":
 | `GET /health` | `{ "ok": true, "version": "1.0.0", "platform": "win32" }` |
 | `GET /printers` | `{ "printers": [{ "name": "...", "isDefault": true, "status": "ready" }] }` (`status`: `ready`, `printing`, `warming-up`, `stopped`, `offline`, `unknown`) |
 | `POST /print?printer=<name>&copies=<n>` | The raw bytes as the body (`Content-Type: application/octet-stream`). `{ "ok": true, "bytes": <size of one copy>, "copies": <n> }` |
+| `POST /print-image?printer=<name>&widthMm=<mm>&heightMm=<mm>&dpi=<dpi>` (+ optional `offsetXmm`, `offsetYmm`, `copies`, `paper`) | A PNG as the body (`Content-Type: image/png`). `{ "ok": true, "bytes": <PNG size>, "copies": <n> }`. See [Print an image](#print-an-image-through-the-driver) |
 | `OPTIONS` (any path) | The CORS preflight: `Access-Control-Allow-Origin` with the exact origin (never `*`), `-Methods`, `-Headers`, `Access-Control-Allow-Private-Network: true`, `Vary: Origin` |
 
 `copies` is 1 to 99 (default 1): the agent repeats the data that many times inside **one** spooler job, so labels with counters increment
@@ -135,9 +138,34 @@ per label as if the printer printed them one after another.
 |---|---|---|
 | `origin_refused` | 403 | The `Origin` is not allowed, or the `Host` header is not `127.0.0.1` / `localhost` |
 | `printer_not_found` | 404 | The printer name is not in the Windows list (checked before printing) |
-| `too_large` | 413 | The body is over `maxBytes` |
-| `bad_request` | 400 | Missing printer, empty body, or `copies` not an integer from 1 to 99 |
-| `spooler_error` | 502 | PowerShell or Windows could not list the printers or write the job (the `detail` field carries the reason) |
+| `too_large` | 413 | The body is over `maxBytes` (`maxImageBytes` for `/print-image`) |
+| `bad_request` | 400 | Missing printer, empty body, `copies` not an integer from 1 to 99, or (`/print-image`) a missing or out of range `widthMm`, `heightMm`, `dpi`, `offsetXmm`, `offsetYmm` or `paper` |
+| `not_png` | 415 | `/print-image` only: the body does not start with the PNG signature |
+| `spooler_error` | 502 | PowerShell or Windows could not list the printers, write the job or print the image (the `detail` field carries the reason) |
+
+## Print an image through the driver
+
+`POST /print-image` prints a PNG with the normal Windows printer driver (`System.Drawing.Printing.PrintDocument`, driven from PowerShell), so it works on
+laser and inkjet printers. It prints **what the PNG shows**, not the label code: it does not prove that a TEC / TSC / Zebra accepts the label language.
+
+| Query parameter | Meaning |
+|---|---|
+| `printer` | Required. An installed printer, resolved like in `/print` (exact name, else case-insensitive). |
+| `widthMm`, `heightMm` | Required. Size of the drawing in millimetres, greater than 0 and up to 1000. The image is drawn at exactly this size (100 %), never fitted to the page. |
+| `dpi` | Required. The resolution the PNG was rendered at, 72 to 1200. |
+| `offsetXmm`, `offsetYmm` | Position of the drawing on the page, -100 to 100 (default 0). Use them to compensate the non printable margins of laser printers. |
+| `copies` | 1 to 99 (default 1), the copies of the print job. |
+| `paper` | `default` (default): the driver's default paper. `label`: a custom page of `widthMm` x `heightMm`. |
+
+The margins are set to 0 and the origin is the printable area, so a laser printer may clip the edges of the drawing: shift it with the offsets.
+Interpolation: when the PNG has at least the printer's resolution (`dpi` >= the printer's dpi) the pixels are copied as they are (nearest neighbour), which keeps
+barcode bars sharp; only a PNG with fewer dots than the printer is resampled (high quality bicubic), because nearest neighbour would make uneven bars.
+Every value is validated before PowerShell starts; the PNG goes through a temporary file and the other values through environment variables, never inside the command text.
+Like `/print`, it has the origin and Host checks, and the log line has the printer, size, dpi and copies but never the image.
+
+```bat
+curl -X POST --data-binary @label.png -H "Content-Type: image/png" "http://127.0.0.1:9631/print-image?printer=HP%20LaserJet&widthMm=100&heightMm=50&dpi=300&paper=label"
+```
 
 ## Test it with curl
 
@@ -180,7 +208,7 @@ Use `%20` for spaces in the printer name. `--data-binary` keeps the bytes untouc
 - The agent binds to `127.0.0.1` only: it is not reachable from other computers on the network.
 - Every request is checked: the `Origin` must be allowed (or absent), and the `Host` header must be `127.0.0.1` or `localhost`, which stops DNS-rebinding attacks (a page on `evil.example` made to resolve to `127.0.0.1`).
 - The label data is never logged: the log has one line per job with the time, the printer, the byte count and the copies.
-- The printer name and the data never go inside a PowerShell command line: the name travels in an environment variable and the bytes in a temporary file (deleted afterwards).
+- The printer name and the data never go inside a PowerShell command line: the name travels in an environment variable and the bytes in a temporary file (deleted afterwards). `/print-image` does the same with its numbers.
 - There is **no authentication token**. The origin and Host checks already keep other web pages out, and a token stored in a page served from GitHub Pages would be readable by anyone, so it would add no protection. Anything running on this PC as
   you can already print without the agent. If the PC is shared with untrusted users, do not run the agent there.
 - The size limit (`maxBytes`, 5 MB by default) bounds memory use; a job is also limited to 100 MB after repeating the copies.

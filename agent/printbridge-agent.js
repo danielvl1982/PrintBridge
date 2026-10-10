@@ -5,15 +5,18 @@
  *
  * Node >= 18, CommonJS, zero npm dependencies. Windows is the target (the spooler is reached through PowerShell and winspool.drv),
  * but the HTTP protocol is independent of it: createServer({ spooler, config }) takes the spooler as an injected interface
- *   { listPrinters(): Promise<[{ name, isDefault, status }]>, printRaw(printerName, Buffer): Promise<void> }
+ *   { listPrinters(): Promise<[{ name, isDefault, status }]>, printRaw(printerName, Buffer): Promise<void>,
+ *     printImage?(printerName, pngBuffer, { widthMm, heightMm, dpi, offsetXmm, offsetYmm, copies, paper }): Promise<void> }
  * so the tests run it against a fake on any OS.
  *
  * HTTP API (127.0.0.1 only, default port 9631):
  *   GET  /health                              -> { ok, version, platform }
  *   GET  /printers                            -> { printers: [{ name, isDefault, status }] }
  *   POST /print?printer=<name>&copies=<1..99> -> body = raw bytes (application/octet-stream) -> { ok: true, bytes, copies }
+ *   POST /print-image?printer=<name>&widthMm=&heightMm=&dpi=[&offsetXmm=&offsetYmm=&copies=&paper=label|default]
+ *                                             -> body = PNG (image/png), printed through the driver -> { ok: true, bytes, copies }
  *   errors: { ok: false, error: <code>, message: <Spanish text> } with the codes
- *     origin_refused 403, printer_not_found 404, too_large 413, bad_request 400, spooler_error 502
+ *     origin_refused 403, printer_not_found 404, too_large 413, bad_request 400, not_png 415, spooler_error 502
  *     (plus not_found 404 / method_not_allowed 405 for unknown routes)
  * Copies are the data repeated N times inside ONE spooler job. The label data is never logged.
  * Run it with `node agent/printbridge-agent.js [--config <file>]`.
@@ -39,6 +42,7 @@ const DEFAULT_CONFIG = Object.freeze({
   allowedOrigins: Object.freeze(['https://danielvl1982.github.io', 'http://localhost', 'http://127.0.0.1']),
   allowFileOrigin: false,
   maxBytes: 5 * 1024 * 1024,
+  maxImageBytes: 20 * 1024 * 1024,
 });
 
 // ---------------------------------------------------------------------------------------------------------------------
@@ -67,6 +71,10 @@ function normalizeConfig(raw) {
   if (raw.maxBytes !== undefined) {
     if (!Number.isInteger(raw.maxBytes) || raw.maxBytes < 1) throw new Error('Invalid config: "maxBytes" must be a positive integer');
     config.maxBytes = raw.maxBytes;
+  }
+  if (raw.maxImageBytes !== undefined) {
+    if (!Number.isInteger(raw.maxImageBytes) || raw.maxImageBytes < 1) throw new Error('Invalid config: "maxImageBytes" must be a positive integer');
+    config.maxImageBytes = raw.maxImageBytes;
   }
   return config;
 }
@@ -188,6 +196,132 @@ $bytes = [System.IO.File]::ReadAllBytes($env:PB_FILE)
 [PbRawPrinter]::Send($env:PB_PRINTER, $bytes)
 `;
 
+/**
+ * Prints a PNG through the printer driver with System.Drawing.Printing.PrintDocument. Everything variable travels in
+ * environment variables (PB_PRINTER, PB_FILE, PB_WIDTH_MM, PB_HEIGHT_MM, PB_DPI, PB_OFFSET_X_MM, PB_OFFSET_Y_MM, PB_COPIES,
+ * PB_PAPER), never inside the command text. Numbers arrive with a dot and are parsed with the invariant culture.
+ * The image is drawn in millimetres at (offsetX, offsetY) with width x height: 100 % scale, never fitted to the page.
+ * Interpolation: NearestNeighbor when the PNG was rendered at the printer resolution or finer (keeps barcode bars sharp, no blur);
+ * HighQualityBicubic only when the PNG has fewer dots than the printer (an upscale, where nearest neighbour would make uneven bars).
+ */
+const IMAGE_SCRIPT = `
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName System.Drawing
+$inv = [System.Globalization.CultureInfo]::InvariantCulture
+$script:widthMm = [double]::Parse($env:PB_WIDTH_MM, $inv)
+$script:heightMm = [double]::Parse($env:PB_HEIGHT_MM, $inv)
+$script:imageDpi = [double]::Parse($env:PB_DPI, $inv)
+$script:offsetX = [double]::Parse($env:PB_OFFSET_X_MM, $inv)
+$script:offsetY = [double]::Parse($env:PB_OFFSET_Y_MM, $inv)
+$copies = [int]$env:PB_COPIES
+$script:pbError = $null
+$stream = $null
+$script:image = $null
+$doc = $null
+try {
+  $bytes = [System.IO.File]::ReadAllBytes($env:PB_FILE)
+  $stream = New-Object System.IO.MemoryStream (,$bytes)
+  $script:image = [System.Drawing.Image]::FromStream($stream)
+  $doc = New-Object System.Drawing.Printing.PrintDocument
+  $doc.PrinterSettings.PrinterName = $env:PB_PRINTER
+  if (-not $doc.PrinterSettings.IsValid) { throw 'The printer is not valid' }
+  $doc.PrinterSettings.Copies = [int16]$copies
+  $doc.DocumentName = 'PrintBridge'
+  $doc.OriginAtMargins = $false
+  $doc.DefaultPageSettings.Margins = New-Object System.Drawing.Printing.Margins 0, 0, 0, 0
+  if ($env:PB_PAPER -eq 'label') {
+    $paperW = [int][Math]::Round($script:widthMm / 25.4 * 100)
+    $paperH = [int][Math]::Round($script:heightMm / 25.4 * 100)
+    $doc.DefaultPageSettings.PaperSize = New-Object System.Drawing.Printing.PaperSize 'PrintBridge label', $paperW, $paperH
+  }
+  $doc.add_PrintPage({
+    param($sender, $e)
+    try {
+      $g = $e.Graphics
+      if ($script:imageDpi -ge ($g.DpiX - 0.5)) {
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::NearestNeighbor
+      } else {
+        $g.InterpolationMode = [System.Drawing.Drawing2D.InterpolationMode]::HighQualityBicubic
+      }
+      $g.PixelOffsetMode = [System.Drawing.Drawing2D.PixelOffsetMode]::Half
+      $g.PageUnit = [System.Drawing.GraphicsUnit]::Millimeter
+      $g.DrawImage($script:image, [single]$script:offsetX, [single]$script:offsetY, [single]$script:widthMm, [single]$script:heightMm)
+      $e.HasMorePages = $false
+    } catch {
+      $script:pbError = $_.Exception.Message
+      $e.Cancel = $true
+    }
+  })
+  $doc.Print()
+  if ($script:pbError) { throw $script:pbError }
+} finally {
+  if ($doc) { $doc.Dispose() }
+  if ($script:image) { $script:image.Dispose() }
+  if ($stream) { $stream.Dispose() }
+}
+`;
+
+const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
+const MAX_SIZE_MM = 1000;
+const MAX_OFFSET_MM = 100;
+
+/** Does the buffer start with the 8-byte PNG signature? Exported for the tests. */
+function isPng(buffer) {
+  return Buffer.isBuffer(buffer) && buffer.length >= PNG_SIGNATURE.length && buffer.subarray(0, PNG_SIGNATURE.length).equals(PNG_SIGNATURE);
+}
+
+/**
+ * Validates the query of POST /print-image. Returns { value: { printer, widthMm, heightMm, dpi, offsetXmm, offsetYmm, copies, paper } }
+ * or { error: <English detail> }. Pure: no printer, no PowerShell. Exported for the tests.
+ */
+function parseImageQuery(params) {
+  const printer = params.get('printer');
+  if (!printer) return { error: 'Missing "printer"' };
+  const number = (name, { min, max, minExclusive = false, required = false, fallback = 0, integer = false }) => {
+    if (!params.has(name)) return required ? { error: `Missing "${name}"` } : { number: fallback };
+    const text = params.get(name);
+    const valid = (integer ? /^\d{1,3}$/ : /^-?\d{1,6}(\.\d{1,6})?$/).test(text);
+    const n = valid ? Number(text) : NaN;
+    if (!(n >= min && n <= max) || (minExclusive && n === min)) {
+      return { error: `"${name}" must be a number ${minExclusive ? 'greater than' : 'from'} ${min}${minExclusive ? ' and up to' : ' to'} ${max}` };
+    }
+    return { number: n };
+  };
+  const specs = {
+    widthMm: { min: 0, max: MAX_SIZE_MM, minExclusive: true, required: true },
+    heightMm: { min: 0, max: MAX_SIZE_MM, minExclusive: true, required: true },
+    dpi: { min: 72, max: 1200, required: true },
+    offsetXmm: { min: -MAX_OFFSET_MM, max: MAX_OFFSET_MM },
+    offsetYmm: { min: -MAX_OFFSET_MM, max: MAX_OFFSET_MM },
+    copies: { min: 1, max: MAX_COPIES, fallback: 1, integer: true },
+  };
+  const value = { printer };
+  for (const name of Object.keys(specs)) {
+    const r = number(name, specs[name]);
+    if (r.error) return { error: r.error };
+    value[name] = r.number;
+  }
+  const paper = params.has('paper') ? params.get('paper') : 'default';
+  if (paper !== 'label' && paper !== 'default') return { error: '"paper" must be "label" or "default"' };
+  value.paper = paper;
+  return { value: { printer, widthMm: value.widthMm, heightMm: value.heightMm, dpi: value.dpi, offsetXmm: value.offsetXmm, offsetYmm: value.offsetYmm, copies: value.copies, paper } };
+}
+
+/** The environment variables IMAGE_SCRIPT reads. Numbers are formatted with a dot, whatever the locale. Exported for the tests. */
+function buildImageEnv(printerName, file, options) {
+  return {
+    PB_PRINTER: printerName,
+    PB_FILE: file,
+    PB_WIDTH_MM: String(options.widthMm),
+    PB_HEIGHT_MM: String(options.heightMm),
+    PB_DPI: String(options.dpi),
+    PB_OFFSET_X_MM: String(options.offsetXmm),
+    PB_OFFSET_Y_MM: String(options.offsetYmm),
+    PB_COPIES: String(options.copies),
+    PB_PAPER: options.paper,
+  };
+}
+
 /** PrinterStatus codes of Win32_Printer, as short words. */
 const STATUS_NAMES = { 3: 'ready', 4: 'printing', 5: 'warming-up', 6: 'stopped', 7: 'offline' };
 
@@ -251,6 +385,17 @@ function createWindowsSpooler() {
         try { fs.unlinkSync(file); } catch (error) { /* already gone */ }
       }
     },
+    async printImage(printerName, data, options) {
+      const unsupported = requireWindows();
+      if (unsupported) return unsupported;
+      const file = path.join(os.tmpdir(), `printbridge-${crypto.randomBytes(8).toString('hex')}.png`);
+      fs.writeFileSync(file, data);
+      try {
+        await runPowerShell(IMAGE_SCRIPT, buildImageEnv(printerName, file, options));
+      } finally {
+        try { fs.unlinkSync(file); } catch (error) { /* already gone */ }
+      }
+    },
   };
 }
 
@@ -263,6 +408,7 @@ const MESSAGES = {
   printer_not_found: 'La impresora no existe en este equipo',
   too_large: 'Los datos son demasiado grandes',
   bad_request: 'Petición no válida',
+  not_png: 'La imagen no es un PNG válido',
   spooler_error: 'El sistema de impresión no pudo completar la operación',
   not_found: 'Ruta no encontrada',
   method_not_allowed: 'Método no permitido',
@@ -351,6 +497,11 @@ function createServer({ spooler, config: rawConfig, log = line => console.log(li
       return print(req, res, url, cors);
     }
 
+    if (url.pathname === '/print-image') {
+      if (req.method !== 'POST') return fail(res, 405, 'method_not_allowed', cors);
+      return printImage(req, res, url, cors);
+    }
+
     return fail(res, 404, 'not_found', cors);
   }
 
@@ -391,6 +542,43 @@ function createServer({ spooler, config: rawConfig, log = line => console.log(li
     return send(res, 200, { ok: true, bytes: body.length, copies }, cors);
   }
 
+  /** POST /print-image: validate everything first, then hand the PNG to the spooler (PrintDocument through the driver). */
+  async function printImage(req, res, url, cors) {
+    const parsed = parseImageQuery(url.searchParams);
+    if (parsed.error) return fail(res, 400, 'bad_request', cors, parsed.error);
+    const { printer: printerName, ...options } = parsed.value;
+
+    const declared = Number(req.headers['content-length']);
+    const closing = { ...cors, Connection: 'close' };
+    if (Number.isFinite(declared) && declared > config.maxImageBytes) return fail(res, 413, 'too_large', closing);
+    const read = await readBody(req, config.maxImageBytes);
+    if (read.tooLarge) return fail(res, 413, 'too_large', closing);
+    const { body } = read;
+    if (body.length === 0) return fail(res, 400, 'bad_request', cors, 'Empty body');
+    if (!isPng(body)) return fail(res, 415, 'not_png', cors);
+
+    let printers;
+    try {
+      printers = await spooler.listPrinters();
+    } catch (error) {
+      return fail(res, 502, 'spooler_error', cors, error && error.message);
+    }
+    const wanted = printerName.toLowerCase();
+    const printer = printers.find(p => p.name === printerName) || printers.find(p => p.name.toLowerCase() === wanted);
+    if (!printer) return fail(res, 404, 'printer_not_found', cors);
+
+    const summary = `printer="${printer.name}" bytes=${body.length} size=${options.widthMm}x${options.heightMm}mm dpi=${options.dpi} copies=${options.copies}`;
+    try {
+      if (typeof spooler.printImage !== 'function') throw new Error('This spooler cannot print images');
+      await spooler.printImage(printer.name, body, options);
+    } catch (error) {
+      log(`${stamp()} print-image FAILED ${summary}`);
+      return fail(res, 502, 'spooler_error', cors, error && error.message);
+    }
+    log(`${stamp()} print-image ${summary}`);
+    return send(res, 200, { ok: true, bytes: body.length, copies: options.copies }, cors);
+  }
+
   const server = http.createServer((req, res) => {
     handle(req, res).catch(error => {
       if (!res.headersSent) fail(res, 502, 'spooler_error', {}, error && error.message);
@@ -428,6 +616,6 @@ function main(argv) {
   });
 }
 
-module.exports = { createServer, createWindowsSpooler, loadConfig, normalizeConfig, isOriginAllowed, isHostAllowed, parsePrinterList, runPowerShell, LIST_SCRIPT, PRINT_SCRIPT, DEFAULT_CONFIG, VERSION };
+module.exports = { createServer, createWindowsSpooler, loadConfig, normalizeConfig, isOriginAllowed, isHostAllowed, parsePrinterList, runPowerShell, parseImageQuery, isPng, buildImageEnv, LIST_SCRIPT, PRINT_SCRIPT, IMAGE_SCRIPT, DEFAULT_CONFIG, VERSION };
 
 if (require.main === module) main(process.argv.slice(2));

@@ -22,6 +22,7 @@ test('no config file: the defaults (port 9631, the deployed site and localhost, 
     assert.deepEqual(config.allowedOrigins, ['https://danielvl1982.github.io', 'http://localhost', 'http://127.0.0.1']);
     assert.equal(config.allowFileOrigin, false);
     assert.equal(config.maxBytes, 5 * 1024 * 1024);
+    assert.equal(config.maxImageBytes, 20 * 1024 * 1024);
   });
 });
 
@@ -36,8 +37,8 @@ test('a partial config file keeps the defaults of the missing keys', () => {
 });
 
 test('a full config file (also with a BOM and trailing slashes in the origins) is read', () => {
-  withFile('﻿{ "port": 1234, "allowedOrigins": ["https://a.example/"], "allowFileOrigin": true, "maxBytes": 2048 }', file => {
-    assert.deepEqual(agent.loadConfig(file), { port: 1234, allowedOrigins: ['https://a.example'], allowFileOrigin: true, maxBytes: 2048 });
+  withFile('﻿{ "port": 1234, "allowedOrigins": ["https://a.example/"], "allowFileOrigin": true, "maxBytes": 2048, "maxImageBytes": 4096 }', file => {
+    assert.deepEqual(agent.loadConfig(file), { port: 1234, allowedOrigins: ['https://a.example'], allowFileOrigin: true, maxBytes: 2048, maxImageBytes: 4096 });
   });
 });
 
