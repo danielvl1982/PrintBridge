@@ -41,6 +41,8 @@ ZPL (manuals: docs/zpl vol 1 and 2)
 - [x] V12 ZPL images (`^GF`, `~DG`)
 Cross cutting
 - [x] V13 Conversions: every value converted TPCL / TSPL / ZPL lands valid in the target (clamp / snap + one aviso); matrix of tests per pair
+- [x] V15 Report every value the Propiedades panel adjusts: generic `adjustmentNotice` (js/properties.js) called from `changeProperty` (js/app.js); RED/GREEN
+      unit tests, Chrome probe of the 49 out-of-range cases (closes the V14 Open item).
 - [x] V14 Close: README (validation rules and their sources), conversion matrix doc, full `node --test`, Chrome probe of the panels for the three
       languages (screenshots outside the repo), this document finished, Engram mirror, merge request to the user
 
@@ -448,6 +450,7 @@ Expectation changes in existing tests: tests/tpcl-barcode-validation.test.js (a 
   - PASS x3 pasted labels with an out-of-range value give warnings in Avisos: TPCL `{PC01;0100,0100,14,19,B,00,B|}` (magnification) and `{XB00;...}` (module, height), TSPL `BARCODE ...,45,...` / `DENSITY 20` (rotation, range 0..15), ZPL `^BY99` ("módulo 99 fuera de 1..10 puntos, se usa 10").
   - PASS x12 Convertir a... for the 6 pairs on both examples of each language (blank and template): the converted text read back by the app has no warning or error (and the conversion list holds no warning).
   - Not covered by the probe: Data Matrix and image items (no shipped example has one; covered by tests/conversion-validity.test.js and the per-task validation tests).
+- V15 (route: delegated writer, one writer, direct; RED first: the 4 new `adjustmentNotice` tests failed before the helper existed): `PB.ui.adjustmentNotice(field, typed, used)` in js/properties.js builds one Spanish warning (`<label>: <typed> está fuera del rango <min>..<max>; se usa <value>`, or `se ajusta a` for a rounded / snapped value inside the range); `changeProperty` in js/app.js re-reads the field from `describeItem` after the edit and shows the aviso on top of the list, unless the edit already produced a language warning that names the typed number (no duplicate). Verification: `node --test` 4269 tests, 4268 pass, 0 fail, 1 skipped (+4). Chrome probe (Temp ui folder: v15probe.js), 21 checks, 21 PASS: all 49 out-of-range cases (23 TPCL, 13 TSPL, 13 ZPL) now show an aviso (the 18 silent ones included), at most one adjustment aviso per edit, re-typing the current in-range value gives none, no console errors. Commit: see `git log` (fix: report every value the properties panel has to adjust).
 
 ## Summary
 - TPCL (V1..V4): label setup `{D` / `{AX` / `{XS` / `{LC` / `{XR`, text `PC` / `PV` (sizes, spacing, attribute, bold, zero suppression, alignment, `P5`, 255 characters), barcodes (check digit, module 01..15, widths, height 0000..1000, 126 / 2000 characters), QR, Data Matrix and `SG` images (width 1..9999, height 1..99999, 512 KB) are limited in the panel, clamped on emit with one aviso, and warned with their range when typed. The Formato row limits pitch / width / length to the `{D` ranges; the 33rd `XB` and 101st `PV` are reported.
@@ -482,5 +485,4 @@ c883acb fix: validate TPCL label setup and shape values against the manuals
 5. Load a template, **Convertir a…** each of the other two languages and paste the result back into the code box: no warning remains.
 
 ## Open (added by V14)
-- V14 The Propiedades panel clamps a typed number above its maximum to the maximum (the field and the code show it) but 18 of the 49 probe cases give no aviso: TPCL `PC` / `PV` zero suppression and bold, line end point and width, TSPL line width / height, ZPL line length / thickness. The value is never kept out of range and nothing is written invalid; a visible notice for every clamp would need a generic hook in `changeProperty` (js/app.js) and was not added.
 - V14 The browser probe covers the three languages' templates (text, line, barcode, QR) only; Data Matrix, images and TSPL / ZPL shapes other than lines are covered by the unit tests and the V13 matrix, not by the browser.

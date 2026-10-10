@@ -153,6 +153,7 @@
    *  - language: already known language of the label (if not, it is detected).
    *  - notices: extra messages to show along with those of the label.
    */
+  let shown = []; // what the avisos frame holds after the last refresh
   function refresh({ language = null, notices = [] } = {}) {
     try {
       const { model, area, diagnostics, language: used } = analyze(editor.text(), { language });
@@ -169,15 +170,17 @@
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
       updateProperties();
-      messages.show([
+      shown = [
         ...notices,
         ...diagnostics,
         ...area.diagnostics,
         ...(used ? layout.analyze(svgEl, model, area, { markOverlaps: $('optOverlap').checked }) : []),
         ...drawing.diagnostics,
-      ]);
+      ];
+      messages.show(shown);
     } catch (error) {
-      messages.show([...notices, diag.error(`Error al procesar la etiqueta: ${error.message}`)]);
+      shown = [...notices, diag.error(`Error al procesar la etiqueta: ${error.message}`)];
+      messages.show(shown);
     }
   }
 
@@ -229,6 +232,7 @@
     const item = index != null && lastModel.items[index];
     if (!language || !language.updateItem || !item) return;
     const text = editor.text();
+    const before = shown.map(m => m.text);
     const updated = language.updateItem(text, item, { [key]: value }, { dpi: Number($('dpi').value) });
     if (updated !== text) {
       if (!editor.replaceText(updated)) editor.setText(updated);
@@ -237,6 +241,25 @@
     }
     // Also when nothing changed (value out of range or equal): the form goes back to what the code says
     updateProperties();
+    reportAdjustment(key, value, before);
+  }
+
+  /**
+   * A number typed in the form that the label ended up holding differently (clamped, snapped, rounded) is always reported
+   * in the avisos, once, unless the edit already produced a warning of its own about that value (`before`: the texts shown before the edit).
+   */
+  function reportAdjustment(key, typed, before) {
+    const index = preview.selected();
+    const language = sourceLanguage();
+    const item = index != null && lastModel.items[index];
+    if (!language || !language.describeItem || !item || typeof typed !== 'number') return;
+    const field = (language.describeItem(item, editor.text()) || { fields: [] }).fields.find(f => f.key === key);
+    const notice = ui.adjustmentNotice(field, typed, field && field.value);
+    // A warning of the language about this very value (it names the number typed) is the aviso: no second one. Layout errors (overflow, overlap) are not
+    const own = m => m.level !== 'info' && !before.includes(m.text) && /fuera de|se usa/.test(m.text) && new RegExp(`(^|[^0-9.])${String(typed).replace('.', '[.,]')}($|[^0-9])`).test(m.text);
+    if (!notice || shown.some(own)) return;
+    shown = [notice, ...shown];
+    messages.show(shown);
   }
 
   /**

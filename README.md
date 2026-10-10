@@ -512,7 +512,7 @@ Nothing in the ZPL support or in the conversions has been tried on a printer. Be
 
 Every value the app handles was checked against the manuals in `docs/` (see [docs/README.md](docs/README.md); the PDFs are local and git-ignored). The same ranges apply on three surfaces:
 
-1. **Properties panel:** a number field has `min` / `max` from the language's range, a select only offers valid options, and a typed value that is out of range is clamped (or snapped) with a notice instead of being written.
+1. **Properties panel:** a number field has `min` / `max` from the language's range, a select only offers valid options, and a typed value that is out of range is clamped (or snapped) and **always** reported once in **Avisos** (`<field>: <typed> está fuera del rango <min>..<max>; se usa <value>`), generically for every field, never adjusted silently.
 2. **Emit and conversion:** nothing is written out of range. A value that has to be adjusted is clamped or snapped and reported **once** in **Avisos** (or in the conversion warnings), with the valid range. A conversion between languages goes through the same emit, so it lands valid in the target (tested for the six pairs at 203 and 300 dpi).
 3. **Typed or pasted code:** a value out of range is read as written (the code is never rewritten, the panel shows what is written), drawn as the nearest valid one, and reported with a warning that says what the printer will do and the valid range.
 
