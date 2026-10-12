@@ -17,6 +17,7 @@
   });
 
   const catalog = sizes.createCatalog(config.sizes);
+  let printPanel = null; // the Impresión panel (created below, after the controls it needs)
   // image: picture overlaid on the label, { href (data URL), naturalW, naturalH } or null. Preview only, never written to the code.
   // image also holds `rotationPicked` (true once the user chose a "Rotación" for this image; until then it follows Giro, see
   // images.rotationForView) and `converted` once the 1-bit conversion that the preview shows is ready:
@@ -72,7 +73,8 @@
   ui.createConvertPanel({ root: $('convert'), getText: () => editor.text(), getDpi: () => Number($('dpi').value), getSourceName: () => state.fileName });
 
   // "Impresión": sends to the local print agent the same bytes that Descargar writes for the label in the editor (its own language)
-  ui.createPrintPanel({ root: $('print'), getBytes: labelBytes });
+  // Its Driver (imagen) mode prints the drawing the viewer shows: the live SVG and the label size in mm
+  printPanel = ui.createPrintPanel({ root: $('print'), getBytes: labelBytes, getLabel: printLabel });
 
   // Collapsible sections: after every title is rendered (the Convertir panel builds its own)
   ui.initCollapsible(document);
@@ -178,6 +180,7 @@
         ...drawing.diagnostics,
       ];
       messages.show(shown);
+      if (printPanel) printPanel.refreshInfo();
     } catch (error) {
       shown = [...notices, diag.error(`Error al procesar la etiqueta: ${error.message}`)];
       messages.show(shown);
@@ -412,6 +415,15 @@
     const language = PB.languages.detect(text);
     if (!language) throw new Error('No se reconoce el lenguaje de impresión de la etiqueta');
     return PB.convert.toBytes(text, language.id);
+  }
+
+  /** The label the viewer draws for the Driver (imagen) print: its live <svg> and its size in mm (the viewer's units are 0.1 mm); throws a Spanish Error when there is none. */
+  function printLabel() {
+    if (editor.text().trim() === '' || !lastModel || !lastModel.language) throw new Error('No hay etiqueta que imprimir: el editor está vacío o su lenguaje no se reconoce');
+    const svg = $('svgwrap').querySelector('svg');
+    const background = svg && svg.querySelector('.label-background');
+    if (!background) throw new Error('No hay etiqueta dibujada que imprimir');
+    return { svg, widthMm: Number(background.getAttribute('width')) / 10, heightMm: Number(background.getAttribute('height')) / 10 };
   }
 
   /** Pause after the last change of a control before the preview is converted again. */

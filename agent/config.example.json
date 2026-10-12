@@ -6,5 +6,6 @@
     "http://127.0.0.1"
   ],
   "allowFileOrigin": false,
-  "maxBytes": 5242880
+  "maxBytes": 5242880,
+  "maxImageBytes": 20971520
 }

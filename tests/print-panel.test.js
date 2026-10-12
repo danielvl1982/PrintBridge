@@ -344,6 +344,6 @@ test('the manifest and index.html list the same scripts in the same order, print
 
 test('js/app.js sends the editor text in its own language through PB.convert.toBytes (the bytes Descargar writes)', () => {
   const app = fs.readFileSync(path.join(ROOT, 'js', 'app.js'), 'utf8');
-  assert.match(app, /createPrintPanel\(\{ root: \$\('print'\), getBytes: labelBytes \}\)/);
+  assert.match(app, /createPrintPanel\(\{ root: \$\('print'\), getBytes: labelBytes, getLabel: printLabel \}\)/);
   assert.match(app, /PB\.convert\.toBytes\(text, language\.id\)/);
 });

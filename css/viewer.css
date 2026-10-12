@@ -170,6 +170,8 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .print-status.is-ok { color: #1a7f37; }
 .print-status.is-down { color: var(--err); }
 .print-status.is-checking { color: var(--muted); }
-.print-message, .print-help { margin: 6px 0; }
+.print-message, .print-help, .print-info { margin: 6px 0; }
+.print-info { color: var(--muted); }
+.print-tip { font-size: 0.9em; margin-top: 0; }
 .print-message { color: var(--muted); }
 .print-help { color: var(--warn); }
