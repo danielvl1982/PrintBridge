@@ -161,8 +161,9 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .props-bar.is-collapsed, .is-collapsed.panel { min-height: 0; }
 
 /* Impresión panel (js/print-panel.js): agent status, printer, copies, settings row */
-.print label { display: inline-flex; align-items: center; gap: 6px; }
+.print label { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; }
 .print select, .print input { font: inherit; padding: 2px 4px; min-width: 0; }
+.print select { max-width: 100%; text-overflow: ellipsis; }
 .print input[type="number"] { width: 4.5em; }
 .print input[type="text"] { width: 15em; max-width: 100%; }
 .print-status { font-weight: 600; }
