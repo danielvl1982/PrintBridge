@@ -38,7 +38,7 @@ languages: decide the scope with the user before designing it.
 - `GAP 0` written when the TSPL gap is emptied or typed as 0 (today the existing `GAP` line is left as it is).
 - GS1-128 is NOT optional: it is a planned task, see `odd/tasks/gs1-128.md`.
 - `^SF` (ZPL mask) is not optional: it is a planned task, see `odd/tasks/zpl-sf-mask.md`.
-- Printing from the app (the local print agent) is not optional: it is a planned task, see `odd/tasks/print-agent.md`.
+- Printing from the app (the local print agent) is done and verified on real printers (RAW), see `odd/tasks/print-agent.md`; the driver image mode is in `odd/tasks/print-image.md`.
 
 ## Verification debt (needs a printer or a browser)
 Nothing here is a feature: it is what is implemented but never checked. Added 2026-10-09 so that nothing is lost.
