@@ -189,5 +189,13 @@
     return `Código de barras GS1-128 con datos no válidos (${cause}): no se exporta`;
   }
 
-  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage });
+  /** Notice (js/app.js) for a Contenido edit of a gs1-128 barcode that the language refused: the cause, and that the previous content stays. */
+  function rejectedEditMessage(text) {
+    const { structural, diagnostics } = parse(text);
+    const first = structural ? diagnostics.find(d => d.level === 'error') : null;
+    const cause = first ? first.text.replace(/^GS1-128: /, '') : 'el contenido no se puede escribir en este lenguaje';
+    return `Contenido GS1-128 rechazado (${cause}): se mantiene el contenido anterior`;
+  }
+
+  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage, rejectedEditMessage });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

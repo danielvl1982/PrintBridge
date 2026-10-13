@@ -160,3 +160,28 @@ for (const id of LANGS) {
     assert.equal(lang(id).parse(out.text, { dpi: 203 }).items.filter(i => i.kind === 'barcode').length, 0);
   });
 }
+
+// S5: a refused edit is reported in the avisos (js/app.js changeProperty shows this text as a warning notice).
+test('PB.gs1.rejectedEditMessage names the cause of a notation that cannot be encoded and says the previous content is kept', () => {
+  const unknown = PB.gs1.rejectedEditMessage('(99)123');
+  assert.match(unknown, /\(99\)/);
+  assert.match(unknown, /no está en el subconjunto logístico/);
+  assert.match(unknown, /se mantiene el contenido anterior/);
+  assert.match(PB.gs1.rejectedEditMessage('sin paréntesis'), /deben empezar por un identificador/);
+  assert.match(PB.gs1.rejectedEditMessage(''), /vacíos/);
+});
+
+test('PB.gs1.rejectedEditMessage has a generic cause when the notation is fine but the language cannot write it', () => {
+  assert.match(PB.gs1.rejectedEditMessage(GS1), /no se puede escribir en este lenguaje/);
+});
+
+test('the refused edit of the three languages leaves the text unchanged (the case the message reports)', () => {
+  const tspl = 'SIZE 100 mm,60 mm\nGAP 3 mm,0 mm\nCLS\nBARCODE 40,40,"EAN128",100,1,0,2,2,"0109501101530003"\nPRINT 1,1';
+  const src = { tpcl: tpclText('>80109501101530003'), tspl, zpl: '^XA\n^FO40,40^BCN,100,Y,N,N^FD>80109501101530003^FS\n^XZ' };
+  for (const id of LANGS) {
+    const language = PB.languages.get(id);
+    const item = language.parse(src[id], { dpi: 203 }).items.find(i => i.kind === 'barcode');
+    assert.equal(item.symbology, 'gs1-128', id);
+    assert.equal(language.updateItem(src[id], item, { content: '(99)123' }, { dpi: 203 }), src[id], id);
+  }
+});

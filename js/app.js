@@ -241,6 +241,10 @@
       if (!editor.replaceText(updated)) editor.setText(updated);
       // The selection is kept by index in the preview; the code box is not re-selected so the form keeps the focus
       refresh();
+    } else if (key === 'content' && item.kind === 'barcode' && item.symbology === 'gs1-128' && typeof value === 'string' && value !== item.data) {
+      // A refused GS1-128 notation: the field goes back to the previous content, and the avisos say why
+      shown = [diag.warning(PB.gs1.rejectedEditMessage(value)), ...shown];
+      messages.show(shown);
     }
     // Also when nothing changed (value out of range or equal): the form goes back to what the code says
     updateProperties();
