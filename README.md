@@ -568,6 +568,7 @@ The manuals are silent, contradictory, or the command is not modelled; the behav
 ## Limitations
 
 - **ZPL:** the unsupported commands (PDF417 / MicroPDF417, MaxiCode, the other `^B*` symbologies, stored images, binary `^GF`) and everything the manuals do not document are listed in *ZPL support*; nothing of ZPL has been verified on a printer. Only 203 and 300 dpi can be selected.
+- **Printing:** the **Etiquetera** (RAW) mode was verified on real printers; the **Driver (imagen)** mode has not been verified on a real printer yet, and its PNG is not the label code, so it does not prove that a TEC / TSC / Zebra accepts the label.
 - **Conversion:** nothing a conversion writes has been verified on a printer (see **Convertir a…** for what is lost in each direction).
 - The printer letters are imitated with Arial / Times / Courier: the **width of the texts is approximate**. To
   adjust fine margins, always make a test print.

@@ -77,7 +77,7 @@ powershell -ExecutionPolicy Bypass -File agent\install.ps1 -Autostart
 ## Manual start
 
 Double-click `agent\start.bat` (or run `node agent\printbridge-agent.js`). The agent runs in that console window and prints one line per
-print job; close the window or press Ctrl+C to stop it. Optionally `--config <file>` reads another configuration file.
+print job; close the window or press Ctrl+C to stop it. `start.bat` takes no arguments: to read another configuration file run `node agent\printbridge-agent.js --config <file>`.
 
 ## Configuration
 
