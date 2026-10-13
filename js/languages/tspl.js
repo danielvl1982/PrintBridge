@@ -667,12 +667,17 @@
   // ---------------------------------------------------------------------------------------------------------------
   // Size writing: resolved size (0.1 mm: { w, h, p }) -> SIZE / GAP lines
 
-  /** SIZE always; GAP (pitch - height) only when the pitch is larger than the height (else the separation is unknown). */
+  /**
+   * SIZE always; GAP (pitch - height) when the pitch is larger than the height, and `GAP 0 mm,0 mm` when the size says the gap is explicitly zero
+   * (`zeroGap`, set by the Formato row when the gap is emptied or typed as 0: the manual allows 0 <= m <= 1 inch). With pitch == height alone the
+   * separation is unknown and no GAP is written.
+   */
   function sizeCommands(wanted) {
     const size = fitSize(wanted).size;
     const out = [`SIZE ${mmNumber(size.w)} mm,${mmNumber(size.h)} mm`];
     const pitch = size.p == null ? size.h : size.p;
     if (pitch > size.h) out.push(`GAP ${mmNumber(pitch - size.h)} mm,0 mm`);
+    else if (size.zeroGap) out.push('GAP 0 mm,0 mm');
     return out;
   }
 
@@ -680,7 +685,7 @@
    * Writes the size in the text: the first SIZE line and the first GAP line are replaced in place, a missing SIZE is
    * added at the top and a missing GAP right after the SIZE line. Only those command lines change (found with the parser's
    * tokenizer, so BITMAP data and quoted content are never matched); the line ending and the trailing newline stay.
-   * With pitch == height no GAP is written and an existing one is left alone.
+   * With pitch == height and no `zeroGap` no GAP is written and an existing one is left alone.
    */
   function applySize(text, size) {
     const [sizeLine, gapLine] = sizeCommands(size);
