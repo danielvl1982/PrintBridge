@@ -158,5 +158,73 @@ PRINT 1,1`,
 ^FO580,250^BQN,2,6^FDLA,https://example.com/#CODIGO#^FS
 ^XZ`,
     },
+    // GS1-128 sample: an SSCC pallet label (the SSCC, then GTIN (02) + count (37) + lot (10), which needs an FNC1 after the count), the same
+    // label in the three languages, 100 x 60 mm at 203 dpi. No variables: a GS1 element string is not a template field. ASCII only.
+    {
+      id: 'template-gs1-tpcl',
+      group: 'template',
+      name: 'Plantilla GS1-128 — TPCL (TEC)',
+      language: 'tpcl',
+      values: {},
+      source: `{D0630,1000,0600|}
+{AX;+010,+000,+00|}
+{C|}
+
+{LC;0025,0013,0976,0588,1,04|}
+
+{PV00;0050,0070,0050,0040,B,00,B|}
+{RV00;PALET - SSCC|}
+
+{PC00;0050,0124,10,09,N,00,B|}
+{RC00;SSCC (00)|}
+{XB00;0050,0144,9,1,02,0,0125,0,000,1,00|}
+{RB00;>800000422730000001131|}
+
+{PC01;0050,0343,10,09,N,00,B|}
+{RC01;GTIN (02), cantidad (37), lote (10)|}
+{XB01;0050,0363,9,1,02,0,0125,0,000,1,00|}
+{RB01;>802095011015300033724>810L2026-0412|}
+
+{XS;I,0001,0002C4100|}`,
+    },
+    {
+      id: 'template-gs1-tspl',
+      group: 'template',
+      name: 'Plantilla GS1-128 — TSPL (TSC)',
+      language: 'tspl',
+      values: {},
+      source: `SIZE 100 mm,60 mm
+GAP 3 mm,0 mm
+DIRECTION 1
+REFERENCE 0,0
+CLS
+BOX 20,10,780,470,4
+TEXT 40,30,"4",0,1,1,"PALET - SSCC"
+TEXT 40,80,"3",0,1,1,"SSCC (00)"
+BARCODE 40,115,"EAN128",100,1,0,2,2,"00000422730000001131"
+TEXT 40,255,"3",0,1,1,"GTIN (02), cantidad (37), lote (10)"
+BARCODE 40,290,"128M",100,1,0,2,2,"!10202095011015300033724!10210L2026-0412"
+PRINT 1,1`,
+    },
+    {
+      id: 'template-gs1-zpl',
+      group: 'template',
+      name: 'Plantilla GS1-128 — ZPL (Zebra)',
+      language: 'zpl',
+      values: {},
+      source: `^XA
+^PW800
+^LL480
+^FX Frame, title and two GS1-128 bar codes: an SSCC and GTIN + count + lot (>8 is FNC1)
+^FO18,8^GB764,464,4^FS
+^FT40,56^A0N,32,40^FDPALET - SSCC^FS
+^FT40,99^A0N,24,27^FDSSCC (00)^FS
+^BY2
+^FO40,115^BCN,100,Y,N,N^FD>800000422730000001131^FS
+^FT40,274^A0N,24,27^FDGTIN (02), cantidad (37), lote (10)^FS
+^BY2
+^FO40,290^BCN,100,Y,N,N^FD>802095011015300033724>810L2026-0412^FS
+^XZ`,
+    },
   ]);
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
