@@ -132,11 +132,11 @@ test('picking an example from inside a group loads it and returns to the placeho
   });
 });
 
-test('the shipped examples: the En blanco and Plantillas groups, three each, and no example outside them', () => {
+test('the shipped examples: the En blanco (3) and Plantillas (6) groups, and no example outside them', () => {
   const shipped = shippedExamples();
   withGroupedPicker(shipped, ({ select, options }) => {
     const groups = select.children.filter(node => node.tagName === 'OPTGROUP');
-    assert.deepEqual(groups.map(g => [g.label, g.children.length]), [['En blanco', 3], ['Plantillas', 3]]);
+    assert.deepEqual(groups.map(g => [g.label, g.children.length]), [['En blanco', 3], ['Plantillas', 6]]);
     assert.equal(options.length, shipped.length + 1);
     assert.equal(select.children[select.children.length - 1].tagName, 'OPTGROUP', 'nothing outside the groups');
   });

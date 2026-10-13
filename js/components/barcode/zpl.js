@@ -91,7 +91,7 @@
   const E_DEFAULT = Object.freeze({ BC: 'N', B3: 'N', B2: 'N', BM: 'B', BU: 'Y', B9: 'Y', BA: 'N', BK: 'N' });
 
   /** The command of each selectable symbology (the selector's emit table), and the e parameter of each check option (the selector's check table). */
-  const TYPE_CODES = Object.freeze({ code128: 'BC', code39: 'B3', itf: 'B2', code93: 'BA', codabar: 'BK', msi: 'BM', industrial25: 'BI', ean13: 'BE', ean8: 'B8', upca: 'BU', upce: 'B9' });
+  const TYPE_CODES = Object.freeze({ code128: 'BC', 'gs1-128': 'BC', code39: 'B3', itf: 'B2', code93: 'BA', codabar: 'BK', msi: 'BM', industrial25: 'BI', ean13: 'BE', ean8: 'B8', upca: 'BU', upce: 'B9' });
   const CHECK_CODES = Object.freeze({
     code39: { none: 'N', mod43: 'Y' }, itf: { none: 'N', auto: 'Y' }, msi: { none: 'A', auto: 'B', mod1010: 'C', mod1110: 'D' },
     // The commands without a check parameter (the check characters / digit are always part of the symbol): the option is listed, nothing is written
@@ -262,7 +262,6 @@
 
     function barcodeItem(ctx, field, cmd) {
       const name = cmd.name;
-      const { symbology } = COMMANDS[name];
       const p = paramsOf(cmd);
       const ref = `^${name}`;
       // Orientation: the parameter, else ^FW
@@ -288,7 +287,10 @@
       const stop = p.l === undefined ? undefined : START_STOP.includes(p.l) ? p.l : p.l === '' ? 'A' : null;
       if (start === null || stop === null) ctx.report(diag.warning(`${ref}: carácter de inicio o de parada "${start === null ? p.k : p.l}" no válido (A..D), se usa A`));
       const value = field.data.value;
-      const { data, notes } = decodeData(name, value, { k: start || 'A', l: stop || 'A' });
+      const decoded = decodeData(name, value, { k: start || 'A', l: stop || 'A' });
+      const { notes } = decoded;
+      // Code 128 data that starts with FNC1 and is a GS1 element string is a gs1-128 barcode (mode U / D and the UCC check stay kept, not applied)
+      const { symbology, data } = name === 'BC' ? PB.gs1.readCode128(decoded.data) : { symbology: COMMANDS[name].symbology, data: decoded.data };
       reportData(ctx, name, value, ref, notes);
 
       const e = p.e === undefined ? undefined : p.e || E_DEFAULT[name];
@@ -445,7 +447,13 @@
      * ^BYw[,r] and the field ^FO / ^FT x,y ^<cmd><parameters> ^FD data ^FS (see the header for the rules). Only neutral fields are read, plus
      * what native holds for a field that came from ZPL (above, UCC, mode, print check digit, start / stop, the data as written).
      */
-    function emit(item, ctx) {
+    function emit(source, ctx) {
+      // gs1-128 is written as Code 128 over its FNC1 data; data that cannot be encoded is skipped, naming the real cause
+      const item = source.symbology === 'gs1-128' ? PB.gs1.toCode128Item(source) : source;
+      if (!item) {
+        ctx.once('zpl-gs1-invalid', () => diag.warning(PB.gs1.unwritableMessage(source.data)));
+        return [];
+      }
       const name = nameOf(item);
       if (!name) {
         ctx.once('zpl-barcode-skipped', () => diag.warning('Hay códigos de barras sin equivalente en ZPL (solo Code 128, Code 39, ITF, Code 93, NW7, MSI, 2 de 5 industrial y EAN / UPC): no se exportan'));
@@ -640,7 +648,12 @@
     const symbologyField = {
       key: 'symbology', label: 'Tipo de código', type: 'select', custom: true, reemit: true, options: selector.symbologyOptions(TYPE_CODES),
       model: item => (Object.hasOwn(COMMANDS, item.ref) && Object.hasOwn(TYPE_CODES, item.symbology) ? item.symbology : undefined),
-      read: (text, found) => { const cmd = barcodeCmd(found.field); return cmd && Object.hasOwn(TYPE_CODES, COMMANDS[cmd.name].symbology) ? COMMANDS[cmd.name].symbology : undefined; },
+      // gs1-128 is ^BC whose data starts with FNC1 (>8): the item tells it from a plain Code 128
+      read: (text, found, item) => {
+        const cmd = barcodeCmd(found.field);
+        const symbology = cmd && COMMANDS[cmd.name].symbology;
+        return symbology === 'code128' && item && item.symbology === 'gs1-128' ? 'gs1-128' : Object.hasOwn(TYPE_CODES, symbology) ? symbology : undefined;
+      },
       edits: () => null,
     };
     const checkField = {
@@ -710,6 +723,38 @@
       ...serialFields(),
     );
 
+    // gs1-128 content: the panel shows and takes the standard notation with parentheses, the field holds the Code 128 form (>8 for every FNC1)
+
+    /** The ^FD / ^FV of a field whose data a gs1-128 edit can write (not a variable (^FN) or a serial (^SN) field), or undefined. */
+    const gs1DataCmd = field => (field.has('FN') || field.has('SN') ? undefined : field.find(['FD', 'FV']));
+    /** Field data of a Code 128 text: ">" is the invocation character, so a real one is written >0; the FNC1 of the model is >8. */
+    const code128Text = data => data.replaceAll('>', '>0').replaceAll(barcodeData.FNC1, '>8');
+    /** Edits that replace the data of the field with `text` (^FH is added when ^ ~ or the indicator need the escapes), or null when it does not fit. */
+    function dataEdits(cmd, text) {
+      if (text.length > PB.zplEdit.MAX_DATA) return null;
+      const encoded = PB.zplEdit.encodeData(text, { indicator: cmd.hex || '_', hex: !!cmd.hex });
+      return [argEdit(cmd, 0, encoded.text), ...(encoded.hex && !cmd.hex ? [{ start: cmd.start, end: cmd.start, value: '^FH' }] : [])];
+    }
+    const gs1ContentField = {
+      key: 'content', label: 'Contenido', type: 'text', custom: true, maxLength: PB.zplEdit.MAX_DATA, note: PB.gs1.NOTATION_HINT,
+      model: item => item.data,
+      read: (text, found, item) => (gs1DataCmd(found.field) ? item.data : undefined),
+      edits(text, found, item, value) {
+        const cmd = gs1DataCmd(found.field);
+        const code = cmd && typeof value === 'string' ? PB.gs1.toCode128Data(value) : null;
+        return code === null ? null : dataEdits(cmd, code128Text(code));
+      },
+    };
+
+    /** Code 128 <-> GS1-128 (the same ^BC): the data is rewritten, the command stays. To GS1-128 the data must be an element string; any other type change is refused. */
+    function gs1Switch(field, item, from, to) {
+      const cmd = gs1DataCmd(field);
+      const pair = (from === 'code128' && to === 'gs1-128') || (from === 'gs1-128' && to === 'code128');
+      if (!cmd || !pair || typeof item.data !== 'string' || item.data.includes(barcodeData.FNC1)) return null;
+      const code = to === 'gs1-128' ? PB.gs1.toCode128Data(item.data) : item.data;
+      return code === null ? null : dataEdits(cmd, code128Text(code));
+    }
+
     /**
      * Changes the symbology and / or the check option: the whole command is written again with the layout of the new one (see the header). The
      * parameters o, h, f and g are carried as written; e is the check option, the print flag of the same kind, or the new command's default.
@@ -719,9 +764,10 @@
     function reemit(field, item, changes) {
       const cmd = barcodeCmd(field);
       if (!cmd) return null;
-      const from = COMMANDS[cmd.name].symbology;
+      const from = COMMANDS[cmd.name].symbology === 'code128' && item.symbology === 'gs1-128' ? 'gs1-128' : COMMANDS[cmd.name].symbology;
       const to = Object.hasOwn(changes, 'symbology') ? changes.symbology : from;
       if (!selector.symbologyOptions(TYPE_CODES).some(o => o.value === to)) return null;
+      if (from === 'gs1-128' || to === 'gs1-128') return gs1Switch(field, item, from, to);
       const checks = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to] : {};
       if (Object.hasOwn(changes, 'check') && !Object.hasOwn(checks, changes.check)) return null;
       const known = checkOf(cmd.name, param(cmd, 'e'));
@@ -761,11 +807,18 @@
       build,
       // Move: the field origin (^FO / ^FT), which is what the default coordinates are
       coordinates: [{ applies: item => item.kind === 'barcode' }],
-      editable: [{
-        applies: (item, field) => item.kind === 'barcode' && (field ? field.has(NAMES) : Object.hasOwn(COMMANDS, item.ref)),
-        fields,
-        reemit,
-      }],
+      editable: [
+        {
+          applies: (item, field) => item.kind === 'barcode' && item.symbology === 'gs1-128' && (field ? field.has(NAMES) : Object.hasOwn(COMMANDS, item.ref)),
+          fields: fields.map(f => (f.key === 'content' ? gs1ContentField : f)),
+          reemit,
+        },
+        {
+          applies: (item, field) => item.kind === 'barcode' && (field ? field.has(NAMES) : Object.hasOwn(COMMANDS, item.ref)),
+          fields,
+          reemit,
+        },
+      ],
       handlers: [
         {
           // ^BCo,h,f,g,e,m ^B3 ^B2 ^BE ^B8 ^BU ^B9 ^BA ^BK ^BM ^BI ^BJ ... ^FD data ^FS: a barcode field (no data: nothing to draw)

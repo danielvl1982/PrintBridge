@@ -1,6 +1,6 @@
 /**
  * Barcode slice: SVG drawing of 1D barcodes. The model item is { kind: 'barcode', x, y, rotation, symbology, module, height,
- * widths?, interCharGap?, check?, addon?, guard?, humanReadable, data }. Code128 and Code 93 (module based), the wide/narrow symbologies
+ * widths?, interCharGap?, check?, addon?, guard?, humanReadable, data }. Code128, GS1-128 (Code 128 over the FNC1 data of its element string) and Code 93 (module based), the wide/narrow symbologies
  * (Code39, ITF, NW7, MSI, Industrial 2 of 5) and EAN-13 / EAN-8 / UPC-A / UPC-E with their add-ons (module based, with the digits laid out as for these symbologies) are drawn
  * exactly; any other symbology is drawn as approximate filler bars.
  * Published on PB.slices.barcode.render and registered by js/components/barcode/index.js.
@@ -11,11 +11,11 @@
   PB.slices = PB.slices || {};
   PB.slices.barcode = PB.slices.barcode || {};
 
-  const { units, barcodeData, code128, code93, code39, itf, codabar, msi, industrial25, ean } = PB;
+  const { units, barcodeData, code128, code93, code39, itf, codabar, msi, industrial25, ean, gs1 } = PB;
 
   /** Displayed name of each neutral symbology (those not listed are displayed as a generic code). */
   const SYMBOLOGY_NAMES = Object.freeze({ code128: 'Code128', code39: 'Code39', itf: 'ITF', ean13: 'EAN-13', ean8: 'EAN-8', upca: 'UPC-A', upce: 'UPC-E',
-    code93: 'Code93', codabar: 'NW7', msi: 'MSI', industrial25: '2 de 5 industrial',
+    code93: 'Code93', codabar: 'NW7', msi: 'MSI', industrial25: '2 de 5 industrial', 'gs1-128': 'GS1-128',
   });
 
   /** Encoders of the wide/narrow symbologies (bars with real wide and narrow widths). */
@@ -29,6 +29,13 @@
 
   /** Bars of a module-based symbology (Code128, or an approximation of the rest): widths are multiples of item.module. */
   function moduleBars(item, data) {
+    // GS1-128: the model data is the element string; it is drawn as Code 128 over the FNC1 data and read with its parentheses
+    if (item.symbology === 'gs1-128') {
+      const code = gs1.toCode128Data(data);
+      if (code === null) return { rects: [], total: 0, exact: true, readable: '', detail: '', warnings: [] };
+      const bars = moduleBars({ ...item, symbology: 'code128' }, code);
+      return { ...bars, readable: gs1.readable(data) };
+    }
     const encoder = MODULE_ENCODERS[item.symbology];
     const encoded = encoder ? encoder.encode(data, { check: item.check }) : null;
     const exact = !!encoded || item.symbology === 'code128';

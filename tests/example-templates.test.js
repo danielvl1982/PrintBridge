@@ -9,6 +9,8 @@ const LANGUAGES = ['tpcl', 'tspl', 'zpl'];
 const problems = model => model.diagnostics.filter(d => d.level === 'error' || d.level === 'warning');
 const parse = e => PB.languages.get(e.language).parse(e.source, { dpi: DPI });
 const byGroup = group => PB.examples.filter(e => e.group === group);
+// The basic label (frame, title, variables, Code128 and QR) in three languages; the GS1-128 sample has its own file, tests/gs1-template.test.js
+const basicTemplates = () => byGroup('template').filter(e => /^template-(tpcl|tspl|zpl)$/.test(e.id));
 const near100x60 = size => Math.abs(size.width - 1000) <= 2 && Math.abs(size.height - 600) <= 2;
 
 test('every example is detected as its language and parses with no error or warning', () => {
@@ -18,23 +20,24 @@ test('every example is detected as its language and parses with no error or warn
   }
 });
 
-test('the app ships exactly three blank templates then three templates, and no complete example', () => {
+test('the app ships three blank templates, three templates and three GS1-128 templates, and no complete example', () => {
   const shipped = [...shippedExamples()]; // spread: the array comes from another vm context
-  assert.deepEqual(shipped.map(e => e.group), ['blank', 'blank', 'blank', 'template', 'template', 'template']);
-  assert.deepEqual(shipped.map(e => e.id), LANGUAGES.map(l => 'blank-' + l).concat(LANGUAGES.map(l => 'template-' + l)));
+  assert.deepEqual(shipped.map(e => e.group), ['blank', 'blank', 'blank', 'template', 'template', 'template', 'template', 'template', 'template']);
+  assert.deepEqual(shipped.map(e => e.id), LANGUAGES.map(l => 'blank-' + l).concat(LANGUAGES.map(l => 'template-' + l), LANGUAGES.map(l => 'template-gs1-' + l)));
   assert.equal(shipped.some(e => e.group === 'full'), false);
   assert.equal(new Set(shipped.map(e => e.id)).size, shipped.length);
 });
 
 test('the test fixture appends the four complete examples after the shipped ones, with unique ids', () => {
-  assert.deepEqual(PB.examples.slice(6).map(e => e.id), ['spool-99x55', 'barcodes-code39-itf-code128', 'tspl-label-100x60', 'zpl-label-100x60']);
+  assert.deepEqual(PB.examples.slice(9).map(e => e.id), ['spool-99x55', 'barcodes-code39-itf-code128', 'tspl-label-100x60', 'zpl-label-100x60']);
   assert.equal(new Set(PB.examples.map(e => e.id)).size, PB.examples.length);
 });
 
 test('there is one blank template and one template per language, with the agreed names', () => {
-  for (const group of ['blank', 'template']) assert.deepEqual(byGroup(group).map(e => e.language), LANGUAGES, group);
+  assert.deepEqual(byGroup('blank').map(e => e.language), LANGUAGES);
+  assert.deepEqual(byGroup('template').map(e => e.language), LANGUAGES.concat(LANGUAGES));
   assert.deepEqual(byGroup('blank').map(e => e.name), ['En blanco — TPCL (TEC)', 'En blanco — TSPL (TSC)', 'En blanco — ZPL (Zebra)']);
-  assert.deepEqual(byGroup('template').map(e => e.name), ['Plantilla — TPCL (TEC)', 'Plantilla — TSPL (TSC)', 'Plantilla — ZPL (Zebra)']);
+  assert.deepEqual(basicTemplates().map(e => e.name), ['Plantilla — TPCL (TEC)', 'Plantilla — TSPL (TSC)', 'Plantilla — ZPL (Zebra)']);
 });
 
 test('the blank templates have no items, no variables, no values and a 100 x 60 mm label', () => {
@@ -48,7 +51,7 @@ test('the blank templates have no items, no variables, no values and a 100 x 60 
   }
 });
 
-test('the templates are 100 x 60 mm too', () => {
+test('the templates (the GS1-128 ones too) are 100 x 60 mm', () => {
   for (const e of byGroup('template')) assert.ok(near100x60(parse(e).size), e.id);
 });
 
@@ -56,11 +59,11 @@ test('the three templates have the same item kinds in the same order', () => {
   // Frame (a box), title and three text lines, a horizontal line, a Code128 bar code and a QR. The languages only differ in how
   // they write them (TPCL {LC} draws both the box and the line, TSPL uses BOX / BAR, ZPL ^GB), not in the kinds the model reads.
   const KINDS = ['line', 'text', 'text', 'text', 'text', 'line', 'barcode', 'qr'];
-  for (const e of byGroup('template')) assert.deepEqual(parse(e).items.map(i => i.kind), KINDS, e.id);
+  for (const e of basicTemplates()) assert.deepEqual(parse(e).items.map(i => i.kind), KINDS, e.id);
 });
 
 test('the templates read as the same label: a framed box, a straight line, the same texts and a Code128 with a variable', () => {
-  const models = byGroup('template').map(parse);
+  const models = basicTemplates().map(parse);
   for (const model of models) {
     assert.equal(Boolean(model.items[0].rect), true, 'the frame is a box');
     assert.equal(Boolean(model.items[5].rect), false, 'the rule is a straight line');
@@ -74,7 +77,7 @@ test('the templates read as the same label: a framed box, a straight line, the s
 });
 
 test('every #VARIABLE# of a template has a test value, and the three share the same values', () => {
-  const basics = byGroup('template');
+  const basics = basicTemplates();
   for (const e of basics) {
     const names = [...new Set([...e.source.matchAll(/#(\w+)#/g)].map(m => m[1]))];
     assert.ok(names.length >= 4, e.id);

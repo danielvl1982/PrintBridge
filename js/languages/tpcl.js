@@ -208,7 +208,11 @@
         const target = DATA_TARGET[m[1]] + m[2];
         const field = ctx.fields[target];
         if (field && field.kind === 'text') field.data = fitTextData(ctx, target, m[3]);
-        else if (field) field.data = fitBarcodeData(ctx, target, field.kind, field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3]);
+        else if (field) {
+          field.data = fitBarcodeData(ctx, target, field.kind, field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3]);
+          // Code 128 whose data starts with FNC1 and is a GS1 element string is a gs1-128 barcode
+          if (field.kind === 'barcode' && field.symbology === 'code128' && typeof field.data === 'string') Object.assign(field, PB.gs1.readCode128(field.data));
+        }
         else ctx.report(diag.error(`R${m[1]}${m[2]} no tiene un ${target} definido antes`));
       },
     },
@@ -552,7 +556,34 @@
   const CONTENT_FIELD = Object.freeze({ key: 'content', label: 'Contenido', type: 'text', maxLength: 255 });
 
   /** Data as the panel shows it: a barcode's FNC1 character in the TPCL notation (">8"), the form the file stores. */
-  const contentOfModel = item => (item.data == null ? undefined : item.kind === 'barcode' ? item.data.replaceAll(barcodeData.FNC1, '>8') : item.data);
+  const contentOfModel = item => (item.data == null ? undefined : isGs1(item) ? item.data : item.kind === 'barcode' ? item.data.replaceAll(barcodeData.FNC1, '>8') : item.data);
+
+  /**
+   * A gs1-128 barcode is a Code 128 command (type 9) whose data starts with FNC1; the panel shows and takes its data in the standard notation
+   * with parentheses and the file holds the Code 128 form. gs1FileText(notation) -> that form (>8 for every FNC1), or null when the notation
+   * cannot be encoded or the form would be read back differently (a literal ">8" in the data cannot be written).
+   */
+  const isGs1 = item => !!item && item.kind === 'barcode' && item.symbology === 'gs1-128';
+  function gs1FileText(notation) {
+    const code = PB.gs1.toCode128Data(notation);
+    if (code === null) return null;
+    const parts = code.split(barcodeData.FNC1);
+    if (parts.some((part, i) => part.includes('>8') || (i < parts.length - 1 && part.endsWith('>')))) return null;
+    const text = code.replaceAll(barcodeData.FNC1, '>8');
+    return text.length > CONTENT_FIELD.maxLength ? null : text;
+  }
+
+  /**
+   * Code 128 <-> GS1-128: both are the same XB type 9 command, so the switch rewrites the data command only. To GS1-128 the data must be
+   * an element string in the standard notation (becomes its FNC1 form); to Code 128 the notation itself is kept as text. null: refused.
+   */
+  function gs1SwitchText(item, to) {
+    const data = typeof item.data === 'string' ? item.data : null;
+    if (data === null) return null;
+    if (to === 'gs1-128' && item.symbology === 'code128') return data.includes(barcodeData.FNC1) ? null : gs1FileText(data);
+    if (to === 'code128' && isGs1(item)) return data.includes('>8') || UNSAFE_DATA.test(data) || data.length > CONTENT_FIELD.maxLength ? null : data;
+    return null;
+  }
 
   /**
    * Where the data of an item is stored in the text: { start, end, value } over the whole text (start..end is the data
@@ -621,8 +652,8 @@
     // Content: from the text when given (where its data is stored), else from the item model
     if (item && CONTENT_KINDS.includes(item.kind)) {
       const target = typeof text === 'string' ? contentTarget(text, item) : null;
-      const value = typeof text === 'string' ? target && target.value : contentOfModel(item);
-      if (typeof value === 'string') fields.push({ ...CONTENT_FIELD, value });
+      const value = typeof text === 'string' ? target && (isGs1(item) ? item.data : target.value) : contentOfModel(item);
+      if (typeof value === 'string') fields.push({ ...CONTENT_FIELD, value, ...(isGs1(item) && { note: PB.gs1.NOTATION_HINT }) });
     }
     return { kind, fields };
   }
@@ -634,6 +665,17 @@
    */
   function updateItem(text, item, changes, { dpi = PB.config.resolutions[0] } = {}) {
     if (!changes) return text;
+    // Code 128 <-> GS1-128 is a change of the data, not of the command
+    const to = changes.symbology;
+    if (Object.hasOwn(changes, 'symbology') && item && item.kind === 'barcode' && (to === 'gs1-128' ? item.symbology === 'code128' : to === 'code128' && isGs1(item))) {
+      const target = contentTarget(text, item);
+      const value = target ? gs1SwitchText(item, to) : null;
+      if (value === null || UNSAFE_DATA.test(value)) return text;
+      const rewritten = text.slice(0, target.start) + value + text.slice(target.end);
+      const { symbology, ...rest } = changes;
+      const again = Object.keys(rest).length ? parse(rewritten, { dpi }).items.find(i => i.ref === item.ref) : null;
+      return again ? updateItem(rewritten, again, rest, { dpi }) : rewritten;
+    }
     const found = editableOf(item, text);
     // Fields flagged `reemit` (the barcode type and check digit, the text's Tipo and font type) rewrite the whole format command through
     // the shape's `reemit` hook: (found, item, changes, { dpi, text }) -> the new command, or null to refuse (text unchanged). A hook may
@@ -673,7 +715,9 @@
     const content = changes.content;
     if (Object.hasOwn(changes, 'content') && typeof content === 'string' && !UNSAFE_DATA.test(content)) {
       const target = contentTarget(text, item);
-      if (target) edits.push({ start: target.start, end: target.end, value: item.kind === 'barcode' ? content.replaceAll(barcodeData.FNC1, '>8') : content });
+      // A gs1-128 barcode takes the standard notation and writes its Code 128 form; a notation that cannot be encoded is refused, never written
+      const written = isGs1(item) ? gs1FileText(content) : item.kind === 'barcode' ? content.replaceAll(barcodeData.FNC1, '>8') : content;
+      if (target && written !== null) edits.push({ start: target.start, end: target.end, value: written });
     }
     if (!edits.length) return text;
     let out = text;

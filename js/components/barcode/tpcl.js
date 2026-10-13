@@ -45,7 +45,7 @@
   });
 
   /** TPCL barcode type of each emittable neutral symbology (the inverse of SYMBOLOGIES). */
-  const TYPE_CODES = Object.freeze({ itf: '2', code39: '3', code128: '9', code93: 'C', codabar: '4', msi: '1', industrial25: 'O', ean13: '5', ean8: '0', upca: 'K', upce: '6' });
+  const TYPE_CODES = Object.freeze({ itf: '2', code39: '3', code128: '9', 'gs1-128': '9', code93: 'C', codabar: '4', msi: '1', industrial25: 'O', ean13: '5', ean8: '0', upca: 'K', upce: '6' });
 
   /** TPCL type character of each WPC symbology with an add-on of 2 or 5 digits. */
   const ADDON_TYPE_CODES = Object.freeze({ ean13: { 2: '7', 5: '8' }, ean8: { 2: 'I', 5: 'J' }, upca: { 2: 'L', 5: 'M' }, upce: { 2: 'G', 5: 'H' } });
@@ -216,7 +216,13 @@
      * explicit widths the wide elements are 3 x module (info). Symbologies TPCL has no type for (EAN13, unknown...) are
      * skipped with a warning. Only neutral fields are read: native (e.g. the TSPL type) is ignored.
      */
-    function emit(item, ctx) {
+    function emit(source, ctx) {
+      // gs1-128 is written as Code 128 over its FNC1 data; data that cannot be encoded is skipped, naming the real cause
+      const item = source.symbology === 'gs1-128' ? PB.gs1.toCode128Item(source) : source;
+      if (!item) {
+        ctx.once('tpcl-gs1-invalid', () => diag.warning(PB.gs1.unwritableMessage(source.data)));
+        return [];
+      }
       if (!TYPE_CODES[item.symbology]) {
         ctx.once(`tpcl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
         return [];
@@ -311,7 +317,8 @@
       key: 'symbology', label: 'Tipo de código', type: 'select', group: 0, reemit: true,
       options: selector.symbologyOptions(TYPE_CODES),
       model: item => (TYPE_CODES[item.symbology] ? item.symbology : undefined),
-      read: raw => symbologyOfCommand(raw),
+      // gs1-128 is a Code 128 command (type 9) whose data starts with FNC1: the type character alone cannot tell, the item can
+      read: (raw, item) => { const symbology = symbologyOfCommand(raw); return symbology === 'code128' && item && item.symbology === 'gs1-128' ? 'gs1-128' : symbology; },
       write: () => null,
     };
 
@@ -361,6 +368,8 @@
       const from = item.symbology;
       const to = Object.hasOwn(changes, 'symbology') ? changes.symbology : from;
       if (!TYPE_CODES[from] || !selector.symbologyOptions(TYPE_CODES).some(o => o.value === to)) return null;
+      // gs1-128 shares the Code 128 command: switching to or from it rewrites the data (languages/tpcl.js updateItem), never the command
+      if (from === 'gs1-128' || to === 'gs1-128') return null;
       const checks = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to] : {};
       if (Object.hasOwn(changes, 'check') && !Object.hasOwn(checks, changes.check)) return null;
       const addonFrom = isWpc(from) ? (item.addon ?? 0) : 0;
@@ -503,6 +512,9 @@
                 ...optionalProblems(ref, { inc: p[4], readable: p[6], zero: p[7], optional: [], genericIncrement: true }),
                 ...(wpc && p[5] !== undefined && p[5] !== '' ? [rangeWarning(ref, 'barra guardiana', p[5], 0, MAX_GUARD, 3)] : []),
               ].filter(Boolean).forEach(d => ctx.report(d));
+            }
+            if (m[4] === 'N') {
+              ctx.report(diag.info(`${ref}: el tipo N (UCC/EAN128) lleva 19 dígitos y la impresora añade FNC1 y los dígitos de control: el visor no lo lee como cadena de elementos GS1`));
             }
             ctx.addField(ref, {
               kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },

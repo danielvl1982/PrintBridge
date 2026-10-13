@@ -84,7 +84,7 @@
   const DEFAULT_RATIO = 3;
 
   /** TSPL type of each selectable symbology and, for the ones with a check digit option, of each check (the selector's tables). */
-  const TYPE_CODES = Object.freeze({ code128: '128', code39: '39', itf: '25', code93: '93', codabar: 'CODA', ean13: 'EAN13', ean8: 'EAN8', upca: 'UPCA', upce: 'UPCE' });
+  const TYPE_CODES = Object.freeze({ code128: '128', 'gs1-128': '128M', code39: '39', itf: '25', code93: '93', codabar: 'CODA', ean13: 'EAN13', ean8: 'EAN8', upca: 'UPCA', upce: 'UPCE' });
   const CHECK_CODES = Object.freeze({
     code39: { none: '39', mod43: '39C' }, itf: { none: '25' }, code93: { auto: '93' }, codabar: { none: 'CODA' },
     ean13: { auto: 'EAN13' }, ean8: { auto: 'EAN8' }, upca: { auto: 'UPCA' }, upce: { auto: 'UPCE' },
@@ -135,7 +135,11 @@
       return degrees;
     }
 
-    /** TSPL type and content of a Code128 item: "128", "EAN128" (leading FNC1) or "128M" (FNC1 elsewhere, as !102). */
+    /**
+     * TSPL type and content of a Code128 item: "128", "EAN128" (leading FNC1) or "128M" (FNC1 elsewhere, as !102). A gs1-128 item arrives
+     * here as its Code 128 data. UNVERIFIED: that EAN128 prepends the FNC1 itself comes from the TSC TSPL v3.0 manual, which is not in docs/
+     * (the local manual only says "Code 128, automatic subset switching"); 128M with !102 is the reliable form (see odd/tasks/gs1-128.md).
+     */
     function code128Of(ctx, data) {
       const parts = data.split(barcodeData.FNC1);
       if (parts.length === 1) return { type: '128', data };
@@ -184,7 +188,13 @@
      * BARCODE x,y,"type",height,human readable,rotation,narrow,wide,"content" (see the header comment for the mapping).
      * Only neutral fields are read: native (e.g. the source type) is ignored.
      */
-    function emit(item, ctx) {
+    function emit(source, ctx) {
+      // gs1-128 is written as Code 128 over its FNC1 data; data that cannot be encoded is skipped, naming the real cause
+      const item = source.symbology === 'gs1-128' ? PB.gs1.toCode128Item(source) : source;
+      if (!item) {
+        ctx.once('tspl-gs1-invalid', () => diag.warning(PB.gs1.unwritableMessage(source.data)));
+        return [];
+      }
       if (!EMITTABLE.includes(item.symbology)) {
         ctx.once(`tspl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TSPL, no se exporta`));
         return [];
@@ -264,8 +274,9 @@
     const symbologyField = {
       key: 'symbology', label: 'Tipo de código', type: 'select', arg: 2, reemit: true,
       options: selector.symbologyOptions(TYPE_CODES),
-      model: item => (typeOfItem(item) ? item.symbology : undefined),
-      read: (a, cmd) => (typeOfCommand(cmd) || {}).symbology,
+      model: item => (typeOfItem(item) && Object.hasOwn(TYPE_CODES, item.symbology) ? item.symbology : undefined),
+      // gs1-128 is a Code 128 type (128M / EAN128) whose data starts with FNC1: the item tells them apart
+      read: (a, cmd, { item } = {}) => { const { symbology } = typeOfCommand(cmd) || {}; return symbology === 'code128' && item && item.symbology === 'gs1-128' ? 'gs1-128' : symbology; },
       write: () => null,
     };
     const checkField = {
@@ -306,9 +317,10 @@
     function reemit(cmd, item, changes) {
       const known = typeOfCommand(cmd);
       if (!known) return null;
-      const from = known.symbology;
+      const from = known.symbology === 'code128' && item.symbology === 'gs1-128' ? 'gs1-128' : known.symbology;
       const to = Object.hasOwn(changes, 'symbology') ? changes.symbology : from;
       if (!selector.symbologyOptions(TYPE_CODES).some(o => o.value === to)) return null;
+      if (from === 'gs1-128' || to === 'gs1-128') return gs1Edits(cmd, item, from, to, changes);
       const checks = Object.hasOwn(CHECK_CODES, to) ? CHECK_CODES[to] : {};
       if (Object.hasOwn(changes, 'check') && !Object.hasOwn(checks, changes.check)) return null;
       const addon = Object.hasOwn(changes, 'addon') ? changes.addon : known.addon;
@@ -329,6 +341,45 @@
       return edits;
     }
 
+    /** The content of a gs1-128 command is editable when it is one plain quoted string (a counter or a concatenation is left alone). */
+    const plainContent = cmd => { const a = cmd.args[cmd.args.length >= 10 ? 9 : 8]; return !!a && /^"[\s\S]*"$/.test(a.raw) && !COUNTER.test(a.raw); };
+
+    /**
+     * Edits of the type and content arguments for a change that involves gs1-128 (the symbology select, or its content, which can change the
+     * type: EAN128 holds a leading FNC1 only, 128M every other FNC1). Code 128 ("128") with GS1 notation <-> gs1-128; any other type
+     * change, a notation that cannot be encoded, a content that 128M would read as a control code (!nnn) or a counter is refused (null).
+     */
+    function gs1Edits(cmd, item, from, to, changes) {
+      if (!plainContent(cmd)) return null;
+      const content = cmd.args[cmd.args.length >= 10 ? 9 : 8];
+      let type;
+      let data;
+      if (to === 'gs1-128') {
+        const notation = from === 'gs1-128' ? (Object.hasOwn(changes, 'content') ? changes.content : item.data) : (String(cmd.args[2].value).toUpperCase() === '128' ? item.data : null);
+        const code = typeof notation === 'string' ? PB.gs1.toCode128Data(notation) : null;
+        // 128M reads "!nnn" as a control code, so such text in a value cannot be written there
+        if (code === null || (code.indexOf(barcodeData.FNC1, 1) >= 0 && code.split(barcodeData.FNC1).some(part => /!\d{3}/.test(part)))) return null;
+        ({ type, data } = code128Of({ once() {} }, code));
+      } else if (from === 'gs1-128' && to === 'code128' && !Object.hasOwn(changes, 'content')) {
+        type = '128';
+        data = item.data;
+      } else return null;
+      if (typeof data !== 'string' || data.endsWith('\\') || /[\r\n]/.test(data)) return null;
+      const edits = [];
+      const [typeText, contentText] = [quoted(type), quoted(data)];
+      if (typeText !== cmd.args[2].raw) edits.push({ start: cmd.args[2].start, end: cmd.args[2].end, value: typeText });
+      if (contentText !== content.raw) edits.push({ start: content.start, end: content.end, value: contentText });
+      return edits.length ? edits : null;
+    }
+
+    /** The Contenido of a gs1-128 barcode: the standard notation in the panel, the Code 128 form in the file (written by reemit, with the type). */
+    const gs1ContentField = {
+      key: 'content', label: 'Contenido', type: 'text', arg: (cmd => (cmd.args.length >= 10 ? 9 : 8)), reemit: true, note: PB.gs1.NOTATION_HINT,
+      model: item => (item.native && item.native.counterN === undefined && !COUNTER.test(String(item.data)) ? item.data : undefined),
+      read: (a, cmd, { item } = {}) => (plainContent(cmd) ? item.data : undefined),
+      write: () => null,
+    };
+
     /** Properties of BARCODE (type untouched). The wide bar only matters for the wide/narrow symbologies. */
     const barcodeFields = wideNarrow => [
       symbologyField, checkField, addonField,
@@ -343,6 +394,9 @@
       textField('content', 'Contenido', cmd => (cmd.args.length >= 10 ? 9 : 8),
         item => (item.native && rawContent(item.native.type) && item.native.counterN === undefined && !COUNTER.test(String(item.data)) ? item.data : undefined),
         cmd => rawContent(cmd.args[2] && cmd.args[2].value)),
+    ];
+    const gs1Fields = [
+      symbologyField, ...barcodeFields(false).filter(f => !['check', 'addon', 'symbology', 'content'].includes(f.key)), gs1ContentField,
     ];
     const isBarcode = (item, cmd) => (cmd ? cmd.name === 'BARCODE' : item.ref === 'BARCODE');
     const isWideNarrow = (item, cmd) => {
@@ -359,6 +413,7 @@
       // Move: BARCODE x,y are arguments 0 and 1 (dots)
       coordinates: [{ applies: (item, cmd) => !cmd || cmd.name === 'BARCODE', fields: [{ arg: 0, axis: 'x' }, { arg: 1, axis: 'y' }] }],
       editable: [
+        { applies: (item, cmd) => isBarcode(item, cmd) && item.symbology === 'gs1-128', fields: gs1Fields, reemit },
         { applies: (item, cmd) => isBarcode(item, cmd) && isWideNarrow(item, cmd), fields: barcodeFields(true), reemit },
         { applies: isBarcode, fields: barcodeFields(false), reemit },
       ],
@@ -410,12 +465,15 @@
             if (typeKey === '128M') data = manualModeData(ctx, data);
             if (typeKey === 'EAN128') data = barcodeData.FNC1 + data;
 
+            // Code 128 data that starts with FNC1 and is a GS1 element string is a gs1-128 barcode
+            const symbology = known.symbology === 'code128' ? PB.gs1.readCode128(data) : { symbology: known.symbology, data };
+            data = symbology.data;
             const { x, y } = ctx.pos(px, py);
             const wideNarrow = WIDE_NARROW.includes(known.symbology);
             const dotWide = (drawnWide ?? narrow * 3) * ctx.dot;
             const item = {
               kind: 'barcode', ref, source: sourceOf(cmd), x, y, raw: { x: String(px), y: String(py) },
-              symbology: known.symbology, module: narrow * ctx.dot, rotation: ROTATIONS.includes(rotation) ? rotation : 0,
+              symbology: symbology.symbology, module: narrow * ctx.dot, rotation: ROTATIONS.includes(rotation) ? rotation : 0,
               height: drawnHeight * ctx.dot,
               ...(wideNarrow && {
                 widths: { narrowBar: narrow * ctx.dot, narrowSpace: narrow * ctx.dot, wideBar: dotWide, wideSpace: dotWide },

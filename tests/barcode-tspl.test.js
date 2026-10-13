@@ -110,11 +110,14 @@ test('128M: other control codes are dropped with one info', () => {
   assert.match(infos[0].text, /!100, !101/);
 });
 
-test('EAN128 is Code128 with a leading FNC1', () => {
+test('EAN128 is Code128 with a leading FNC1; a GS1 element string is read as gs1-128 (task S3 of odd/tasks/gs1-128.md)', () => {
   const item = one(bc('EAN128', '0112345678901231'));
-  assert.equal(item.symbology, 'code128');
-  assert.equal(item.data, FNC1 + '0112345678901231');
+  assert.equal(item.symbology, 'gs1-128');
+  assert.equal(item.data, '(01)12345678901231');
   assert.equal(item.native.type, 'EAN128');
+  const other = one(bc('EAN128', 'ABC123'));
+  assert.equal(other.symbology, 'code128');
+  assert.equal(other.data, FNC1 + 'ABC123');
 });
 
 test('optional alignment: present with 10 arguments', () => {

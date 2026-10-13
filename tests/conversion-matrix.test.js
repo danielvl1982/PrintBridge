@@ -147,6 +147,11 @@ nativeCase('fonts-zpl-scalable', {
 neutral('barcode-code128', () => [barcode()]);
 neutral('barcode-code128-no-text', () => [barcode({ humanReadable: false })]);
 neutral('barcode-code128-fnc1', () => [barcode({ data: `01${FNC1}2345` })]);
+// gs1-128 (task S3 of odd/tasks/gs1-128.md): written as Code 128 over its FNC1 data in every language, so it converts with no loss
+neutral('barcode-gs1-128-sscc', () => [barcode({ symbology: 'gs1-128', data: '(00)000422730000001131' })]);
+neutral('barcode-gs1-128-leading-fnc1', () => [barcode({ symbology: 'gs1-128', data: '(01)09501101530003(17)250101' })]);
+neutral('barcode-gs1-128-separator', () => [barcode({ symbology: 'gs1-128', data: '(01)09501101530003(17)250101(10)ABC123(21)99', humanReadable: false })]);
+neutral('barcode-gs1-128-rotated', () => [barcode({ symbology: 'gs1-128', data: '(00)000422730000001131', rotation: 90 })]);
 neutral('barcode-code128-reserved', () => [barcode({ data: 'A^B~C,D' })]);
 for (const rotation of [90, 180, 270]) neutral(`barcode-code128-rotation-${rotation}`, () => [barcode({ rotation })]);
 neutral('barcode-code39', () => [barcode({ symbology: 'code39', data: 'CODE39', check: 'none' })]);
@@ -540,6 +545,10 @@ const RULES = [
   [/^example-template-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],
   [/^example-template-tspl$/, [S2T, S2Z], deg(['font'], FONTS)],
   [/^example-template-zpl$/, [Z2S], deg(['font'], FONTS, ['font.width'])],
+  // The GS1-128 samples: same font substitutions as the basic templates; the barcodes convert exactly (Code 128 with FNC1 in all three)
+  [/^example-template-gs1-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],
+  [/^example-template-gs1-tspl$/, [S2T, S2Z], deg(['font'], FONTS)],
+  [/^example-template-gs1-zpl$/, [Z2S], deg(['font'], FONTS, ['font.width'])],
   [/^example-zpl-label-100x60$/, [Z2T], deg(['font', 'reverse'], FONTS, ['font.size', 'font.width'])],
   [/^example-zpl-label-100x60$/, [Z2S], deg(['font', 'reverse'], FONTS, ['font.width'])],
 ];

@@ -34,6 +34,7 @@ The four existing examples stay as complete examples.
 - E1 3cb055c: six examples in js/config.js (group field; conversion-matrix rules and tpcl round trip adjusted for them).
 - E2 125caff: createExamplePicker builds optgroups (En blanco, Básicos, Ejemplos completos). app.js needed no change: loadExample passes the language, so the palette follows it (verified in Chrome).
 - E3 bef1295: tests/example-templates.test.js (12 tests) + picker tests. Chrome probe: all 10 examples selectable, no JS errors; blank templates insert Texto / Código de barras / QR in their language. Screenshots: C:/Users/danielvl/AppData/Local/Temp/ui/tpl-<id>.png.
+- 2026-10-13: the GS1-128 sample templates (`template-gs1-*`, group `template`) were added later, see odd/tasks/gs1-128.md S5 notes.
 - E4 (docs commit): README Ejemplo combo and config.js row, CONTRIBUTING Examples bullet. node --test: 3523 pass, 0 fail.
 
 ## Follow-up (feat/templates-only)

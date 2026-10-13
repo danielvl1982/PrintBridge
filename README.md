@@ -25,7 +25,7 @@ from scratch with the TPCL template label.
 | `index.html` | The page structure |
 | `css/viewer.css` | Look of the page: toolbars, panels and messages |
 | `css/label.css` | Look of the label drawing: colors, grid and typefaces |
-| `js/config.js` | Known label sizes and the example labels (a blank template and a ready-made template per language) |
+| `js/config.js` | Known label sizes and the example labels (a blank template, a ready-made template and a GS1-128 template per language) |
 | `js/manifest.json` | Ordered list of every script (same order as `index.html`; the tests load from it) |
 | `js/core/` | Part common to all languages, one file per module: diagnostics, units, sources, variables, language registry, validation and sizes |
 | `js/core/emit.js` | Shared helpers of the emitters (dots, escaping, id numbering, diagnostics) and the driver that calls each item's slice `emit` |
@@ -61,7 +61,7 @@ Any of these ways:
 - **Abrir archivo…** button.
 - **Ejemplo** combo: choosing an entry loads a label, grouped in two sections.
   - **En blanco:** one empty 100×60 mm template per language (TPCL, TSPL and ZPL), header only. It sets the language and the label size, so the **Componentes** palette inserts commands of that language.
-  - **Plantillas:** the same 100×60 mm label in TPCL, TSPL and ZPL (a frame, a title, three lines with variables, a line, a Code128 bar code and a QR), with sample data for its variables. It is also a handy way to compare the three languages.
+  - **Plantillas:** the same 100×60 mm label in TPCL, TSPL and ZPL (a frame, a title, three lines with variables, a line, a Code128 bar code and a QR), with sample data for its variables. It is also a handy way to compare the three languages. Then **Plantilla GS1-128** in the three languages: an SSCC pallet label (a frame, a title and two GS1-128 barcodes: `(00)000422730000001131`, and `(02)09501101530003(37)24(10)L2026-0412`, which needs an FNC1 after the count). It has no variables, and it has not been printed or scanned (see *GS1-128 barcodes*).
 
 The drawing updates immediately while typing in the code, so coordinates and sizes can be tried directly.
 
@@ -192,7 +192,7 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       content is exactly `@n` with a start value assigned (`@n="0001"`) shows that value, and **Incremento** edits the step of its
       `SET COUNTER @n step` line (-999999999..999999999).
     - **Tipo de código**, **Dígito de control** and **Complemento** (1D barcodes, TPCL `XB` and TSPL `BARCODE`; not QR): the symbology among the ones the viewer draws exactly
-      and the emitters write (Code 128, Code 39, ITF, Code 93, NW7 / Codabar, MSI, 2 de 5 industrial, EAN-13, EAN-8, UPC-A, UPC-E; TSPL has no MSI or 2 de 5 industrial type, so it does not offer them), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
+      and the emitters write (Code 128, Code 39, ITF, Code 93, NW7 / Codabar, MSI, 2 de 5 industrial, EAN-13, EAN-8, UPC-A, UPC-E and GS1-128, see *GS1-128 barcodes* below; TSPL has no MSI or 2 de 5 industrial type, so it does not offer them), and its check digit option (Code 39: none / modulo 43 = TPCL check 3, TSPL `39C`; ITF and Code 128: none,
       so ITF lists a single option and Code 128 no field; NW7: none only; EAN / UPC, Code 93 and 2 de 5 industrial in TPCL: none / check / automatic = options 1 / 2 / 3, MSI also 4 = IBM modulus 10 + 10 and 5 = IBM modulus 11 + 10;
       in TSPL Code 93 and EAN / UPC only automatic, NW7 none, the types have no option),
       and for the EAN / UPC types the add-on (none, +2, +5: part of the TPCL type character and of the TSPL type string, `EAN13+2`). The command is written again for the new type: TPCL replaces the whole `XB` command (the
@@ -201,12 +201,25 @@ Overlays a picture on the preview to check where it would go. Until you insert i
       string and the wide bar argument only (the other arguments, REFERENCE-relative coordinates and a counter content stay as written). A check option the new
       type lacks goes back to none (automatic for Code 93 and the EAN / UPC types); the add-on and the TPCL guard bar length are carried between EAN / UPC types; a TPCL start/stop option (`T`/`P`/`N`) is carried between the widths-form types
       (Code 39, ITF, MSI, NW7, 2 de 5 industrial). TSPL writes the wide argument of the new type (1:2 for Code 93, 3:1 for Code 39 / NW7 / ITF, equal to the narrow one for the rest). The change is refused (nothing changes) when something would be lost without any warning: a TPCL start/stop option
-      or a guard bar that the other form cannot hold (a start/stop option towards Code 128, Code 93 or EAN / UPC), TSPL `128M`/`EAN128` content, an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Postnet...). Content the new type cannot encode
+      or a guard bar that the other form cannot hold (a start/stop option towards Code 128, Code 93 or EAN / UPC), TSPL `128M`/`EAN128` content (except a GS1-128 element string, see below), an add-on that the new type cannot carry (Code 128, Code 39, ITF), a TPCL price check digit (options 4 / 5) that is not replaced, and symbologies without a row (Postnet...). Content the new type cannot encode
       (letters in ITF, an odd digit count, lower case in Code 39) is still written and the viewer warns as usual on the next refresh. The options come from the language's tables, so a
       new symbology only adds rows.
   - **Components panel:** drag a component (**Texto**, **Código de barras** (Code 128), **QR**, **Data Matrix**, **Línea**, **Caja**, **Área invertida**, for TSPL and ZPL **Elipse** and **Círculo**, and, for the three languages, **Imagen**) onto the label to insert it into the
     code with its top-left corner at the drop point (text and barcodes are inserted as `<#NAME#>` variables). Clicking
     one, or pressing Enter on it, inserts it at 10 mm / 10 mm. **Ctrl+Z** in the code box undoes the insertion.
+
+### GS1-128 barcodes
+
+**Tipo de código** offers **GS1-128** in TPCL, TSPL and ZPL. A GS1-128 barcode is a Code 128 symbol that starts with FNC1 and carries GS1 Application Identifiers (AIs).
+
+- **Notation:** the **Contenido** field shows and accepts the standard notation with parentheses, `(01)09501101530003(17)250101(10)ABC123`. Raw FNC1-separated data is not accepted as GS1-128 input (it stays a plain Code 128).
+- **AIs covered (logistic subset only):** `00` (SSCC), `01`, `02`, `10`, `11`, `13`, `15`, `17`, `20`, `21`, `30`, `37`, `240`, `241`, `400` and `410`-`415`. **The rest of the GS1 AI table is not covered**: any other AI is reported as an error (*no está en el subconjunto logístico soportado*) and the barcode is not written.
+- **What the app adds and what the printer receives:** the app writes FNC1 right after the start character and after every variable-length AI that is not the last element (the fixed-length ones need none); the Code 128 check character is computed by the encoder. The GS1 mod 10 check digit of `00`, `01`, `02` and `410`-`415` is part of the data you type: it is validated, not added (a wrong one is an error that names the expected digit). The printers never receive parentheses: the file holds the Code 128 form (TPCL `XB` type `9` with `>8`, TSPL `EAN128` for a leading FNC1 only and `128M` with `!102` otherwise, ZPL `^BC` with `>8`). The human readable line with parentheses is drawn by the viewer only.
+- **Diagnostics** (in the avisos, from the notation): unknown AI, wrong length (fixed AIs exactly, variable ones up to their maximum), characters outside the GS1 set (digits only for numeric AIs), bad mod 10 digit, month outside 01-12 or day above 31 in the date AIs, and, as warnings because the rules are not verified, day `00` and more than 48 data characters.
+- **Reading:** Code 128 data (TPCL types `9` / `A`, TSPL `128` / `128M` / `EAN128`, ZPL `^BC`) that starts with FNC1 and is an element string of the covered AIs is read as GS1-128; anything else stays Code 128. TPCL `XB` type `N` (19 digits, the printer adds FNC1 and the check digits) is not read as GS1-128 (one information message).
+- **Editing:** a content that is not a covered element string is refused: the text stays as it was and the avisos show a warning that names the cause (*Contenido GS1-128 rechazado (...): se mantiene el contenido anterior*), for the **Contenido** field; the refused **Tipo de código** switches and the refused cases of other fields give no message, the field only goes back to the previous value, one with a wrong check digit or date is written and reported. Switching **Tipo de código** between Code 128 and GS1-128 rewrites the data only (Code 128 to GS1-128 needs the data to be an element string in the notation; GS1-128 to Code 128 keeps the notation as text); any other change from or to GS1-128 is refused because it would lose the FNC1 data. TSPL chooses `EAN128` or `128M` again from the content, and refuses a value that `128M` would read as a control code (`!103`).
+- **Conversion:** written as Code 128 in all three languages, so the six directions are exact. A GS1-128 barcode whose data cannot be encoded is not exported, with a warning that names the cause (*Código de barras GS1-128 con datos no válidos (...)*).
+- **Not verified on a printer:** that TSPL `EAN128` prepends FNC1 by itself (the TSC manual that says so is not in `docs/`; `128M` with `!102` is the form that does not depend on it), the 48 data characters limit and what a printer prints as its own human readable line. Check a printout with a scanner that decodes the AIs.
 
 ### Convertir a…
 
@@ -239,6 +252,7 @@ The positions of the items are carried through the neutral model, so they are ex
 | Zero suppression (TPCL characters kept, ZPL `z`) | ~ dropped | ~ becomes "all leading zeros" | – | – | = | ~ dropped |
 | `#NAME#` variables | ~ literal text | ~ literal text | = | ~ literal text | = (`<#FNn#>`) | ~ literal text |
 | Code 128, Code 39, ITF, Code 93, NW7 / Codabar (data, height, module, rotation, text line, wide / narrow) | = | = | = | = | = | = |
+| GS1-128 (logistic AIs; written as Code 128 with FNC1; not exported, with a warning, when the data is invalid) | = | = | = | = | = | = |
 | Check digit options with no counterpart (Code 93 none / check, ITF check digit, EAN / UPC none / check, TSPL `25C`) | ~ automatic or none | ~ | ~ | ~ | ~ | ~ |
 | EAN / UPC add-on (+2 / +5) | = | ~ dropped from the data | = | ~ dropped | – | – |
 | EAN / UPC guard bar length (TPCL) | ~ dropped | ~ dropped | – | – | – | – |
@@ -563,12 +577,14 @@ The manuals are silent, contradictory, or the command is not modelled; the behav
 - **TPCL:** the `{D` backing paper parameter and the model tables of the manuals; items outside the print area; check digit `Mm` / `Mk` (read, never drawn or written); link fields `;ss`; `PV` fonts E..J and TrueType; `PC` fonts beyond A..T; the 40-digit counter data and 32 counters rule; the character code table; QR / Data Matrix capacity per level and size; PDF417, MicroPDF417, MaxiCode, GS1 DataBar and postal codes (drawn approximately, parameters not checked); `{SG0;` and the hex, BMP, PCX and TOPIX modes (not drawn); the issue speed set, which depends on the model.
 - **TSPL:** everything only TSC v3.0 defines is checked as "is a number": `BLOCK`, `QRCODE` ranges, `DIRECTION` mirror, `SHIFT`, `ELLIPSE`, `CIRCLE`, the `BOX` radius, fonts 0 / 6..8, the `TEXT` alignment; `SIZE` has no maximum; the limits of height, narrow, wide, measures and positions (9999 / 10) and the 200 pt scalable size are conveniences; `SPEED` depends on the model; the narrow : wide ratio table is garbled in the local manual; CR / LF in `TEXT` become spaces; data ending in a backslash cannot be read back by the viewer (the printer is not affected); `PUTBMP`, `PUTPCX`, `PUTPNG` and `DOWNLOAD` are not drawn.
 - **ZPL:** `^PW` above the printhead width and `^LL` by memory are not warned (32000 is the viewer's limit); `^GC` / `^GE` thickness 1 (the guide's default) is accepted in typed code; `^LT` per platform; the `^FO` justification and `^FT` without values; `^BY` height (typo in vol. 1; 1..9999 in vol. 2; 32000 is used); the `^BX` module upper bound; `^BQ` capacity per level and version; Code 39 / 93 full ASCII; `^A@`, `^FP`, `^FC`, `^SF`; the 600 dpi heads; stored images and formats (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`, `^DF`, `^XF`); compression and B64 / Z64 data inside `^GF` (documented for `~DG` / `~DB`); the symbologies the app does not model.
+- **GS1-128:** that TSPL `EAN128` prepends FNC1 (claimed by the TSC v3.0 manual, which is not in `docs/`; the writer only relies on it for a leading FNC1), that day `00` in a date AI is accepted, the 48 data characters limit (and whether the AIs count), that the parentheses of the human readable line are shown and never encoded, the exact GS1 mod 10 text and ZPL `^BC` mode `D` / the `e` parameter (read, kept, not applied). Printing and scanning of every GS1-128 label, the sample template included, is pending.
 - **All:** conversions are checked through the parsers of the three languages, not on a printer; values that no manual bounds pass unchanged between languages.
 
 ## Limitations
 
 - **ZPL:** the unsupported commands (PDF417 / MicroPDF417, MaxiCode, the other `^B*` symbologies, stored images, binary `^GF`) and everything the manuals do not document are listed in *ZPL support*; nothing of ZPL has been verified on a printer. Only 203 and 300 dpi can be selected.
 - **Printing:** the **Etiquetera** (RAW) mode was verified on real printers; the **Driver (imagen)** mode has not been verified on a real printer yet, and its PNG is not the label code, so it does not prove that a TEC / TSC / Zebra accepts the label.
+- **GS1-128:** only the logistic AIs listed in *GS1-128 barcodes* are known; the rest of the GS1 AI table is not covered (not modelled, validated or converted). Nothing of GS1-128, nor of its sample template, has been verified on a printer or with a scanner; the unverified rules are listed in *Not validated / unverified*.
 - **Conversion:** nothing a conversion writes has been verified on a printer (see **Convertir a…** for what is lost in each direction).
 - The printer letters are imitated with Arial / Times / Courier: the **width of the texts is approximate**. To
   adjust fine margins, always make a test print.

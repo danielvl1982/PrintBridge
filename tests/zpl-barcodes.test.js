@@ -403,7 +403,7 @@ test('describeItem values from the text and without it (the model), and the data
   const [bc, b3] = itemsOf(TEXT);
   const d = byKey(describe(bc, TEXT));
   assert.deepEqual([d.symbology.value, d.height.value, d.rotation.value, d.readable.value, d.above.value, d.module.value, d.ucc.value, d.mode.value, d.content.value], ['code128', 80, 90, true, false, 2, false, 'N', 'ABC123']);
-  assert.deepEqual(d.symbology.options.map(o => o.value), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce']);
+  assert.deepEqual(d.symbology.options.map(o => o.value), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce', 'gs1-128']);
   assert.deepEqual(d.rotation.options.map(o => o.value), [0, 90, 180, 270]);
   assert.deepEqual([d.height.min, d.height.max], [1, 32000]);
   assert.deepEqual([d.module.min, d.module.max, d.module.step], [1, 10, 1]);
@@ -484,7 +484,7 @@ const FIXTURE = c => BASE(`^FO100,50^BY3,2.5${c.cmd('R')}^FD${c.data}^FS^FO10,30
 test('the selector offers the ZPL symbologies in the label order and the check options of each one', () => {
   const [it] = itemsOf(FIXTURE(CASES[0]));
   const options = byKey(describe(it, FIXTURE(CASES[0]))).symbology.options;
-  assert.deepEqual(options.map(o => o.value), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce']);
+  assert.deepEqual(options.map(o => o.value), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce', 'gs1-128']);
   assert.equal(options[0].label, 'Code 128');
   const checkOf = c => byKey(describe(itemsOf(FIXTURE(c))[0], FIXTURE(c))).check;
   assert.equal(checkOf(CASES[0]), undefined);
