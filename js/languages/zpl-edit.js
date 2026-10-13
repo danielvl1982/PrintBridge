@@ -78,6 +78,15 @@
     return typeof text === 'string' && /\d/.test(text) && !/[,^~\r\n]/.test(text) && text === text.trim() && !PB.variables.namesIn(text).length;
   }
 
+  /**
+   * The ^SFmask,increment the app models: a mask of decimal placeholders (d, D) and ignored positions (%), and an increment string of digits and % (the
+   * increment is aligned with the mask from the right, so it is never longer than it; empty = the default, decimal 1). Mask and increment as written.
+   */
+  const SF_MASK = /^[dD%]+$/;
+  const SF_INCREMENT = /^[0-9%]*$/;
+  const maskSupported = (mask, increment = '') => typeof mask === 'string' && typeof increment === 'string'
+    && SF_MASK.test(mask) && SF_INCREMENT.test(increment) && increment.length <= mask.length;
+
   const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
 
   /** Rounds to whole dots; the epsilon keeps x.5 values that float noise nudged just below from rounding down. */
@@ -582,7 +591,7 @@
   }
 
   PB.zplEdit = Object.freeze({
-    createZplEditing, createOffsets, COORD_MAX, OFFSET_LIMITS, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable,
+    createZplEditing, createOffsets, COORD_MAX, OFFSET_LIMITS, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable, maskSupported,
     numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField, reverseField, setArgs, flagEdits, serialFields,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

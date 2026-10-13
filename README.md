@@ -491,7 +491,11 @@ Lines, boxes, circles, ellipses, diagonals and the inverted / cleared areas, dra
 
 - **Editing:** **Incremento** (signed) and **Ceros iniciales** (checkbox, only on a `^SN`) in Propiedades; **Contenido** of a counter is its start value (`^SN` first argument, which cannot carry commas, `^`, `~`, blanks at the ends or variables, and needs a digit). Setting **Incremento** to 0 turns the `^SN` back into a `^FD` with the start value (the zero suppression is gone with it); a value other than 0 on a plain `^FD` that `^SN` can carry writes `^SN data,step,Y`.
 - **Writing:** a counter is written as `^SN start,step,Y` (`N` with zero suppression); what `^SN` cannot carry (no digit, a comma, `^` or `~`) is written as a plain `^FD` with one warning; a step beyond ±999999999999 is clamped (warning); TPCL's "characters kept" of the zero suppression becomes `N` (ZPL has no count: one information message) and a zero suppression without a counter is dropped (information).
-- QR and Data Matrix with `^SN` read the start value as data (one information message: the counter is not modelled for 2D codes). **`^SF`** (the mask form: `%`, `D`, `A`, `N`, `O`, `H`) is **not modelled**: the field is drawn with its `^FD` text, without counter, with one warning.
+- QR and Data Matrix with `^SN` read the start value as data (one information message: the counter is not modelled for 2D codes). 
+
+### Serialization with a mask (`^SF`)
+
+`^FD data ^SF mask,increment` (Volume One pages 298-300): the **decimal masks** are read: `d` / `D` (a digit) and `%` (the position is ignored); the mask length is the number of right-most characters of the data that are serialized, and the increment is a **string** aligned with the mask from the right (digits and `%`, default decimal 1), kept as written: the manual's exercise 4, `^FDABCD1000EFGH^SF%%%%dddd%%%%,10000`, is read as it is. The field is drawn like a `^FD` one with its data as the **first value** (the printer serializes it on every label of `^PQ`; one information message says so). When the mask is a run of `d` that covers the whole trailing digit run of the data (`^FDBL0000^SFdddd,1`) and the increment is all digits, the field also has a counter with that step, which is what the TPCL / TSPL conversion will use. **Not modelled:** masks with `A` / `a` (alphabetic), `H` / `h` (hexadecimal), `O` / `o` (octal) or `N` / `n` (alphanumeric): the field is read as its plain `^FD` text, without counter, with one warning that names the placeholder. A mask longer than the data (the manual does not say what the printer does) is read with one warning; `^SF` on a QR / Data Matrix and with `^FN` follow `^SN` (information / the variable wins); with `^SN` in the same field the counter wins. Not verified on a printer.
 
 ### Field variables (`^FN`) and stored formats
 
@@ -504,7 +508,7 @@ Lines, boxes, circles, ellipses, diagonals and the inverted / cleared areas, dra
 
 ### Not supported
 
-Reported and not drawn (a warning each; `^DF`, `^POI` and the extra formats of a file are information messages): PDF417 and MicroPDF417 (`^B7`, `^BF`), MaxiCode (`^BD`), the other `^B*` symbologies (Postnet, Planet, Code 11, LOGMARS, Plessey, Code 49, Codablock...), the images stored in the printer (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`), binary `^GFB` / `^GFC` and Z64 data (B64 is read), `^DF` / `^XF` stored formats, the `^SF` mask serialization, `^POI` and the second and later formats of a file.
+Reported and not drawn (a warning each; `^DF`, `^POI` and the extra formats of a file are information messages): PDF417 and MicroPDF417 (`^B7`, `^BF`), MaxiCode (`^BD`), the other `^B*` symbologies (Postnet, Planet, Code 11, LOGMARS, Plessey, Code 49, Codablock...), the images stored in the printer (`~DG`, `~DY`, `^IM`, `^IL`, `^XG`), binary `^GFB` / `^GFC` and Z64 data (B64 is read), `^DF` / `^XF` stored formats, the `^SF` masks with letters, hexadecimal or octal placeholders, `^POI` and the second and later formats of a file.
 
 ### Conversion
 

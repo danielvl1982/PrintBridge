@@ -32,7 +32,7 @@
  *   - ^FO / ^FT open a field (origin x,y in dots, LH not applied yet); ^FS closes it; a field still open when the next ^FO / ^FT arrives is
  *     closed there (one warning per label: the guide shows the ^FS in every field), and one still open at ^XZ or at the end of the text is
  *     closed silently (the guide: ^XZ "ends the field data").
- *   - ^FD, ^FV, ^FH, ^FR, ^FB, ^FN, ^FP, ^SN, ^SF are field MODIFIERS: they are stored in the field (field.data, field.reverse, field.block (the ^FB command), field.fn, field.serial) and never dispatched.
+ *   - ^FD, ^FV, ^FH, ^FR, ^FB, ^FN, ^FP, ^SN, ^SF are field MODIFIERS: they are stored in the field (field.data, field.reverse, field.block (the ^FB command), field.fn, field.serial, field.sf) and never dispatched.
  *   - the setup commands (^PW ^LL ^LH ^LS ^LT ^PO ^CF ^FW ^CI ^BY and the recognised-but-not-drawn configuration ones) are IMMEDIATE: they run when they
  *     are read, inside an open field too, so the state the handler sees at ^FS is the state after all of them (the guide's ^CF inside a field
  *     example relies on it). A slice may declare an immediate handler too (`immediate: true`: ^LR, in js/components/area/zpl.js).
@@ -59,8 +59,15 @@
  * 'SN') and, after the slice handler ran, gives the text and bar code items item.counter = { step, native: { n, z } } (step 0 = none, like TPCL)
  * and item.zeroSuppress = 1 for z = N (TPCL's Zpp keeps that many characters: 1 keeps the last digit, the neutral preview helper then draws
  * exactly what the guide says for a numeric start value; for a mixed text the guide scans the right-most digits, which the viewer does not
- * model: not verified). QR and Data Matrix read the start value as data and report once that the counter is not modelled for 2D codes. ^SF (the
- * mask form of the serialization) is read as its plain ^FD with one warning: no counter, the mask and the increment string are not modelled.
+ * model: not verified). QR and Data Matrix read the start value as data and report once that the counter is not modelled for 2D codes.
+ * ^SFmask,increment (the mask form of the serialization of a ^FD, Volume One pages 298-300; the manual is silent on a data shorter than the mask, ^PQ, ^FN,
+ * ^FB and the 2D codes) is modelled for the DECIMAL masks only: placeholders d / D and % (the position is ignored), an increment string of digits and %
+ * aligned with the mask from the right (empty = decimal 1, never an integer). The data is the first value and is drawn as a plain ^FD; the text and bar code
+ * items get item.serialMask = { mask, increment } (as written; see js/core/model.js) and are written back as ^FD...^SFmask[,increment]. When the mask is a run
+ * of d / D that covers the whole trailing digit run of the data and the increment is all digits, item.counter = { step } is also set (the integer value
+ * of the increment) for the conversion to the TPCL / TSPL counters. Any other mask (A a H h O o N n, other characters) or an increment that does not
+ * parse keeps the plain ^FD with one warning that names the placeholder. QR / Data Matrix (info) and ^FN (warning, the variable wins) follow ^SN; with
+ * ^SN in the same field the counter wins (warning).
  * Not in the guide: what n = 0 does, the suppression of a mixed text, ^SN on 2D codes, ^SN with ^FN.
  * ^FNn (0..9999, default 0; the quoted prompt ^FNn"prompt" is of later guides, read, not verified) numbers a field of a stored format (^DF) whose data
  * ^XF merges. The driver makes it the app's variable <#FNn#>: the field's data is the placeholder (so the Variables panel and "Valores de prueba"
@@ -332,6 +339,7 @@
     if (PB.variables.namesIn(text).length) {
       ctx.once('zpl-variables', () => diag.info('Las variables #NOMBRE# se escriben como texto literal en ZPL (solo los campos ^FN de un archivo ZPL se escriben como variables)'));
     }
+    if (item.serialMask) return maskCommands(ctx, item, text);
     const c = item.counter;
     let step = c && Number.isFinite(c.step) ? Math.trunc(c.step) : 0;
     if (step === 0) {
@@ -349,6 +357,20 @@
     if (/\d{13}/.test(text)) ctx.once('zpl-counter-digits', () => diag.info('Hay contadores con más de 12 dígitos seguidos: ^SN solo incrementa los 12 de la derecha'));
     if (item.zeroSuppress > 1) ctx.once('zpl-zero-count', () => diag.info('La supresión de ceros de ZPL (z = N) quita todos los ceros iniciales: se pierde el número de caracteres que se conservan'));
     return `^SN${text},${step},${item.zeroSuppress > 0 ? 'N' : 'Y'}`;
+  }
+
+  /**
+   * A field with a serialization mask: the data command ^FD followed by ^SFmask,increment as the item holds them (the increment is omitted only when it
+   * was); the counter bridged from the mask is not written (the mask is). A mask this app cannot write (see maskSupported) is dropped with one warning.
+   */
+  function maskCommands(ctx, item, text) {
+    const { mask, increment = '' } = item.serialMask;
+    if (!zplEdit.maskSupported(mask, increment)) {
+      ctx.once('zpl-sf-emit', () => diag.warning('Hay máscaras ^SF que no se pueden escribir (solo marcadores d, D y %, incremento de dígitos y % no más largo que la máscara): se escribe el dato como texto fijo'));
+      return fieldData(ctx, text);
+    }
+    if (mask.length > text.length) ctx.once('zpl-sf-length', () => diag.warning('Hay máscaras ^SF más largas que el dato: la guía no dice qué hace la impresora'));
+    return `${fieldData(ctx, text)}^SF${mask}${increment === '' ? '' : `,${increment}`}`;
   }
 
   /** A coordinate in dots limited to the origin range 0..32000 of ^FO / ^FT; one warning per emit when it had to change. */
@@ -678,7 +700,7 @@
   /** Starts a field; its start offset is the one of its first command. */
   function openField(ctx) {
     const cmds = [];
-    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, fn: null, serial: null, block: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
+    ctx.field = { start: null, end: null, raw: '', cmds, origin: null, data: null, fn: null, serial: null, sf: null, block: null, reverse: false, labelReverse: ctx.labelReverse, closed: false, ...zplEdit.fieldMethods(cmds) };
     return ctx.field;
   }
 
@@ -749,7 +771,10 @@
     const added = ctx.model.items.slice(before);
     if (variable) {
       for (const item of added) if (item.data === variable.placeholder) item.native = { ...item.native, fn: { n: variable.n, prompt: variable.prompt, default: variable.default } };
-    } else if (field.serial) applySerial(ctx, field.serial, added);
+    } else if (field.serial) {
+      applySerial(ctx, field.serial, added);
+      if (field.sf) ctx.once('zpl-sn-sf', () => diag.warning('Hay campos con ^SN y ^SF a la vez: se usa ^SN (el contador) y se ignora la máscara ^SF'));
+    } else if (field.sf) applyMask(ctx, field, added);
     if (field.block && added.some(item => item.kind !== 'text')) {
       ctx.once('zpl-fb-not-text', () => diag.info('^FB (bloque de texto) solo se aplica al texto: en códigos de barras, QR, Data Matrix o imágenes el visor lo ignora'));
     }
@@ -783,6 +808,51 @@
     };
   }
 
+  /** What each placeholder of an ^SF mask means (Volume One): the ones the app does not model are named in the warning. */
+  const SF_PLACEHOLDERS = { A: 'alfabético', a: 'alfabético', H: 'hexadecimal', h: 'hexadecimal', O: 'octal', o: 'octal', N: 'alfanumérico', n: 'alfanumérico' };
+
+  /**
+   * ^SFmask,increment (see the header): { cmd, mask, increment } as written (increment '' when omitted or empty), or null with one warning when the mask has
+   * a placeholder the app does not model (A H O N), another character, or the increment is not digits and % or is longer than the mask: the field is then
+   * read as its plain ^FD. The data of the field stays the ^FD one (the first value).
+   */
+  function readMask(ctx, cmd) {
+    const mask = cmd.args[0] ? cmd.args[0].raw : '';
+    const increment = cmd.args[1] ? cmd.args[1].raw : '';
+    const plain = 'el campo se dibuja con el dato ^FD sin contador';
+    if (zplEdit.maskSupported(mask, increment)) return { cmd, mask, increment };
+    const other = [...mask].find(ch => !/[dD%]/.test(ch));
+    if (mask === '') ctx.report(diag.warning(`^SF: falta la máscara, ${plain}`));
+    else if (other !== undefined) {
+      const kind = SF_PLACEHOLDERS[other];
+      ctx.report(diag.warning(`^SF: la máscara "${mask.slice(0, 40)}" tiene ${kind ? `el marcador "${other}" (${kind})` : `el carácter "${other}"`}: solo se modelan los marcadores decimales d, D y %; ${plain}`));
+    } else ctx.report(diag.warning(`^SF: el incremento "${increment.slice(0, 40)}" no es válido (solo dígitos y %, y no más largo que la máscara "${mask.slice(0, 40)}"); ${plain}`));
+    return null;
+  }
+
+  /**
+   * The ^SF mask of a field on the items its handler added (see the header): text and bar codes get item.serialMask = { mask, increment } and, when the
+   * mask is a run of d / D that covers the WHOLE trailing digit run of the data and the increment is all digits, also counter = { step } (the integer
+   * value of the increment, never 0 and within the 12 digits of ^SN) so that it converts to the TPCL / TSPL counters. The 2D codes are reported (as ^SN).
+   */
+  function applyMask(ctx, field, items) {
+    const { mask, increment } = field.sf;
+    const data = field.data ? field.data.value : '';
+    const run = /\d+$/.exec(data);
+    const step = /^\d+$/.test(increment) ? Number(increment) : /^$/.test(increment) ? 1 : 0;
+    const bridge = /^[dD]+$/.test(mask) && run && run[0].length === mask.length && step > 0 && step <= zplEdit.SERIAL_MAX;
+    for (const item of items) {
+      if (item.kind === 'text' || item.kind === 'barcode') {
+        item.serialMask = { mask, increment };
+        if (bridge) item.counter = { step };
+        ctx.once('zpl-counter', () => diag.info(COUNTER_NOTE));
+        if (mask.length > data.length) ctx.report(diag.warning(`^SF: la máscara "${mask.slice(0, 40)}" es más larga que el dato (${data.length} caracteres): la guía no dice qué hace la impresora`));
+      } else if (item.kind === 'qr' || item.kind === 'datamatrix') {
+        ctx.once('zpl-sf-2d', () => diag.info('^SF en QR o Data Matrix: se lee el dato ^FD tal como está, la máscara no se modela para códigos 2D'));
+      }
+    }
+  }
+
   /** ^FNn or ^FNn"prompt": { cmd, n, prompt } (prompt undefined when there is none); null (and a warning) when it is not valid. */
   function readFn(ctx, cmd) {
     const m = /^\s*(\d*)\s*(?:"([^"]*)")?\s*$/.exec(cmd.raw.slice(1 + cmd.name.length));
@@ -811,6 +881,10 @@
     ctx.once('zpl-fn', () => diag.info('Los campos ^FN son variables <#FNn#>: se dibujan con su dato ^FD por defecto, que se puede cambiar en Variables'));
     field.data = { cmd: fn.cmd, kind: 'FN', value: placeholder, raw: placeholder, start: fn.cmd.start, end: fn.cmd.end, hex: false };
     field.serial = null;
+    if (field.sf) {
+      ctx.once('zpl-fn-sf', () => diag.warning('Hay campos con ^FN y ^SF a la vez: se usa ^FN (la variable) y se ignora la máscara ^SF'));
+      field.sf = null;
+    }
     return { n: fn.n, prompt: fn.prompt, default: dflt, placeholder };
   }
 
@@ -847,7 +921,7 @@
         field.serial = null;
       } else if (id === '^FN') field.fn = readFn(ctx, cmd);
       else if (id === '^SN') { field.serial = readSerial(ctx, cmd); field.data = field.serial.data; }
-      else if (id === '^SF') ctx.once('zpl-sf', () => diag.warning('^SF (formato de serialización con máscara) no se modela: el campo se dibuja con el dato ^FD tal como está y sin contador'));
+      else if (id === '^SF') field.sf = readMask(ctx, cmd);
       return;
     }
     if (!handlerFor(id, false)) {

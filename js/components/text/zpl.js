@@ -283,7 +283,7 @@
      * is written as its start value with one info.
      */
     function blockData(ctx, item) {
-      const counter = item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0;
+      const counter = !item.serialMask && item.counter && Number.isFinite(item.counter.step) && Math.trunc(item.counter.step) !== 0;
       if (counter) ctx.once('zpl-fb-counter', () => diag.info('Hay contadores en bloques de texto: ^SN no imprime dentro de ^FB, se escribe el valor inicial como texto'));
       const data = String(item.data == null ? '' : item.data).replace(/\r\n|\r|\n/g, '\\&');
       return dataCommands(ctx, counter ? { ...item, counter: undefined } : item, data);
@@ -368,6 +368,7 @@
       const whole = (i, def, min, max) => { const v = arg(i) ? int(arg(i)) : null; return v === null ? def : clamp(v, min, max); };
       const letter = arg(3) ? arg(3).raw.toUpperCase() : 'L';
       if (!(letter in BLOCK_ALIGN)) ctx.once('zpl-fb-align', () => diag.warning('^FB: justificación no válida (L, C, R o J), se dibuja a la izquierda'));
+      if (field.sf) ctx.once('zpl-fb-sf', () => diag.info('^FB con ^SF: la guía no dice si el campo se imprime; el visor lo dibuja con el valor inicial'));
       if (field.serial) ctx.once('zpl-fb-sn', () => diag.info('^FB con ^SN: la guía dice que el campo no se imprime; el visor lo dibuja con el valor inicial'));
       return {
         width: Math.min(width, MAX_FB), lines: whole(1, 1, 1, MAX_FB), space: whole(2, 0, -MAX_FB, MAX_FB), indent: whole(4, 0, 0, MAX_FB),
