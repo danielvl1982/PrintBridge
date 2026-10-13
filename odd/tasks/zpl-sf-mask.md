@@ -51,15 +51,28 @@ edited in Propiedades, written back unchanged, and converted to and from the TPC
 - [ ] S1 Read the manual (Volume One pages 298-300 and the exercises, Volume Two) and decide the model: extend the existing `counter` model of `^SN`
       (start, step, zero suppression, digits only) with an optional mask / alphabet per position, or add a separate mask serialization item
       property. Decide first how much of the alpha / hex / octal behaviour is worth the cost (the TPCL and TSPL counters are decimal only).
-- [ ] S2 Parse and draw: read `^SF` into the model (mask, increment, the `^FD` data as the first value), remove the `zpl-sf` warning, draw the
+- [x] S2 (8ff7d5c, route: delegated direct writer; RED: 14 failing tests, GREEN: full suite) Parse and draw: read `^SF` into the model (mask, increment, the `^FD` data as the first value), remove the `zpl-sf` warning, draw the
       first value as `^SN` does, with the neutral flags documented in js/core/model.js.
-- [ ] S3 Emit and edit: write `^SF` back exactly as read; Propiedades fields for the mask and the increment (and the counter fields that apply);
+- [x] S3 (28fa686, RED: 9 failing edit tests; the emit path shipped with S2, so its tests were green on arrival) Emit and edit: write `^SF` back exactly as read; Propiedades fields for the mask and the increment (and the counter fields that apply);
       move, undo and the edit engines keep working; the `^FD` data stays editable.
 - [ ] S4 Conversion: to and from the TPCL and TSPL counters (decimal masks with a numeric increment map to a counter; masks with letters,
       hex, octal or `%` in the middle degrade with one warning, the field is written as its first value); update the loss table; the conversion matrix cases.
 - [ ] S5 Tests (RED first: the manual's examples above as pinned cases, round trip parse -> emit -> parse, the matrix), README (ZPL section and
       limitations: remove "not modelled", add what is verified and what is not), an example in the ZPL templates if it fits, Chrome probe, and a
       printer check on a Zebra (the real test of the alphabetic and `%` behaviour).
+
+## S2 / S3 results (2026-10-13)
+- Model: `serialMask = { mask, increment }` (strings as written, increment '' when omitted) on text and barcode items, documented in js/core/model.js.
+  Only `d D %` masks and digit / `%` increments no longer than the mask are modelled; anything else keeps the plain `^FD` with one warning that names the
+  placeholder (A a H h O o N n) or the problem. A mask longer than the data is modelled with one warning (manual silent).
+- Bridge: a `d` run covering the whole trailing digit run of the data, with an all-digit increment (or none: 1) in 1..999999999999, also sets
+  `counter = { step }` (no native). `serialMask` wins over `counter` when the ZPL emitter writes the field (`^FD...^SFmask[,increment]`, never `^SN`).
+- QR / Data Matrix: info, no mask (as `^SN`); `^FN` + `^SF`: warning, the variable wins; `^SN` + `^SF`: warning, the counter wins; `^FB` + `^SF`: info,
+  the mask is kept and written back. All manual-silent, recorded as such.
+- Edit: fields `serialMask` and `serialIncrement` (only for a modelled mask; an empty mask removes `^SF`, an empty increment removes the argument).
+  A field with any `^SF` has no Incremento / Ceros iniciales (they would write `^SN` over the `^FD`). Adding a mask to a plain `^FD` is not offered.
+- For S4: the TPCL / TSPL emitters already see the bridged `counter` (untouched); a `serialMask` without `counter` is silently dropped there, so S4 needs the
+  warning and the loss table entry; `serialMask` and `counter` can disagree after a counter edit in another language (ZPL writes the mask).
 
 ## Acceptance
 A ZPL field with `^SF` is drawn with its first value without the "no se modela" warning, round-trips unchanged, is editable in Propiedades,
