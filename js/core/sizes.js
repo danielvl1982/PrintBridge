@@ -4,7 +4,8 @@
  * applySize of the registry).
  *
  * A catalog "size" is in mm: { id, name, w, h, p }.
- * A "resolved" size is in 0.1 mm (returned by resolve) and is the one the other modules use.
+ * A "resolved" size is in 0.1 mm (returned by resolve) and is the one the other modules use. It may carry `zeroGap: true` (the Formato row of a TSPL label
+ * where the gap was emptied or typed as 0): pitch == height then means an explicit zero gap, which only TSPL writes (`GAP 0`).
  */
 (function (PB) {
   'use strict';

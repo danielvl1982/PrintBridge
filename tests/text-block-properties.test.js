@@ -34,7 +34,7 @@ test('TSPL TEXT: Tipo is the first field, "line", with the two options in order'
 
 test('TSPL BLOCK: Tipo "block", then width, lines, alignment (3 options), then the usual fields of the command', () => {
   const d = tdescribe(tdoc('BLOCK 100,200,300,150,"3",90,2,1,4,2,"Some, text"'));
-  assert.deepEqual(keys(d), ['kind', 'blockWidth', 'blockLines', 'blockAlign', 'rotation', 'xmul', 'ymul', 'font', 'content']);
+  assert.deepEqual(keys(d), ['kind', 'blockWidth', 'blockLines', 'blockHeight', 'blockAlign', 'rotation', 'xmul', 'ymul', 'font', 'content']);
   assert.equal(byKey(d, 'kind').value, 'block');
   assert.deepEqual([byKey(d, 'blockWidth').value, byKey(d, 'blockWidth').label], [300, 'Ancho del bloque (puntos)']);
   assert.deepEqual([byKey(d, 'blockLines').value, byKey(d, 'blockLines').label], [Math.floor(150 / (24 + 4)), 'Líneas máx.']);

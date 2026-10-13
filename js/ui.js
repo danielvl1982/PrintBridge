@@ -196,7 +196,9 @@
       if (pitchEdited) p = fieldEmpty ? h : mode === 'gap' ? h + typed : typed;
       else if (shown && shown.pitch > shown.height) p = h + (shown.pitch - shown.height) / 10;
       if (w > 0 && h > 0 && (fieldEmpty || typed >= (mode === 'gap' ? 0 : Number.MIN_VALUE))) {
-        onApply(sizes.resolve({ name: 'Personalizado', w, h, p }));
+        // TSPL: emptying the gap or typing 0 is an explicit "no gap" (GAP 0); an empty field that was already empty is "not specified" and writes nothing
+        const zeroGap = mode === 'gap' && pitchEdited && (fieldEmpty || typed === 0);
+        onApply(sizes.resolve({ name: 'Personalizado', w, h, p, ...(zeroGap && { zeroGap: true }) }));
       } else if (shown) {
         showArea(shown);
       }

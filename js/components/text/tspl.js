@@ -355,6 +355,24 @@
       read: (a, cmd, ctx) => (ctx && ctx.item && ctx.item.block ? ctx.item.block.lines : undefined),
       write: () => null,
     };
+    /**
+     * Pitch of the lines of a block in dots: the character height of the font + the space of the command (what `lines` is multiplied by to write the
+     * height argument). At least 1, so a height always maps to a whole number of lines.
+     */
+    const linePitch = (item, dot) => Math.max(1, Math.round(item.font.size / dot)) + (item.native && Number.isFinite(item.native.space) ? item.native.space : 0);
+    /** Height of the block in mm = lines * pitch (the value emitBlock writes, in dots), rounded to 0.01 mm; undefined for an item that is not a block. */
+    const blockHeightMm = (item, dpi) => {
+      if (!item || !item.block || !Number.isFinite(item.block.lines) || !item.font) return undefined;
+      const dot = units.dotSize(dpi || PB.config.resolutions[0]);
+      return Math.round(item.block.lines * linePitch(item, dot) * dot * 10) / 100;
+    };
+    /** Block height in mm: shows lines * pitch and, when edited, sets the lines to the nearest whole number (the field then shows the rounded height). */
+    const heightField = {
+      key: 'blockHeight', label: 'Alto (mm)', type: 'number', arg: 3, min: 0, step: 0.01, reemit: true,
+      model: (item, ctx) => blockHeightMm(item, ctx && ctx.dpi),
+      read: (a, cmd, ctx) => blockHeightMm(ctx && ctx.item, ctx && ctx.dpi),
+      write: () => null,
+    };
     /** Alignment: the align argument, which follows the optional space, so it is written through the hook (left, center, right: no justification). */
     const alignField = {
       key: 'blockAlign', label: 'Alineación', type: 'select', arg: 3, options: ALIGN_OPTIONS, reemit: true,
@@ -385,6 +403,7 @@
      * Shape hook for the fields flagged `reemit` (see js/languages/tspl-edit.js): the edits [{ start, end, value }] of the command, or null to refuse.
      *   kind: block / line rewrite the whole command (blockFromText, textFromBlock); the same kind changes nothing.
      *   blockLines: the height argument = lines * pitch (character height of the font in dots + the space of the command).
+     *   blockHeight: the same argument from a height in mm, rounded to whole lines (at least 1, at most MAX_BLOCK_LINES).
      *   blockAlign: the optional arguments after the multipliers become [space (0 when omitted), align, fit (if there was one)].
      */
     function reemitText(cmd, item, changes, opts) {
@@ -395,11 +414,11 @@
         return changes.kind === 'block' || changes.kind === 'line' ? [] : null;
       }
       if (cmd.name !== 'BLOCK') return null;
-      if (Object.hasOwn(changes, 'blockLines')) {
-        const v = changes.blockLines;
+      if (Object.hasOwn(changes, 'blockLines') || Object.hasOwn(changes, 'blockHeight')) {
+        const pitch = linePitch(item, dot);
+        // The lines edited win; a height in mm becomes the nearest whole number of lines (one mm is 10 / dot dots)
+        const v = Object.hasOwn(changes, 'blockLines') ? changes.blockLines : typeof changes.blockHeight === 'number' ? changes.blockHeight * 10 / dot / pitch : NaN;
         if (typeof v !== 'number' || !Number.isFinite(v)) return null;
-        const space = item.native && Number.isFinite(item.native.space) ? item.native.space : 0;
-        const pitch = Math.max(1, Math.round(item.font.size / dot)) + space;
         const height = cmd.args[3];
         const value = String(Math.min(MAX_BLOCK_LINES, Math.max(1, Math.round(v))) * pitch);
         return value === height.raw ? [] : [{ start: height.start, end: height.end, value }];
@@ -433,7 +452,7 @@
         reemit: reemitText,
         fields: [
           kindField,
-          ...(block ? [widthField, linesField, alignField] : []),
+          ...(block ? [widthField, linesField, heightField, alignField] : []),
           selectField('rotation', 'Rotación', 3 + shift, [0, 90, 180, 270], item => item.rotation),
           numberField('xmul', bitmap ? 'Multiplicador X' : 'Tamaño X (pt)', 4 + shift, 1, max, item => item.native && item.native.xmul),
           numberField('ymul', bitmap ? 'Multiplicador Y' : 'Tamaño Y (pt)', 5 + shift, 1, max, item => item.native && item.native.ymul),

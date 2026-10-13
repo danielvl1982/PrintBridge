@@ -84,7 +84,7 @@ test('font: LF line endings behave like CRLF', () => {
 
 test('describeItem: BLOCK lists Tipo, the block fields and the usual ones (see tests/text-block-properties.test.js)', () => {
   const text = doc('BLOCK 100,200,300,150,"3",0,1,1,"Some, long text"');
-  assert.deepEqual(pairs(describe(text)), [['kind', 'block'], ['blockWidth', 300], ['blockLines', 6], ['blockAlign', 'left'], ['rotation', 0], ['xmul', 1], ['ymul', 1], ['font', '3'], ['content', 'Some, long text']]);
+  assert.deepEqual(pairs(describe(text)), [['kind', 'block'], ['blockWidth', 300], ['blockLines', 6], ['blockHeight', 18.02], ['blockAlign', 'left'], ['rotation', 0], ['xmul', 1], ['ymul', 1], ['font', '3'], ['content', 'Some, long text']]);
   assert.equal(update(text, { rotation: 90, xmul: 3 }), doc('BLOCK 100,200,300,150,"3",90,3,1,"Some, long text"'));
 });
 

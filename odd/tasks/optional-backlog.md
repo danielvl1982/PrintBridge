@@ -3,7 +3,7 @@
 Ideas agreed with the user as "optional, only if wanted". Nothing here is scheduled. Each item that is taken up gets its own feature
 document under `odd/tasks/` (and the Engram mirror) before the first write.
 
-## Printer settings section (TPCL configuration commands)
+## Printer settings section (TPCL configuration commands) **[difícil]**
 Added 2026-10-09. In the future the app may get a **settings** section for the printer: commands that configure or operate the printer
 instead of drawing the label. TPCL commands of the B-452-TS12 guide (Spanish, 2001) command list:
 
@@ -31,11 +31,13 @@ A settings section would also need its TSPL (`SET ...`, `CUT`, `HOME`...) and ZP
 languages: decide the scope with the user before designing it.
 
 ## Other optional items
-- Z64 (LZ77 + Base64) graphic data in `^GF`: needs a synchronous inflate and the CRC algorithm the manual does not give.
-- `^DF` / `^XF` format recall simulated inside one file (ZPL Volume Two exercise 6).
-- Mod 10 of an even-length Interleaved 2 of 5 (manual and viewer may disagree).
-- A TSPL "Alto (mm)" field for the block, rounded to whole lines.
-- `GAP 0` written when the TSPL gap is emptied or typed as 0 (today the existing `GAP` line is left as it is).
+Each item is tagged with its difficulty ([fácil] / [media] / [difícil]), verified against the code; keep the tag when adding items.
+- **[difícil]** Z64 (LZ77 + Base64) graphic data in `^GF`: needs a synchronous inflate and the CRC algorithm the manual does not give.
+- **[media]** `^DF` / `^XF` format recall simulated inside one file (ZPL Volume Two exercise 6).
+- **[media]** Mod 10 of an even-length Interleaved 2 of 5 (manual and viewer may disagree; needs a printer or a clearer manual).
+- **[fácil, hecho: odd/tasks/tspl-small-fixes.md T1, 1286e49]** A TSPL "Alto (mm)" field for the block, rounded to whole lines.
+- **[fácil, hecho: odd/tasks/tspl-small-fixes.md T2, d8ab012]** `GAP 0` written when the TSPL gap is emptied or typed as 0 (today the existing `GAP` line is left as it is).
+- **[media]** `^SF` with alphabetic / hexadecimal / octal / alphanumeric placeholders (`A`, `H`, `O`, `N`): out of scope by the user's decision of 2026-10-13 (decimal masks only), see `odd/tasks/zpl-sf-mask.md`.
 - GS1-128 is done and confirmed working by the user (2026-10-13; logistic AI subset, sample template), only the unverified rules are open: see `odd/tasks/gs1-128.md` and the Verification debt below.
 - `^SF` (ZPL decimal mask) is done (branch `feat/zpl-sf-mask`, see `odd/tasks/zpl-sf-mask.md`), pending the user's browser and printer checks; the optional leftovers are the alphabetic (`A` / `a`), hexadecimal (`H` / `h`), octal (`O` / `o`) and alphanumeric (`N` / `n`) placeholders (today a plain `^FD` with a warning, which also leaves the manual's `^FD12A^SFnnA,F` and `^FDBL00-0^SFAAdd%d,1%1` samples unsupported), `^SF` on QR / Data Matrix, `^SF` with `^FN` and the `^PQ` replicate simulation of the sequence.
 - Printing from the app (the local print agent) is done and verified on real printers (RAW), see `odd/tasks/print-agent.md`; the driver image mode is in `odd/tasks/print-image.md`.
