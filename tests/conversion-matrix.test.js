@@ -83,6 +83,10 @@ nativeCase('text-bold-overprint', { tpcl: () => '{PC000;0100,0200,06,06,J,00,B,J
 neutral('text-counter', () => [text({ data: '0001', counter: { step: 1 } })]);
 neutral('text-counter-down', () => [text({ data: '0100', counter: { step: -5 } })]);
 neutral('text-counter-zero-suppress', () => [text({ data: '0001', counter: { step: 1 }, zeroSuppress: 3 })]);
+// ZPL ^SF (S4 of odd/tasks/zpl-sf-mask.md): a decimal mask over the whole trailing digit run is bridged to the counter (exact in every pair); any other mask
+// has no TPCL / TSPL counter, so it is written as its first value with one warning (ZPL -> TPCL / TSPL), and the counter -> ZPL path stays ^SN
+neutral('text-serial-mask', () => [text({ data: 'BL0000', counter: { step: 1 }, serialMask: { mask: 'dddd', increment: '1' } })]);
+neutral('text-serial-mask-degraded', () => [text({ data: 'ABCD1000EFGH', serialMask: { mask: '%%%%dddd%%%%', increment: '10000' } })]);
 neutral('text-variable', () => [text({ data: 'Lot #LOT# of #TOTAL#' })]);
 neutral('text-special-characters', () => [text({ data: 'say "hi" 100%' })]);
 neutral('text-reserved-characters', () => [text({ data: 'a^b~c,d;e\\f' })]);
@@ -184,6 +188,8 @@ neutral('barcode-ean8', () => [barcode({ symbology: 'ean8', data: '96385074', ch
 neutral('barcode-upca', () => [barcode({ symbology: 'upca', data: '012345678905', check: 'auto' })]);
 neutral('barcode-upce', () => [barcode({ symbology: 'upce', data: '01234565', check: 'auto' })]);
 neutral('barcode-counter', () => [barcode({ data: '0001', counter: { step: 1 } })]);
+neutral('barcode-serial-mask', () => [barcode({ data: '0042', counter: { step: 1 }, serialMask: { mask: 'dddd', increment: '1' } })]);
+neutral('barcode-serial-mask-degraded', () => [barcode({ data: '0001', serialMask: { mask: 'dd', increment: '1' } })]);
 neutral('barcode-counter-zero-suppress', () => [barcode({ data: '0001', counter: { step: 1 }, zeroSuppress: 2 })]);
 neutral('barcode-variable', () => [barcode({ data: '#CODE#' })]);
 
@@ -327,6 +333,8 @@ function differences(a, b, dot, withFont) {
       eq('spacing', !!a.spacing, !!b.spacing);
       eq('bold', !!a.bold, !!b.bold);
       eq('counter', a.counter && a.counter.step, b.counter && b.counter.step);
+      // A mask bridged to a counter is not a loss (the counter carries it); one without a counter is lost where the target has no ^SF
+      check('serialMask', !(a.serialMask && !a.counter && !b.serialMask));
       eq('zeroSuppress', a.zeroSuppress || 0, b.zeroSuppress || 0);
       eq('reverse', !!a.reverse, !!b.reverse);
       eq('block', !!a.block, !!b.block);
@@ -348,6 +356,8 @@ function differences(a, b, dot, withFont) {
         for (const k of Object.keys(a.widths)) if (!(a.symbology === 'industrial25' && k === 'wideSpace')) check(`widths.${k}`, near(a.widths[k], b.widths[k], tol));
       }
       eq('counter', a.counter && a.counter.step, b.counter && b.counter.step);
+      // A mask bridged to a counter is not a loss (the counter carries it); one without a counter is lost where the target has no ^SF
+      check('serialMask', !(a.serialMask && !a.counter && !b.serialMask));
       eq('zeroSuppress', a.zeroSuppress || 0, b.zeroSuppress || 0);
       break;
     }
@@ -477,6 +487,7 @@ const NO_CHECK = /dígito de control/;
 const ADDON = /complemento/;
 const ZERO_TSPL = /ceros suprimidos/;
 const ZERO_ZPL = /supresión de ceros/;
+const SF_MASK = /máscaras de serie \^SF/;
 const ELLIPSE_TPCL = /elipses y círculos no se escriben en TPCL/;
 const REVERSE = /impresión inversa/;
 const WHITE = /en blanco/;
@@ -492,6 +503,7 @@ const RULES = [
   [/^text-bold-overprint$/, [T2S, T2Z], deg(['bold'], /negrita/)],
   [/^text-counter-zero-suppress$/, [T2S, Z2S], deg(['zeroSuppress'], ZERO_TSPL)],
   [/^text-counter-zero-suppress$/, [T2Z], deg(['zeroSuppress'], ZERO_ZPL)],
+  [/^text-serial-mask-degraded$/, [Z2T, Z2S], deg(['serialMask'], SF_MASK)],
   [/^text-zpl-reverse$/, [Z2T, Z2S], deg(['reverse'], REVERSE)],
   // The ZPL and TSPL font 0 of the neutral sans 100 is an outline (PV) font in TPCL (no block): the TSPL one (28 pt) was H at 2.8 when the PC
   // magnification took any tenth, but the printer only accepts 0.5 steps from 1 (2.5 or 3.0), which do not reproduce the size
@@ -517,6 +529,7 @@ const RULES = [
   [/^barcode-msi-check$/, [T2Z], deg(['check'], NO_CHECK)],
   [/^barcode-ean13-addon[25]$/, [T2Z, S2Z], deg(['addon', 'data'], ADDON)],
   [/^barcode-ean13-guard$/, [T2S, T2Z], deg(['guard'], /barra de guarda/)],
+  [/^barcode-serial-mask-degraded$/, [Z2T, Z2S], deg(['serialMask'], SF_MASK)],
   [/^barcode-counter-zero-suppress$/, [T2S, Z2S], deg(['zeroSuppress'], ZERO_TSPL)],
   [/^barcode-counter-zero-suppress$/, [T2Z], deg(['zeroSuppress'], ZERO_ZPL)],
   [/^barcodes-tspl-25c$/, [S2T, S2Z], deg(['check'], NO_CHECK)],

@@ -462,10 +462,20 @@
     return out;
   }
 
+  /**
+   * A ZPL ^SF mask (item.serialMask) that did not bridge to a counter has no TPCL equivalent: the field is written as its first value, reported once. When the
+   * item has a counter (the bridged decimal mask, or one edited by hand) the counter is what TPCL writes, whatever the mask says.
+   */
+  function maskNote(model, ctx) {
+    const lost = ((model && model.items) || []).some(i => i && i.serialMask && !(i.counter && Number.isFinite(i.counter.step) && Math.trunc(i.counter.step) !== 0));
+    if (lost) ctx.once('tpcl-sf-mask', () => diag.warning('Hay máscaras de serie ^SF de ZPL sin contador equivalente en TPCL (solo el contador decimal de todo el número final): los campos se escriben con su primer valor'));
+  }
+
   /** Neutral model -> { text, diagnostics }: header, the items (slices' emit hooks), then the print command. */
   function emit(model, { dpi = PB.config.resolutions[0] } = {}) {
     const ctx = PB.emit.createContext({ dpi, language: 'tpcl' });
     const header = headerLines(model, ctx);
+    maskNote(model, ctx);
     const { lines } = PB.emit.run(model, COMPOSED, ctx);
     // The parser does not keep the source's {XS|}, so the reference default is always written
     ctx.report(diag.info('Parámetros de {XS} por defecto, verifíquelos en su impresora'));

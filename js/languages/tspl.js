@@ -644,12 +644,22 @@
   }
 
   /**
+   * A ZPL ^SF mask (item.serialMask) that did not bridge to a counter has no TSPL equivalent: the field is written as its first value, reported once. When the
+   * item has a counter (the bridged decimal mask, or one edited by hand) the counter is what TSPL writes, whatever the mask says.
+   */
+  function maskNote(model, ctx) {
+    const lost = ((model && model.items) || []).some(i => i && i.serialMask && !(i.counter && Number.isFinite(i.counter.step) && Math.trunc(i.counter.step) !== 0));
+    if (lost) ctx.once('tspl-sf-mask', () => diag.warning('Hay máscaras de serie ^SF de ZPL sin contador equivalente en TSPL (solo el contador decimal de todo el número final): los campos se escriben con su primer valor'));
+  }
+
+  /**
    * Neutral model -> { text, diagnostics }: header, the items (slices' emit hooks), then PRINT 1,1. Lines are joined
    * with CRLF (the line ending TSPL printers expect) and the text ends with one, so the last command is executed.
    */
   function emit(model, { dpi = PB.config.resolutions[0] } = {}) {
     const ctx = PB.emit.createContext({ dpi, language: 'tspl' });
     const header = headerLines(model, ctx);
+    maskNote(model, ctx);
     const { lines } = PB.emit.run(model, COMPOSED, ctx);
     return { text: [...header, ...lines, 'PRINT 1,1', ''].join('\r\n'), diagnostics: ctx.diagnostics };
   }
