@@ -1,6 +1,6 @@
 # ZPL `^SF` (serialization field with a mask)
 
-Status: IN PROGRESS (added 2026-10-09; started 2026-10-13, S1 done). Branch when started: `feat/zpl-sf-mask`. Create the Engram mirror `odd/zpl-sf-mask/tasks`
+Status: DONE pending the user's browser and printer checks (added 2026-10-09; started 2026-10-13; S1-S5 implemented and tested 2026-10-13). Branch when started: `feat/zpl-sf-mask`. Create the Engram mirror `odd/zpl-sf-mask/tasks`
 before the first write.
 
 ## Objective
@@ -55,11 +55,28 @@ edited in Propiedades, written back unchanged, and converted to and from the TPC
       first value as `^SN` does, with the neutral flags documented in js/core/model.js.
 - [x] S3 (28fa686, RED: 9 failing edit tests; the emit path shipped with S2, so its tests were green on arrival) Emit and edit: write `^SF` back exactly as read; Propiedades fields for the mask and the increment (and the counter fields that apply);
       move, undo and the edit engines keep working; the `^FD` data stays editable.
-- [ ] S4 Conversion: to and from the TPCL and TSPL counters (decimal masks with a numeric increment map to a counter; masks with letters,
-      hex, octal or `%` in the middle degrade with one warning, the field is written as its first value); update the loss table; the conversion matrix cases.
-- [ ] S5 Tests (RED first: the manual's examples above as pinned cases, round trip parse -> emit -> parse, the matrix), README (ZPL section and
-      limitations: remove "not modelled", add what is verified and what is not), an example in the ZPL templates if it fits, Chrome probe, and a
-      printer check on a Zebra (the real test of the alphabetic and `%` behaviour).
+- [x] S4 (47e7592, route: delegated direct writer; RED: 22 failing tests of tests/zpl-sf-conversion.test.js, GREEN: full suite) Conversion: the bridged
+      counter converts to the TPCL / TSPL counters and back (tested at 203 and 300 dpi, text and bar code); a `serialMask` without a counter is written as its
+      first value with ONE warning in TPCL and TSPL; TPCL / TSPL counter -> ZPL stays `^SN`, never `^SF`; README loss table, notes and matrix cases
+      (`text-serial-mask[-degraded]`, `barcode-serial-mask[-degraded]`, rules for Z2T / Z2S). tests/cross-conversion.test.js did not need a change.
+- [x] S5 (7d7f53e, tests were green on arrival because the code shipped with S2 / S3) Tests, docs, close: round trip parse -> emit -> parse of the manual
+      examples at 203 and 300 dpi (supported ones keep the mask, the letter-placeholder samples stay a plain `^FD` with one warning); README ZPL section,
+      Not verified, Limitations; optional-backlog. No ZPL example template: a template needs a counter that the ZPL templates do not have and would change the
+      conversion matrix rules of every example, so it was skipped. No Chrome probe and no printer check were run.
+
+## S4 / S5 results (2026-10-13)
+- TPCL / TSPL emitters: a `serialMask` item with no usable counter (absent or step 0) gives one warning ("Hay máscaras de serie ^SF de ZPL sin contador
+  equivalente...", keys `tpcl-sf-mask` / `tspl-sf-mask`) and is written as its first value. An item with a counter writes the counter even when the mask
+  disagrees (neutral model edited by hand): ZPL writes the mask, TPCL / TSPL the counter, no mask warning.
+- Matrix: the `serialMask` field is compared only when a mask without a counter is lost; a bridged mask converts exactly.
+
+## Browser and printer checks pending (nothing has been run)
+- [ ] Propiedades of a ZPL `^SF` field: **Máscara de serie (^SF)** and **Incremento de la máscara** fields, invalid values change nothing, an empty mask removes `^SF`.
+- [ ] Editing and re-emit: content, move, undo and the written text keep the `^SF`.
+- [ ] Convertir a... ZPL -> TPCL and ZPL -> TSPL for a decimal mask (`^FDBL0000^SFdddd,1`) and for a degraded one (exercise 4 shape): counter vs first value + one warning.
+- [ ] Convertir a... TPCL / TSPL -> ZPL for a counter (still `^SN`, no `^SF`).
+- [ ] Print on a Zebra: `^FDABCD1000EFGH^SF%%%%dddd%%%%,10000` with `^PQ15` ends at ABCD1014EFGH.
+- [ ] Not a test: `^FDBL00-0^SFAAdd%d,1%1` (letter placeholders) is NOT supported.
 
 ## S2 / S3 results (2026-10-13)
 - Model: `serialMask = { mask, increment }` (strings as written, increment '' when omitted) on text and barcode items, documented in js/core/model.js.
