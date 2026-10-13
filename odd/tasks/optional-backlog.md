@@ -36,7 +36,7 @@ languages: decide the scope with the user before designing it.
 - Mod 10 of an even-length Interleaved 2 of 5 (manual and viewer may disagree).
 - A TSPL "Alto (mm)" field for the block, rounded to whole lines.
 - `GAP 0` written when the TSPL gap is emptied or typed as 0 (today the existing `GAP` line is left as it is).
-- GS1-128 is done (logistic AI subset, sample template), only the browser / printer checks are pending: see `odd/tasks/gs1-128.md` and the Verification debt below.
+- GS1-128 is done and confirmed working by the user (2026-10-13; logistic AI subset, sample template), only the unverified rules are open: see `odd/tasks/gs1-128.md` and the Verification debt below.
 - `^SF` (ZPL mask) is not optional: it is a planned task, see `odd/tasks/zpl-sf-mask.md`.
 - Printing from the app (the local print agent) is done and verified on real printers (RAW), see `odd/tasks/print-agent.md`; the driver image mode is in `odd/tasks/print-image.md`.
 
@@ -61,8 +61,8 @@ Nothing here is a feature: it is what is implemented but never checked. Added 20
 - Every ZPL output and every conversion (the last list of the README ZPL section has the details).
 
 ### GS1-128 (odd/tasks/gs1-128.md "Browser and printer checks pending")
-- Never run in a browser: the Tipo de código / Contenido editing, the rejected-edit warning, the Plantilla GS1-128 in three languages and Convertir a... between them.
-- Never printed or scanned: the sample on TEC / TSC / Zebra and a decode of the AIs; whether TSPL `EAN128` prepends FNC1 (the TSC v3.0 manual is not in docs/).
+- Browser flow, real printing and scanning of the sample: confirmed working by the user on 2026-10-13 (not itemized per printer).
+- Not individually confirmed: whether TSPL `EAN128` prepends FNC1 by itself (the TSC v3.0 manual is not in docs/).
 - Unverified rules: day `00`, the 48 character limit, parentheses only in the readable line, the exact GS1 mod 10 text, ZPL `^BC` mode `D` / `e`. Only the logistic AIs are covered, the rest of the GS1 table is out of scope.
 
 ### Open decisions taken without the user (open for review)
