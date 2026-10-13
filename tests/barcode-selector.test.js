@@ -19,7 +19,7 @@ const { selector } = PB.slices.barcode;
 const SYMBOLOGIES = ['code128', 'code39', 'itf'];
 // All the symbologies the selector offers once tasks C1 (EAN / UPC) and C2 (Code 93, NW7, MSI, Industrial 2 of 5) added their rows (the
 // pairwise tests below use the first three). TSPL has no MSI and no Industrial 2 of 5 type.
-const OFFERED = [...SYMBOLOGIES, 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce'];
+const OFFERED = [...SYMBOLOGIES, 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce', 'gs1-128'];
 const OFFERED_TSPL = OFFERED.filter(s => !['msi', 'industrial25'].includes(s));
 const DPI = 203;
 
@@ -358,11 +358,18 @@ test('TSPL updateItem: the alignment argument, the coordinates with REFERENCE an
 
 test('TSPL updateItem: 128M / EAN128 content is rewritten by the parser: leaving Code 128 refuses; the symbology is already Code 128', () => {
   for (const type of ['128M', 'EAN128']) {
-    const text = tsplText(`BARCODE 40,50,"${type}",96,1,0,2,2,"${type === '128M' ? '!104ABC!102DEF' : '0112345678901231'}"`);
+    const text = tsplText(`BARCODE 40,50,"${type}",96,1,0,2,2,"${type === '128M' ? '!104ABC!102DEF' : 'ABC123'}"`);
     assert.equal(setS(text, { symbology: 'code39' }), text, type);
     assert.equal(setS(text, { symbology: 'code128' }), text, type);
     assert.equal(valueOf(describeS(text), 'symbology'), 'code128', type);
   }
+});
+
+test('TSPL updateItem: an EAN128 element string is a gs1-128 barcode; it only changes to Code 128 (the notation becomes the text)', () => {
+  const text = tsplText('BARCODE 40,50,"EAN128",96,1,0,2,2,"0112345678901231"');
+  assert.equal(valueOf(describeS(text), 'symbology'), 'gs1-128');
+  assert.equal(setS(text, { symbology: 'code39' }), text);
+  assert.ok(setS(text, { symbology: 'code128' }).includes('BARCODE 40,50,"128",96,1,0,2,2,"(01)12345678901231"'));
 });
 
 test('TSPL updateItem: types without a row, add-ons of types that have none, invalid values and an unparsable command leave the text unchanged', () => {

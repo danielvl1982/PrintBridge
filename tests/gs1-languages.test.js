@@ -114,10 +114,10 @@ test('ZPL reads ^BC data that starts with >8 as gs1-128; plain Code 128 stays co
 // --- structural errors never crash an emitter
 
 for (const id of LANGS) {
-  test(`${id}: a gs1-128 barcode that cannot be encoded gives the "cannot write" warning and no barcode`, () => {
+  test(`${id}: a gs1-128 barcode that cannot be encoded gives the "invalid GS1-128 data" warning and no barcode`, () => {
     for (const data of ['(99)123', 'no parentheses', '', '(01']) {
       const out = emit(id, [barcode({ data })]);
-      assert.ok(levels(out.diagnostics, 'warning').some(d => /sin equivalente/.test(d.text)), `${id} "${data}"`);
+      assert.ok(levels(out.diagnostics, 'warning').some(d => /GS1-128 con datos no válidos/.test(d.text) && !/sin equivalente/.test(d.text)), `${id} "${data}"`);
       assert.equal(barcodes(parse(id, out.text)).length, 0, `${id} "${data}": no barcode written`);
     }
   });

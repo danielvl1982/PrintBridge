@@ -245,11 +245,11 @@ test('selector: the labels list the new symbologies and check options in order',
   assert.equal(selector.LABELS.industrial25, '2 de 5 industrial');
 });
 
-test('TPCL describeItem: Tipo de código offers all eleven symbologies; Dígito de control the options of the symbology in the command', () => {
+test('TPCL describeItem: Tipo de código offers all eleven symbologies and GS1-128; Dígito de control the options of the symbology in the command', () => {
   for (const withText of [true, false]) {
     for (const [symbology, checks] of [['code93', ['none', 'check', 'auto']], ['codabar', ['none']], ['msi', ['none', 'check', 'auto', 'mod1010', 'mod1110']], ['industrial25', ['none', 'check', 'auto']]]) {
       const d = describeT(tpclDoc(XB[symbology]), withText);
-      assert.deepEqual(optionsOf(d, 'symbology'), SYMBOLOGIES, symbology);
+      assert.deepEqual(optionsOf(d, 'symbology'), [...SYMBOLOGIES, 'gs1-128'], symbology);
       assert.equal(valueOf(d, 'symbology'), symbology);
       assert.deepEqual(optionsOf(d, 'check'), checks, symbology);
       assert.equal(valueOf(d, 'addon'), undefined, symbology);
@@ -331,7 +331,7 @@ const lineOf = text => /BARCODE [^\r\n]*/.exec(text)[0];
 test('TSPL describeItem: Tipo de código offers Code 93 and NW7 (no MSI or Industrial 2 of 5); their check options are the only ones of the manual', () => {
   for (const withText of [true, false]) {
     const d = describeS(tsplText(BARCODE_S('93', 4)), withText);
-    assert.deepEqual(optionsOf(d, 'symbology'), ['code128', 'code39', 'itf', 'code93', 'codabar', 'ean13', 'ean8', 'upca', 'upce']);
+    assert.deepEqual(optionsOf(d, 'symbology'), ['code128', 'code39', 'itf', 'code93', 'codabar', 'ean13', 'ean8', 'upca', 'upce', 'gs1-128']);
     assert.deepEqual([valueOf(d, 'symbology'), valueOf(d, 'check')], ['code93', 'auto']);
     assert.deepEqual(optionsOf(d, 'check'), ['auto']);
     assert.equal(d.fields.some(f => f.key === 'wide'), false, 'Code 93 has no wide bar field');

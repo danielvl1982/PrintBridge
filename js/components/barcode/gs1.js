@@ -179,5 +179,15 @@
     return data === null ? null : { ...item, symbology: 'code128', data };
   }
 
-  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item });
+  /** Hint shown under the Contenido field of a gs1-128 barcode in the properties panel (all three languages). */
+  const NOTATION_HINT = 'Notación GS1 con paréntesis, p. ej. (01)09501101530003(17)250101(10)ABC123. Solo identificadores logísticos (00, 01, 02, 10, 11, 13, 15, 17, 20, 21, 30, 37, 240, 241, 400, 410-415); la impresora recibe los datos sin paréntesis y con FNC1';
+
+  /** Warning text of an emitter for a gs1-128 item whose data cannot be encoded (toCode128Data gives null): names the real cause. */
+  function unwritableMessage(text) {
+    const first = parse(text).diagnostics.find(d => d.level === 'error');
+    const cause = first ? first.text.replace(/^GS1-128: /, '') : 'no es una cadena de elementos GS1';
+    return `Código de barras GS1-128 con datos no válidos (${cause}): no se exporta`;
+  }
+
+  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
