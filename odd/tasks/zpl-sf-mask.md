@@ -1,6 +1,6 @@
 # ZPL `^SF` (serialization field with a mask)
 
-Status: PLANNED (added 2026-10-09; not started). Branch when started: `feat/zpl-sf-mask`. Create the Engram mirror `odd/zpl-sf-mask/tasks`
+Status: IN PROGRESS (added 2026-10-09; started 2026-10-13, S1 done). Branch when started: `feat/zpl-sf-mask`. Create the Engram mirror `odd/zpl-sf-mask/tasks`
 before the first write.
 
 ## Objective
@@ -21,6 +21,31 @@ edited in Propiedades, written back unchanged, and converted to and from the TPC
   `^FDBL0000^SFAAdddd,1` gives BL0000, BL0001 ... BL9999, BM0000; `^FDBL00-0^SFAAdd%d,1%1` gives BL00-0, BL01-1 ... BL09-9, BL11-0;
   exercise 4 `^FDABCD1000EFGH^SF%%%%dddd%%%%,10000` increments only the middle digits (the last of 15 labels prints ABCD1014EFGH).
 - Volume Two has no `^SF` reference (only the programming exercises). Read both volumes again when starting, the text above is a first read.
+
+## Decisions
+- 2026-10-13 (user): **decimal masks only** (`d` / `D` and `%`). Alphabetic, hexadecimal, octal and alphanumeric placeholders (`A`, `H`, `O`, `N`)
+  are out of scope: a field with one of them keeps today's behaviour (plain `^FD`, with a warning that names the unsupported placeholder).
+  Document it in the README (what is covered, what is not).
+- 2026-10-13 (defaults taken without asking, open for review): `^SF` on a QR / Data Matrix and combined with `^FN` follows what `^SN` already
+  does in the same cases (the manual is silent); the preview shows the first value only, as `^SN` does.
+- 2026-10-13 (delivery, cached from the GS1-128 feature): one branch `feat/zpl-sf-mask`, one work-unit commit per task (tests and docs with the
+  behavior), everything merged and pushed to `main` together after S5; push / merge only on the user's go. Forecast about 700 authored lines.
+
+## S1 findings (2026-10-13, read-only; printed pages of Volume One)
+- `^SF` pp. 298-300, exercise 4 of the Basic ZPL Exercises; Volume Two has no `^SF` reference.
+- The increment `b` is a **positional string** aligned with the mask from the right, not an integer: `^FDABCD1000EFGH^SF%%%%dddd%%%%,10000`
+  has the increment `10000` right-aligned on the 12-character mask: its `1` lands on the last `d` and the four zeros on the `%%%%`, so the
+  step is +1 on the number 1000 (15 labels end at ABCD1014EFGH). Do not model `b` as an integer step.
+- Inferred, not stated (needs a Zebra): in `^FDBL00-0^SFAAdd%d,1%1` the jump BL09-9 -> BL11-0 means each position adds its own increment
+  character and a carry skips the `%` positions.
+- Not stated in either volume: `^SF` with `^PQ` replicate, `^FN`, `^FV`, `^FH`, `^FB`, QR / Data Matrix (only PDF417 says serialization is not
+  allowed), a `^FD` shorter than the mask, wrap order, media-out recovery.
+- Code: `^SF` is only a field modifier with the `zpl-sf` warning (js/languages/zpl.js:850, README ZPL section); pinned by
+  `tests/zpl-counters.test.js:134-141` (S2 rewrites that test first). The neutral `counter` is a never-zero signed integer `step`; the TPCL
+  (10 digits) and TSPL (+-999999999, 50 slots) counters are decimal only and count the whole trailing digit run.
+- Model chosen: a separate item property `serialMask = { mask, increment }` (counter untouched); a plain decimal mask whose `d` run covers the whole
+  trailing digit run of the data, with an all-digit increment, also sets `counter = { step }` so it converts to TPCL / TSPL; every other mask
+  (`%` inside or around, partial run) degrades with one warning and the field is written as its first value.
 
 ## Tasks (to refine when started)
 - [ ] S1 Read the manual (Volume One pages 298-300 and the exercises, Volume Two) and decide the model: extend the existing `counter` model of `^SN`
