@@ -517,7 +517,7 @@ Reported and not drawn (a warning each; `^DF`, `^POI` and the extra formats of a
 
 ### Conversion
 
-**Convertir a…** lists **ZPL (Zebra)** as a target and reads ZPL as a source; see that section for the exact / approximated / lost table. Specific to ZPL: the fonts are mapped to the nearest one (mono multiples of a matrix become a bitmapped font, the rest the scalable `0`); ZPL has no EAN / UPC add-ons and no TPCL price check digits (written with one warning); TSPL has no MSI and no Industrial 2 of 5; a ZPL box is the outer box of the neutral rectangle, so its border grows outward by `t / 2` from the TPCL / TSPL corners; the corner radius is quantised to the nine ZPL rounding degrees; images convert with TPCL `SG` and TSPL `BITMAP` (ZPL 1 = black, TPCL nibble data, TSPL inverted bits).
+**Convertir a…** lists **ZPL (Zebra)** as a target and reads ZPL as a source; see that section for the exact / approximated / lost table. Specific to ZPL: the fonts are mapped to the nearest one (mono multiples of a matrix become a bitmapped font, the rest the scalable `0`); ZPL has no EAN / UPC add-ons and no TPCL price check digits (written with one warning); TSPL has no MSI and no Industrial 2 of 5; a ZPL box is the outer box of the neutral rectangle, so its border grows outward by `t / 2` from the TPCL / TSPL corners; the corner radius is quantised to the nine ZPL rounding degrees; images convert with TPCL `SG` and TSPL `BITMAP` (ZPL 1 = black, TPCL nibble data, TSPL inverted bits); a `^SF` decimal mask over the whole trailing digit run becomes the TPCL / TSPL counter and any other `^SF` mask is written there as the first value with one warning (see *Convertir a…*).
 
 ### Not verified on a printer
 

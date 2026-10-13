@@ -55,7 +55,7 @@ Open `index.html` in a browser to try the app. There is nothing to install.
 
 `node --test` also runs the print agent tests (`tests/print-agent.test.js` for the protocol, limits, origins and preflight; `tests/print-agent-config.test.js` for `config.json` and the embedded PowerShell; `tests/print-image.test.js` for `POST /print-image`) and the panel tests (`tests/print-panel.test.js` and `tests/print-panel-image.test.js` for the Driver (imagen) mode, on a fake DOM and a fake `fetch`). The agent needs no `npm install`; to try it by hand run `node agent/printbridge-agent.js --config <file>` with a spare port and use `curl` (do not post a job to a real printer by accident).
 
-`node --test` runs everything under `tests/` (about 115 files, a few seconds). A file is named after what it covers: `tests/<area>.test.js` (`zpl-text.test.js`, `tspl-emit-barcode-qr-image.test.js`...). The tests load the browser scripts in Node through `tests/helpers/load.js`,
+`node --test` runs everything under `tests/` (about 117 files, a few seconds). A file is named after what it covers: `tests/<area>.test.js` (`zpl-text.test.js`, `tspl-emit-barcode-qr-image.test.js`...). The tests load the browser scripts in Node through `tests/helpers/load.js`,
 so parsers, encoders, emitters, editors and the SVG renderer are all testable without a browser. Write the test first and see it fail.
 
 - **Round trip of an emitter:** `parse(emit(parse(x)))` must equal `parse(x)` on the neutral items (ignore `source`, `raw` and `native`; allow at most 1 dot of rounding across languages), at 203 and 300 dpi, on every example of that language; see

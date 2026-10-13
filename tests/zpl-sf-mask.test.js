@@ -335,3 +335,40 @@ test('an item without source text (the model only) describes the mask and the in
   assert.deepEqual(fields.filter(f => /^serial/.test(f.key)).map(f => [f.key, f.value]), [['serialMask', 'dddd'], ['serialIncrement', '']]);
   assert.equal(fields.some(f => f.key === 'counter'), false);
 });
+
+// ---------------------------------------------------------------------------------------------------------------
+// S5: the manual's examples, parse -> emit -> parse at 203 and 300 dpi
+
+for (const dpi of [203, 300]) {
+  for (const [name, data, mask] of [
+    ['exercise 4 (the % around the digits)', '^FDABCD1000EFGH^SF%%%%dddd%%%%,10000', { mask: '%%%%dddd%%%%', increment: '10000' }],
+    ['a decimal run with the default increment', '^FDBL0000^SFdddd', { mask: 'dddd', increment: '' }],
+    ['a decimal run with an increment of 1', '^FDBL0000^SFdddd,1', { mask: 'dddd', increment: '1' }],
+    ['a mask shorter than the digit run', '^FD00100^SFddd,1', { mask: 'ddd', increment: '1' }],
+  ]) {
+    test(`round trip at ${dpi} dpi: ${name} is written back as read and keeps its mask`, () => {
+      const first = zpl.parse(wrap(TEXT(data)), { dpi });
+      assert.deepEqual(first.items[0].serialMask, mask);
+      const text = zpl.emit(first, { dpi }).text;
+      assert.ok(text.includes(data), text);
+      const second = zpl.parse(text, { dpi });
+      assert.deepEqual(second.items[0].serialMask, mask);
+      assert.equal(second.items[0].data, first.items[0].data);
+      assert.equal(zpl.emit(second, { dpi }).text, text);
+      assert.deepEqual(second.diagnostics.filter(d => d.level === 'warning'), []);
+    });
+  }
+
+  // The manual's samples with letter placeholders are not modelled: plain ^FD with a warning, stable on a second round
+  for (const [name, data] of [['^FD12A^SFnnA,F (mask nnA)', '^FD12A^SFnnA,F'], ['^FDBL0000^SFAAdddd,1', '^FDBL0000^SFAAdddd,1'], ['^FDBL00-0^SFAAdd%d,1%1', '^FDBL00-0^SFAAdd%d,1%1']]) {
+    test(`round trip at ${dpi} dpi: the manual's ${name} stays a plain ^FD with one warning and no mask`, () => {
+      const first = zpl.parse(wrap(TEXT(data)), { dpi });
+      assert.equal(first.items[0].serialMask, undefined);
+      assert.equal(first.items[0].counter, undefined);
+      assert.equal(first.diagnostics.filter(d => d.level === 'warning' && /\^SF/.test(d.text)).length, 1);
+      const text = zpl.emit(first, { dpi }).text;
+      assert.doesNotMatch(text, /\^SF/);
+      assert.equal(zpl.emit(zpl.parse(text, { dpi }), { dpi }).text, text);
+    });
+  }
+}
