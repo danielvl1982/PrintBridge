@@ -73,9 +73,11 @@
  *       barcode { ref, x, y, rotation, module, height, humanReadable, symbology, native:{ type, module }, data,
  *                 widths?, interCharGap?, check?, addon?, guard? }
  *               module = width of the narrowest module and height = height of the bars, both in 0.1 mm
- *               neutral symbology: code128 | code39 | itf | code93 | codabar | msi | industrial25 | ean13 | ean8 | upca | upce | qr | unknown;
+ *               neutral symbology: code128 | code39 | itf | code93 | codabar | msi | industrial25 | ean13 | ean8 | upca | upce | gs1-128 | qr | unknown;
  *               native.type = the language's code.
- *               Exact (generated for real): code128, code39, itf, code93, codabar, msi, industrial25, ean13, ean8, upca, upce; the others are drawn approximately.
+ *               gs1-128: data = the GS1 element string in the standard notation with parentheses, `(01)09501101530003(17)250101(10)ABC123` (AIs of
+ *                 the logistic subset only, see js/components/barcode/gs1.js); drawn as Code 128 over its FNC1 data, with the parenthesized human readable line.
+ *               Exact (generated for real): code128, gs1-128, code39, itf, code93, codabar, msi, industrial25, ean13, ean8, upca, upce; the others are drawn approximately.
  *               code93: module based like code128 (widths of 1..4 modules); check = 'none' | 'check' | 'auto' (TPCL option e = 1 | 2 | 3; the two check
  *                 characters C and K, modulo 47; TSPL "93" = 'auto'). Only the 43 standard characters are drawn (no full ASCII).
  *               codabar (NW7; TPCL type 4, TSPL "CODA"), msi (TPCL 1), industrial25 (TPCL O): wide / narrow like code39 / itf (widths, interCharGap);

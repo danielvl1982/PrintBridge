@@ -18,7 +18,7 @@
    */
   const LABELS = Object.freeze({
     code128: 'Code 128', code39: 'Code 39', itf: 'ITF (2 de 5 intercalado)', code93: 'Code 93', codabar: 'NW7 (Codabar)', msi: 'MSI',
-    industrial25: '2 de 5 industrial', ean13: 'EAN-13', ean8: 'EAN-8', upca: 'UPC-A', upce: 'UPC-E',
+    industrial25: '2 de 5 industrial', ean13: 'EAN-13', ean8: 'EAN-8', upca: 'UPC-A', upce: 'UPC-E', 'gs1-128': 'GS1-128',
   });
   const CHECK_LABELS = Object.freeze({
     none: 'Sin dígito de control', mod43: 'Módulo 43', check: 'Comprobar el dígito de control', auto: 'Añadir el dígito de control (automático)',

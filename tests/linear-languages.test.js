@@ -237,7 +237,7 @@ const optionsOf = (d, key) => ((d.fields.find(f => f.key === key) || {}).options
 const xbOf = text => /\{XB01;[^|]*\|\}/.exec(text)[0];
 
 test('selector: the labels list the new symbologies and check options in order', () => {
-  assert.deepEqual(Object.keys(selector.LABELS), SYMBOLOGIES);
+  assert.deepEqual(Object.keys(selector.LABELS), [...SYMBOLOGIES, 'gs1-128']);
   assert.deepEqual(Object.keys(selector.CHECK_LABELS), ['none', 'mod43', 'check', 'auto', 'mod1010', 'mod1110']);
   assert.equal(selector.LABELS.codabar, 'NW7 (Codabar)');
   assert.equal(selector.LABELS.code93, 'Code 93');

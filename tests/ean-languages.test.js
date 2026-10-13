@@ -228,7 +228,7 @@ const optionsOf = (d, key) => ((d.fields.find(f => f.key === key) || {}).options
 const xbOf = text => /\{XB01;[^|]*\|\}/.exec(text)[0];
 
 test('selector: the data-driven labels list the new symbologies in order (C2 added Code 93, NW7, MSI and Industrial 2 of 5 before the EAN / UPC ones)', () => {
-  assert.deepEqual(Object.keys(selector.LABELS), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce']);
+  assert.deepEqual(Object.keys(selector.LABELS), ['code128', 'code39', 'itf', 'code93', 'codabar', 'msi', 'industrial25', 'ean13', 'ean8', 'upca', 'upce', 'gs1-128']);
   assert.deepEqual(Object.keys(selector.CHECK_LABELS), ['none', 'mod43', 'check', 'auto', 'mod1010', 'mod1110']);
   assert.deepEqual(Object.keys(selector.ADDON_LABELS), ['0', '2', '5']);
   assert.equal(selector.LABELS.ean13, 'EAN-13');
