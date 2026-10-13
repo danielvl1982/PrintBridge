@@ -39,7 +39,8 @@
  *       serialFields() are the two counter fields of the text and bar code slices (Incremento, Ceros iniciales): the data command of a field is
  *       ^FD / ^FV or ^SNv,n,z (the counter), and the Incremento field converts one into the other (a step of 0 is a plain ^FD; a step other than
  *       0 on a ^FD whose data ^SN can carry writes ^SN with z = Y). contentField reads and writes the first argument of ^SN too (its start value).
- *       A field with ^FN has no content or counter fields: its data is the variable <#FNn#> (the ^FD of the field is only the default test value).
+ *       The same function gives the ^SFmask,increment fields (Máscara de serie, Incremento de la máscara: text, only for a mask maskSupported accepts); a
+ *       field with an ^SF has no counter fields. A field with ^FN has no content or counter fields: its data is the variable <#FNn#> (the ^FD of the field is only the default test value).
  *
  * Only the text of the targeted arguments is replaced (by source offsets), so the other commands of the field, other fields,
  * comments and line endings stay byte for byte. An argument that is not a plain number is never moved. The coordinates of an item
@@ -77,6 +78,15 @@
   function serializable(text) {
     return typeof text === 'string' && /\d/.test(text) && !/[,^~\r\n]/.test(text) && text === text.trim() && !PB.variables.namesIn(text).length;
   }
+
+  /**
+   * The ^SFmask,increment the app models: a mask of decimal placeholders (d, D) and ignored positions (%), and an increment string of digits and % (the
+   * increment is aligned with the mask from the right, so it is never longer than it; empty = the default, decimal 1). Mask and increment as written.
+   */
+  const SF_MASK = /^[dD%]+$/;
+  const SF_INCREMENT = /^[0-9%]*$/;
+  const maskSupported = (mask, increment = '') => typeof mask === 'string' && typeof increment === 'string'
+    && SF_MASK.test(mask) && SF_INCREMENT.test(increment) && increment.length <= mask.length;
 
   const clampInt = (n, min, max) => Math.min(max, Math.max(min, Math.round(n)));
 
@@ -254,7 +264,11 @@
   // ---------------------------------------------------------------------------------------------------------------
   // Counter fields (^SNv,n,z)
 
-  /** The two counter fields of the text and bar code slices (see the header): [Incremento, Ceros iniciales]. */
+  /**
+   * The serialization fields of the text and bar code slices (see the header): [Incremento, Ceros iniciales, Máscara de serie, Incremento de la
+   * máscara]. A field with an ^SF has no Incremento (it would write ^SN over the ^FD and leave the ^SF behind) and the mask fields exist only for a
+   * mask the app models (maskSupported); an empty mask removes the ^SF (the counter fields come back), an empty increment is the default one.
+   */
   function serialFields() {
     const dataCmd = field => field.find(['FD', 'FV', 'SN']);
     const variable = field => field.has('FN') && !field.has(['BQ', 'BX']);
@@ -265,17 +279,17 @@
     const startOf = cmd => (cmd.args[0] && cmd.args[0].raw !== '' ? cmd.args[0].raw : '1');
     const counter = {
       key: 'counter', label: 'Incremento', type: 'number', min: -SERIAL_MAX, max: SERIAL_MAX, step: 1, custom: true,
-      model: item => (item.counter && Number.isFinite(item.counter.step) ? item.counter.step : serializable(String(item.data ?? '')) ? 0 : undefined),
+      model: item => (item.serialMask ? undefined : item.counter && Number.isFinite(item.counter.step) ? item.counter.step : serializable(String(item.data ?? '')) ? 0 : undefined),
       read(text, found) {
         const cmd = dataCmd(found.field);
-        if (!cmd || variable(found.field)) return undefined;
+        if (!cmd || variable(found.field) || found.field.has('SF')) return undefined;
         if (cmd.name === 'SN') return stepOf(cmd);
         return serializable(cmd.args[0] ? cmd.args[0].value : undefined) ? 0 : undefined;
       },
       edits(text, found, item, value) {
         const { field } = found;
         const cmd = dataCmd(field);
-        if (!cmd || variable(field) || typeof value !== 'number' || !Number.isFinite(value)) return null;
+        if (!cmd || variable(field) || field.has('SF') || typeof value !== 'number' || !Number.isFinite(value)) return null;
         const step = clampInt(value, -SERIAL_MAX, SERIAL_MAX);
         if (cmd.name === 'SN') {
           const current = stepOf(cmd);
@@ -294,7 +308,7 @@
     };
     const zeros = {
       key: 'zeros', label: 'Ceros iniciales', type: 'checkbox', custom: true,
-      model: item => (item.counter ? !(item.zeroSuppress > 0) : undefined),
+      model: item => (item.counter && !item.serialMask ? !(item.zeroSuppress > 0) : undefined),
       read(text, found) {
         const cmd = dataCmd(found.field);
         return cmd && cmd.name === 'SN' && !variable(found.field) ? zerosOf(cmd) ?? false : undefined;
@@ -305,7 +319,44 @@
         return [argEdit(cmd, 2, value ? 'Y' : 'N')];
       },
     };
-    return [counter, zeros];
+
+    /** The ^SF of a field whose mask the app models: { cmd, mask, increment } as written, or undefined (no ^SF, an unmodelled mask, a variable field). */
+    const maskOf = field => {
+      const cmd = field.find('SF');
+      if (!cmd || variable(field)) return undefined;
+      const [mask, increment] = [0, 1].map(i => (cmd.args[i] ? cmd.args[i].raw : ''));
+      return maskSupported(mask, increment) ? { cmd, mask, increment } : undefined;
+    };
+    /** The value of another field of the same update when it is a string (the pair is checked as a whole), else the current one. */
+    const together = (opts, key, current) => (opts && opts.changes && typeof opts.changes[key] === 'string' ? opts.changes[key] : current);
+    const serialMask = {
+      key: 'serialMask', label: 'Máscara de serie (^SF)', type: 'text', custom: true, maxLength: MAX_DATA,
+      note: 'd o D = dígito, % = ignorar la posición; vacío quita la máscara. Su largo no debe superar el del dato: la guía no dice qué hace la impresora con un dato más corto',
+      model: item => (item.serialMask ? item.serialMask.mask : undefined),
+      read: (text, found) => { const m = maskOf(found.field); return m ? m.mask : undefined; },
+      edits(text, found, item, value, opts) {
+        const m = maskOf(found.field);
+        if (!m || typeof value !== 'string') return null;
+        if (value === '') { const edits = []; flagEdits(text, found.field, { cmd: 'SF' }, false, edits); return edits; }
+        if (value === m.mask || !maskSupported(value, together(opts, 'serialIncrement', m.increment))) return null;
+        return [argEdit(m.cmd, 0, value)];
+      },
+    };
+    const serialIncrement = {
+      key: 'serialIncrement', label: 'Incremento de la máscara', type: 'text', custom: true, maxLength: MAX_DATA,
+      note: 'Dígitos y %, alineado con la máscara por la derecha y no más largo que ella; vacío = 1 (decimal)',
+      model: item => (item.serialMask ? item.serialMask.increment : undefined),
+      read: (text, found) => { const m = maskOf(found.field); return m ? m.increment : undefined; },
+      edits(text, found, item, value, opts) {
+        const m = maskOf(found.field);
+        if (!m || typeof value !== 'string' || value === m.increment || (opts && opts.changes && opts.changes.serialMask === '')) return null;
+        if (!maskSupported(together(opts, 'serialMask', m.mask), value)) return null;
+        const a = m.cmd.args[1];
+        if (value === '') return a ? [{ start: m.cmd.args[0].end, end: a.end, value: '' }] : null;
+        return [argEdit(m.cmd, 1, value)];
+      },
+    };
+    return [counter, zeros, serialMask, serialIncrement];
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -582,7 +633,7 @@
   }
 
   PB.zplEdit = Object.freeze({
-    createZplEditing, createOffsets, COORD_MAX, OFFSET_LIMITS, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable,
+    createZplEditing, createOffsets, COORD_MAX, OFFSET_LIMITS, fieldMethods, dropDots, encodeData, decodeData, argEdit, MAX_DATA, SERIAL_MAX, serializable, maskSupported,
     numberField, selectField, stringSelectField, checkboxField, textField, contentField, paramField, reverseField, setArgs, flagEdits, serialFields,
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

@@ -34,7 +34,14 @@
  *               absent); TPCL PC/PV/XB "noooooooooo" skip value 0000000000..9999999999, native = the token as written ("+0000000010");
  *               TSPL "SET COUNTER @n step" -999999999..999999999 with the content "@n", native = { n, start, end } (the counter number
  *               and where its step sits in the text, for the panel; ZPL ^SNv,n,z: the step is n (default 1, up to 12 digits), native = { n, z } as
- *               written). Barcodes carry it too; QR does not.)
+ *               written). Barcodes carry it too; QR does not.) ZPL ^SFmask,increment with a decimal mask whose d run covers the whole trailing digit
+ *               run of the data and an all-digit increment also sets it (step = the integer value of the increment, no native), see serialMask.
+ *               serialMask? = { mask, increment } (ZPL ^SFmask,increment, the mask form of the serialization of a ^FD; text and barcodes; absent = none):
+ *               mask = the string as written, only the DECIMAL placeholders d / D and % (the position is ignored; its length is the number of right-most
+ *               characters of the data that are serialized), increment = the string as written, digits and %, aligned with the mask from the right and
+ *               never longer than it ('' = omitted: decimal 1; NOT an integer). The data is the first value, drawn as plain data. The ZPL emitter writes
+ *               it back as ^FD...^SFmask[,increment] and, when present, it wins over counter (which only bridges the plain decimal case for the
+ *               TPCL / TSPL counters). Other placeholders (A H O N) are not modelled.
  *               reverse? = true (ZPL ^FR field reverse print: the viewer draws the text white blended with `difference`, so it reads inverted over
  *               black; absent = normal). ZPL specific: it is NOT the TPCL attribute 'reverse' (a black box behind the text), the two never convert.
  *               TSPL: x, y is the baseline origin (TEXT gives the top-left of the character cell; the slice adds / removes 80% of the height, see js/components/text/tspl.js).

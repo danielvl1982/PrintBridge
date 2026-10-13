@@ -37,7 +37,7 @@ languages: decide the scope with the user before designing it.
 - A TSPL "Alto (mm)" field for the block, rounded to whole lines.
 - `GAP 0` written when the TSPL gap is emptied or typed as 0 (today the existing `GAP` line is left as it is).
 - GS1-128 is done and confirmed working by the user (2026-10-13; logistic AI subset, sample template), only the unverified rules are open: see `odd/tasks/gs1-128.md` and the Verification debt below.
-- `^SF` (ZPL mask) is not optional: it is a planned task, see `odd/tasks/zpl-sf-mask.md`.
+- `^SF` (ZPL decimal mask) is done (branch `feat/zpl-sf-mask`, see `odd/tasks/zpl-sf-mask.md`), pending the user's browser and printer checks; the optional leftovers are the alphabetic (`A` / `a`), hexadecimal (`H` / `h`), octal (`O` / `o`) and alphanumeric (`N` / `n`) placeholders (today a plain `^FD` with a warning, which also leaves the manual's `^FD12A^SFnnA,F` and `^FDBL00-0^SFAAdd%d,1%1` samples unsupported), `^SF` on QR / Data Matrix, `^SF` with `^FN` and the `^PQ` replicate simulation of the sequence.
 - Printing from the app (the local print agent) is done and verified on real printers (RAW), see `odd/tasks/print-agent.md`; the driver image mode is in `odd/tasks/print-image.md`.
 
 ## Verification debt (needs a printer or a browser)
@@ -54,6 +54,7 @@ Nothing here is a feature: it is what is implemented but never checked. Added 20
   the "Origen:" lines).
 
 ### Implemented but not verified on a printer
+- ZPL `^SF` decimal masks (odd/tasks/zpl-sf-mask.md "Browser and printer checks pending"): nothing was run in a browser or on a Zebra; the carry that skips the `%` positions and the right-aligned increment string are inferences from the manual's examples.
 - TPCL `P5` text block: P5 itself was tested by the user on a TEC printer on 2026-10-09 (it breaks into lines), but the unit of `bbb` (0.1 mm
   or 1 mm: the manuals disagree) is still unverified.
 - The TSPL baseline shares (0.75 for the scalable fonts, 0.8 for the bitmap fonts) and the TSPL `BLOCK`, `ELLIPSE`, `CIRCLE` and `BOX` radius.
@@ -72,7 +73,7 @@ Nothing here is a feature: it is what is implemented but never checked. Added 20
   with spacing 010, a block that only PV can write becomes one line with a warning, PV -> PC only among sans bold fonts.
 
 ### Not settled by the manuals
-- ZPL: the `^BY` default ratio, the `^FT` origin of 2D symbols and their quiet zone, the `^FO` box of rotated bars, `^LS` / `^LT`, `^SN` on 2D
+- ZPL: `^SF` with `^PQ`, `^FN`, `^FH`, `^FB`, a `^FD` shorter than the mask and on QR / Data Matrix, the `^BY` default ratio, the `^FT` origin of 2D symbols and their quiet zone, the `^FO` box of rotated bars, `^LS` / `^LT`, `^SN` on 2D
   codes and with `^FN`, the ECC 200 range, the QR mixed mode, the shapes geometry, whether `^GF` accepts the compression, the `^FN` prompt, the
   default character set (Code Page 850: UTF-8 bytes above ASCII are not what a printer expects by default).
 - Mod 10 of an even-length Interleaved 2 of 5 (also listed above).

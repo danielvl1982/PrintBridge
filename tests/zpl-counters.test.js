@@ -131,11 +131,11 @@ test('^FD after ^SN in the same field: the last data command wins (no counter)',
   assert.deepEqual([item.data, item.counter], ['Hola', undefined]);
 });
 
-test('^SF (serialization format with a mask) is not modelled: the ^FD text is drawn as written, no counter, one warning', () => {
-  const model = parse('^FO100,100^A0N,36,20^FDABCD1000EFGH^SF%%%%dddd%%%%,10000^FS');
+test('^SF with a mask that has an alphabetic placeholder is not modelled: the ^FD text is drawn as written, no counter, one warning (decimal masks: tests/zpl-sf-mask.test.js)', () => {
+  const model = parse('^FO100,100^A0N,36,20^FDBL0000^SFAAdddd,1^FS');
   assert.equal(model.items.length, 1);
-  assert.deepEqual([model.items[0].data, model.items[0].counter], ['ABCD1000EFGH', undefined]);
-  assert.equal(note(model.diagnostics).filter(t => /^warning: \^SF/.test(t)).length, 1);
+  assert.deepEqual([model.items[0].data, model.items[0].counter, model.items[0].serialMask], ['BL0000', undefined, undefined]);
+  assert.equal(note(model.diagnostics).filter(t => /^warning: \^SF.*"A"/.test(t)).length, 1);
   assert.equal(note(model.diagnostics).filter(t => /no soportado/.test(t)).length, 0);
 });
 
