@@ -216,7 +216,9 @@
      * explicit widths the wide elements are 3 x module (info). Symbologies TPCL has no type for (EAN13, unknown...) are
      * skipped with a warning. Only neutral fields are read: native (e.g. the TSPL type) is ignored.
      */
-    function emit(item, ctx) {
+    function emit(source, ctx) {
+      // gs1-128 is written as Code 128 over its FNC1 data; when it cannot be encoded it has no TYPE_CODES row and is skipped below
+      const item = source.symbology === 'gs1-128' ? PB.gs1.toCode128Item(source) || source : source;
       if (!TYPE_CODES[item.symbology]) {
         ctx.once(`tpcl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TPCL, no se exporta`));
         return [];
@@ -503,6 +505,9 @@
                 ...optionalProblems(ref, { inc: p[4], readable: p[6], zero: p[7], optional: [], genericIncrement: true }),
                 ...(wpc && p[5] !== undefined && p[5] !== '' ? [rangeWarning(ref, 'barra guardiana', p[5], 0, MAX_GUARD, 3)] : []),
               ].filter(Boolean).forEach(d => ctx.report(d));
+            }
+            if (m[4] === 'N') {
+              ctx.report(diag.info(`${ref}: el tipo N (UCC/EAN128) lleva 19 dígitos y la impresora añade FNC1 y los dígitos de control: el visor no lo lee como cadena de elementos GS1`));
             }
             ctx.addField(ref, {
               kind: 'barcode', ref, source: sourceOf(cmd), x: +m[2], y: +m[3], raw: { x: m[2], y: m[3] },

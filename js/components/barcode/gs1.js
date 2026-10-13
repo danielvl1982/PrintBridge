@@ -167,5 +167,17 @@
     return structural || !elements.length ? String(text ?? '') : elements.map(e => `(${e.ai})${e.value}`).join('');
   }
 
-  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, mod10, parse, toCode128Data, fromCode128Data, readable });
+  /** What a language parser makes of Code 128 data: { symbology: 'gs1-128', data: the parenthesized string } when it starts with FNC1 and is an element string, else the data as it is. */
+  function readCode128(data) {
+    const text = fromCode128Data(data);
+    return text === null ? { symbology: 'code128', data } : { symbology: 'gs1-128', data: text };
+  }
+
+  /** The Code 128 item a language writes for a gs1-128 item (the printers never take the parentheses), or null when its data cannot be encoded. */
+  function toCode128Item(item) {
+    const data = toCode128Data(item.data);
+    return data === null ? null : { ...item, symbology: 'code128', data };
+  }
+
+  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

@@ -183,13 +183,13 @@ const TSPL_UNSUPPORTED = [
 for (const dpi of [203, 300]) {
   test(`TSPL -> TPCL at ${dpi} dpi: a Postnet barcode has no TPCL counterpart, is absent and is named in a Spanish warning; FNC1 barcodes survive`, () => {
     const { result, original, converted } = cross(TSPL_UNSUPPORTED, 'tpcl', dpi);
-    assert.deepEqual(original.items.map(i => i.symbology || i.kind), ['text', 'unknown', 'code128', 'code128']);
-    assert.deepEqual(converted.items.map(i => i.symbology || i.kind), ['text', 'code128', 'code128']);
+    assert.deepEqual(original.items.map(i => i.symbology || i.kind), ['text', 'unknown', 'code128', 'gs1-128']);
+    assert.deepEqual(converted.items.map(i => i.symbology || i.kind), ['text', 'code128', 'gs1-128']);
     const warnings = levels(result.diagnostics, 'warning');
     assert.equal(warnings.length, 1);
     assert.match(warnings[0].text, /unknown/);
     assert.match(warnings[0].text, /sin equivalente en TPCL/);
-    assert.deepEqual(converted.items.slice(1).map(i => i.data), ['01' + FNC1 + '23', FNC1 + '0112345678901231']);
+    assert.deepEqual(converted.items.slice(1).map(i => i.data), ['01' + FNC1 + '23', '(01)12345678901231']);
     assert.deepEqual(levels(converted.diagnostics, 'error', 'warning'), []);
   });
 }

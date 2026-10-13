@@ -135,7 +135,11 @@
       return degrees;
     }
 
-    /** TSPL type and content of a Code128 item: "128", "EAN128" (leading FNC1) or "128M" (FNC1 elsewhere, as !102). */
+    /**
+     * TSPL type and content of a Code128 item: "128", "EAN128" (leading FNC1) or "128M" (FNC1 elsewhere, as !102). A gs1-128 item arrives
+     * here as its Code 128 data. UNVERIFIED: that EAN128 prepends the FNC1 itself comes from the TSC TSPL v3.0 manual, which is not in docs/
+     * (the local manual only says "Code 128, automatic subset switching"); 128M with !102 is the reliable form (see odd/tasks/gs1-128.md).
+     */
     function code128Of(ctx, data) {
       const parts = data.split(barcodeData.FNC1);
       if (parts.length === 1) return { type: '128', data };
@@ -184,7 +188,9 @@
      * BARCODE x,y,"type",height,human readable,rotation,narrow,wide,"content" (see the header comment for the mapping).
      * Only neutral fields are read: native (e.g. the source type) is ignored.
      */
-    function emit(item, ctx) {
+    function emit(source, ctx) {
+      // gs1-128 is written as Code 128 over its FNC1 data; when it cannot be encoded it is not EMITTABLE and is skipped below
+      const item = source.symbology === 'gs1-128' ? PB.gs1.toCode128Item(source) || source : source;
       if (!EMITTABLE.includes(item.symbology)) {
         ctx.once(`tspl-skipped-${item.symbology}`, () => diag.warning(`Código de barras ${item.symbology}: sin equivalente en TSPL, no se exporta`));
         return [];
@@ -264,7 +270,7 @@
     const symbologyField = {
       key: 'symbology', label: 'Tipo de código', type: 'select', arg: 2, reemit: true,
       options: selector.symbologyOptions(TYPE_CODES),
-      model: item => (typeOfItem(item) ? item.symbology : undefined),
+      model: item => (typeOfItem(item) && Object.hasOwn(TYPE_CODES, item.symbology) ? item.symbology : undefined),
       read: (a, cmd) => (typeOfCommand(cmd) || {}).symbology,
       write: () => null,
     };
@@ -410,12 +416,15 @@
             if (typeKey === '128M') data = manualModeData(ctx, data);
             if (typeKey === 'EAN128') data = barcodeData.FNC1 + data;
 
+            // Code 128 data that starts with FNC1 and is a GS1 element string is a gs1-128 barcode
+            const symbology = known.symbology === 'code128' ? PB.gs1.readCode128(data) : { symbology: known.symbology, data };
+            data = symbology.data;
             const { x, y } = ctx.pos(px, py);
             const wideNarrow = WIDE_NARROW.includes(known.symbology);
             const dotWide = (drawnWide ?? narrow * 3) * ctx.dot;
             const item = {
               kind: 'barcode', ref, source: sourceOf(cmd), x, y, raw: { x: String(px), y: String(py) },
-              symbology: known.symbology, module: narrow * ctx.dot, rotation: ROTATIONS.includes(rotation) ? rotation : 0,
+              symbology: symbology.symbology, module: narrow * ctx.dot, rotation: ROTATIONS.includes(rotation) ? rotation : 0,
               height: drawnHeight * ctx.dot,
               ...(wideNarrow && {
                 widths: { narrowBar: narrow * ctx.dot, narrowSpace: narrow * ctx.dot, wideBar: dotWide, wideSpace: dotWide },

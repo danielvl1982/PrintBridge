@@ -262,7 +262,6 @@
 
     function barcodeItem(ctx, field, cmd) {
       const name = cmd.name;
-      const { symbology } = COMMANDS[name];
       const p = paramsOf(cmd);
       const ref = `^${name}`;
       // Orientation: the parameter, else ^FW
@@ -288,7 +287,10 @@
       const stop = p.l === undefined ? undefined : START_STOP.includes(p.l) ? p.l : p.l === '' ? 'A' : null;
       if (start === null || stop === null) ctx.report(diag.warning(`${ref}: carácter de inicio o de parada "${start === null ? p.k : p.l}" no válido (A..D), se usa A`));
       const value = field.data.value;
-      const { data, notes } = decodeData(name, value, { k: start || 'A', l: stop || 'A' });
+      const decoded = decodeData(name, value, { k: start || 'A', l: stop || 'A' });
+      const { notes } = decoded;
+      // Code 128 data that starts with FNC1 and is a GS1 element string is a gs1-128 barcode (mode U / D and the UCC check stay kept, not applied)
+      const { symbology, data } = name === 'BC' ? PB.gs1.readCode128(decoded.data) : { symbology: COMMANDS[name].symbology, data: decoded.data };
       reportData(ctx, name, value, ref, notes);
 
       const e = p.e === undefined ? undefined : p.e || E_DEFAULT[name];
@@ -445,7 +447,9 @@
      * ^BYw[,r] and the field ^FO / ^FT x,y ^<cmd><parameters> ^FD data ^FS (see the header for the rules). Only neutral fields are read, plus
      * what native holds for a field that came from ZPL (above, UCC, mode, print check digit, start / stop, the data as written).
      */
-    function emit(item, ctx) {
+    function emit(source, ctx) {
+      // gs1-128 is written as Code 128 over its FNC1 data; when it cannot be encoded it has no command and is skipped below
+      const item = source.symbology === 'gs1-128' ? PB.gs1.toCode128Item(source) || source : source;
       const name = nameOf(item);
       if (!name) {
         ctx.once('zpl-barcode-skipped', () => diag.warning('Hay códigos de barras sin equivalente en ZPL (solo Code 128, Code 39, ITF, Code 93, NW7, MSI, 2 de 5 industrial y EAN / UPC): no se exportan'));

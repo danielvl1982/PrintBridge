@@ -208,7 +208,11 @@
         const target = DATA_TARGET[m[1]] + m[2];
         const field = ctx.fields[target];
         if (field && field.kind === 'text') field.data = fitTextData(ctx, target, m[3]);
-        else if (field) field.data = fitBarcodeData(ctx, target, field.kind, field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3]);
+        else if (field) {
+          field.data = fitBarcodeData(ctx, target, field.kind, field.kind === 'barcode' ? m[3].replace(FNC1_NOTATION, barcodeData.FNC1) : m[3]);
+          // Code 128 whose data starts with FNC1 and is a GS1 element string is a gs1-128 barcode
+          if (field.kind === 'barcode' && field.symbology === 'code128' && typeof field.data === 'string') Object.assign(field, PB.gs1.readCode128(field.data));
+        }
         else ctx.report(diag.error(`R${m[1]}${m[2]} no tiene un ${target} definido antes`));
       },
     },
