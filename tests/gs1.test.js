@@ -98,3 +98,44 @@ test('readable: the parenthesized line', () => {
   assert.equal(gs1.readable('(10)ABC'), '(10)ABC');
   assert.equal(gs1.readable('free text'), 'free text');
 });
+
+// --- odd/tasks/gs1-editor.md: helpers of the element editor in the properties panel
+
+test('aiOptions: one option per AI of the subset, with its name and the shape of its value', () => {
+  const options = gs1.aiOptions();
+  assert.deepEqual(options.map(o => o.value), Object.keys(gs1.AIS));
+  assert.equal(options.find(o => o.value === '01').label, '(01) GTIN · 14 dígitos');
+  assert.equal(options.find(o => o.value === '17').label, '(17) Fecha de caducidad · AAMMDD');
+  assert.equal(options.find(o => o.value === '10').label, '(10) Lote · hasta 20 caracteres');
+});
+
+test('rowsOf / notationOf: a notation and its rows are the same thing; text that is not an element string has no rows', () => {
+  const text = '(01)09501101530003(17)250101(10)ABC123';
+  assert.deepEqual(gs1.rowsOf(text), [{ ai: '01', value: '09501101530003' }, { ai: '17', value: '250101' }, { ai: '10', value: 'ABC123' }]);
+  assert.equal(gs1.notationOf(gs1.rowsOf(text)), text);
+  assert.deepEqual(gs1.rowsOf('ABC123'), []);
+  assert.deepEqual(gs1.rowsOf('(99)1'), []);
+});
+
+test('checkRow: an empty row is incomplete (no message), a wrong one names the cause', () => {
+  assert.deepEqual(gs1.checkRow({ ai: '01', value: '' }), []);
+  assert.deepEqual(gs1.checkRow({ ai: '01', value: '09501101530003' }), []);
+  assert.match(gs1.checkRow({ ai: '01', value: '0950110153000' })[0].text, /debe tener 14/);
+  assert.match(gs1.checkRow({ ai: '01', value: '09501101530004' })[0].text, /dígito de control/);
+  assert.match(gs1.checkRow({ ai: '17', value: '251301' })[0].text, /mes/);
+});
+
+test('commitRows: the notation only when every row is complete and without errors', () => {
+  const good = [{ ai: '01', value: '09501101530003' }, { ai: '10', value: 'ABC123' }];
+  assert.equal(gs1.commitRows(good), '(01)09501101530003(10)ABC123');
+  assert.equal(gs1.commitRows([]), null);
+  assert.equal(gs1.commitRows([...good, { ai: '21', value: '' }]), null);
+  assert.equal(gs1.commitRows([{ ai: '01', value: '09501101530004' }]), null);
+});
+
+test('notationFor: plain digits complete to (00) / (01), a notation stays, anything else starts from the example', () => {
+  assert.equal(gs1.notationFor('09501101530003'), '(01)09501101530003');
+  assert.equal(gs1.notationFor('(10)ABC'), '(10)ABC');
+  assert.equal(gs1.notationFor('ABC123'), gs1.EXAMPLE);
+  assert.equal(gs1.toCode128Data(gs1.EXAMPLE) !== null, true);
+});

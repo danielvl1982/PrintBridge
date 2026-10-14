@@ -153,6 +153,14 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .props .props-choices { display: flex; gap: 10px; }
 .props .props-choices label { color: var(--text); }
 .props-note { color: var(--muted); font-size: 11px; }
+.props .props-gs1 { flex-basis: 100%; flex-direction: column; align-items: stretch; }
+.props-gs1-rows { display: grid; gap: 4px; }
+.props-gs1-row { display: flex; gap: 6px; align-items: center; }
+.props-gs1-row select { max-width: 22em; }
+.props-gs1-value { flex: 1; min-width: 8em; }
+.props-gs1-error { color: #b3261e; }
+.props-gs1 details { color: var(--muted); }
+.props-gs1 details input { width: 100%; }
 .props-input { display: flex; gap: 6px; align-items: center; }
 .props-input output { min-width: 3.2em; color: var(--text); }
 .props-actions { display: flex; flex-wrap: wrap; gap: 8px; }

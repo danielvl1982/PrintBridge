@@ -117,7 +117,69 @@
       return group;
     }
 
+    /**
+     * The Contenido of a GS1-128 barcode (field.editor === 'gs1') as one row per element: AI select, value, remove. The rows are validated as
+     * typed and only a complete, error-free set is notified (as the notation with parentheses); until then they stay in the panel (the draft)
+     * and the label keeps its last good content. The text input of the notation stays as the advanced way to paste a whole string.
+     */
+    let gs1Draft = null;
+    function gs1Row(field) {
+      const { gs1 } = PB;
+      const state = gs1Draft && gs1Draft.committed === field.value ? gs1Draft : { committed: field.value, rows: gs1.rowsOf(field.value) };
+      const group = document.createElement('div');
+      group.className = 'props-field props-gs1';
+      const commit = () => {
+        const notation = gs1.commitRows(state.rows);
+        gs1Draft = { committed: notation ?? state.committed, rows: state.rows };
+        if (notation !== null && notation !== field.value) onChange(field.key, notation);
+        else render();
+      };
+      const note = (text, className = 'props-note') => Object.assign(document.createElement('small'), { className, textContent: text });
+      function render() {
+        const rows = document.createElement('div');
+        rows.className = 'props-gs1-rows';
+        state.rows.forEach((r, i) => {
+          const line = document.createElement('div');
+          line.className = 'props-gs1-row';
+          const select = document.createElement('select');
+          for (const o of gs1.aiOptions()) select.append(Object.assign(document.createElement('option'), { value: o.value, textContent: o.label, selected: o.value === r.ai }));
+          select.addEventListener('change', () => { r.ai = select.value; commit(); });
+          const input = Object.assign(document.createElement('input'), { type: 'text', value: r.value, placeholder: gs1.valueHint(r.ai), className: 'props-gs1-value' });
+          input.addEventListener('change', () => { r.value = input.value; commit(); });
+          const remove = Object.assign(document.createElement('button'), { type: 'button', textContent: '✕', title: 'Quitar este elemento' });
+          remove.addEventListener('click', () => { state.rows.splice(i, 1); commit(); });
+          line.append(select, input, remove);
+          rows.append(line);
+          for (const d of gs1.checkRow(r)) rows.append(note(d.text, d.level === 'error' ? 'props-note props-gs1-error' : 'props-note'));
+        });
+        const add = Object.assign(document.createElement('button'), { type: 'button', textContent: '+ Añadir elemento' });
+        add.addEventListener('click', () => {
+          state.rows.push({ ai: state.rows.length ? '10' : '01', value: '' });
+          gs1Draft = { committed: state.committed, rows: state.rows };
+          render();
+          group.querySelectorAll('.props-gs1-value')[state.rows.length - 1]?.focus();
+        });
+        const complete = gs1.commitRows(state.rows) !== null;
+        const advanced = document.createElement('details');
+        const text = Object.assign(document.createElement('input'), { type: 'text', value: field.value, maxLength: field.maxLength ?? 255 });
+        text.dataset.key = field.key;
+        text.addEventListener('change', () => { gs1Draft = null; onChange(field.key, text.value); });
+        advanced.append(Object.assign(document.createElement('summary'), { textContent: 'Modo avanzado: escribir la cadena completa' }), text);
+        group.replaceChildren(
+          Object.assign(document.createElement('span'), { textContent: field.label }),
+          rows,
+          add,
+          note(`Cadena: ${gs1.notationOf(state.rows) || '(sin elementos)'}`),
+          note(complete ? 'FNC1 se añade solo después de los elementos de largo variable que no son el último; el dígito de control se valida, no se añade' : 'Se guarda cuando todos los elementos están completos y sin errores; mientras tanto la etiqueta conserva el contenido anterior'),
+          advanced,
+        );
+      }
+      render();
+      return group;
+    }
+
     function row(field) {
+      if (field.editor === 'gs1') return gs1Row(field);
       if (field.type === 'radio') return radioRow(field);
       const label = document.createElement('label');
       const input = control(field);
@@ -208,6 +270,7 @@
           return;
         }
         els.title.textContent = descriptor.kind || '';
+        if (!descriptor.fields.some(f => f.editor === 'gs1')) gs1Draft = null;
         els.form.replaceChildren(...descriptor.fields.map(row), ...(variableFields.length ? [valuesSection(variableFields)] : []));
         setMode('form');
         // The edit re-renders the form: the field being edited keeps the keyboard focus

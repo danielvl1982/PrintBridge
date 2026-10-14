@@ -197,10 +197,59 @@
     return `Contenido GS1-128 rechazado (${cause}): se mantiene el contenido anterior`;
   }
 
+  /** Name of each AI of the subset, for the element editor of the properties panel. */
+  const AI_NAMES = Object.freeze({
+    '00': 'SSCC', '01': 'GTIN', '02': 'GTIN de los artículos contenidos', '10': 'Lote', '11': 'Fecha de producción', '13': 'Fecha de empaquetado',
+    '15': 'Consumir preferentemente antes de', '17': 'Fecha de caducidad', '20': 'Variante del producto', '21': 'Número de serie',
+    '30': 'Cantidad variable', '37': 'Unidades contenidas', '240': 'Referencia adicional del producto', '241': 'Referencia del cliente',
+    '400': 'Número de pedido del cliente', '410': 'Entregar a (GLN)', '411': 'Facturar a (GLN)', '412': 'Comprar a (GLN)',
+    '413': 'Enviar a, para otro destinatario (GLN)', '414': 'Localización física (GLN)', '415': 'Facturador (GLN)',
+  });
+
+  /** Short description of the value of an AI: "14 dígitos", "AAMMDD", "hasta 20 caracteres". */
+  function valueHint(ai) {
+    const spec = AIS[ai];
+    if (DATE_AIS.includes(ai)) return 'AAMMDD';
+    const unit = spec.charset === 'numeric' ? 'dígitos' : 'caracteres';
+    return spec.kind === 'fixed' ? `${spec.length} ${unit}` : `hasta ${spec.length} ${unit}`;
+  }
+
+  /** Options of the AI select of the element editor: [{ value: '01', label: '(01) GTIN · 14 dígitos' }]. */
+  const aiOptions = () => Object.keys(AIS).map(ai => ({ value: ai, label: `(${ai}) ${AI_NAMES[ai]} · ${valueHint(ai)}` }));
+
+  /** Rows of the element editor for a notation: [{ ai, value }] (none when the text is not an element string). */
+  function rowsOf(text) {
+    const { elements, structural } = parse(text);
+    return structural ? [] : elements.map(({ ai, value }) => ({ ai, value }));
+  }
+
+  /** Notation of the rows: `(ai)value` each, in order. */
+  const notationOf = rows => rows.map(r => `(${r.ai})${r.value}`).join('');
+
+  /** Diagnostics [{ level, text }] of one row (the same checks as the whole notation); none while the row has no value yet (it is incomplete, not wrong). */
+  function checkRow(row) {
+    const out = [];
+    if (row.value) checkElement(row, out);
+    return out;
+  }
+
+  /** What the element editor can write: the notation of the rows, or null while there are no rows, a row is empty or a row has an error. */
+  function commitRows(rows) {
+    if (!rows.length || rows.some(r => !r.value || checkRow(r).some(d => d.level === 'error'))) return null;
+    return notationOf(rows);
+  }
+
   /** The notation of plain data when it can only be one element: 18 digits are an SSCC (00), 14 digits a GTIN (01); anything else is returned as is. */
   function guessNotation(text) {
     const data = String(text ?? '');
     return /^\d{18}$/.test(data) ? `(00)${data}` : /^\d{14}$/.test(data) ? `(01)${data}` : data;
+  }
+
+  /** Notation a Code 128 barcode starts from when it becomes GS1-128: its own data when that is (or completes to) an element string, else the example. */
+  const EXAMPLE = '(01)09501101530003';
+  function notationFor(text) {
+    const guess = guessNotation(text);
+    return toCode128Data(guess) === null ? EXAMPLE : guess;
   }
 
   /** Notice (js/app.js) for a switch of a Code 128 barcode to GS1-128 that the language refused: the data must already be GS1 notation. */
@@ -211,5 +260,5 @@
     return `No se puede cambiar a GS1-128 (${cause}): escribí primero el contenido en notación GS1, p. ej. (01)09501101530003 (con 14 o 18 dígitos solos se completa el identificador)`;
   }
 
-  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage, rejectedEditMessage, rejectedSwitchMessage, guessNotation });
+  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage, rejectedEditMessage, rejectedSwitchMessage, guessNotation, notationFor, AI_NAMES, valueHint, aiOptions, rowsOf, notationOf, checkRow, commitRows, EXAMPLE });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

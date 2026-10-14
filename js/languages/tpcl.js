@@ -590,7 +590,7 @@
   function gs1SwitchText(item, to) {
     const data = typeof item.data === 'string' ? item.data : null;
     if (data === null) return null;
-    if (to === 'gs1-128' && item.symbology === 'code128') return data.includes(barcodeData.FNC1) ? null : gs1FileText(PB.gs1.guessNotation(data));
+    if (to === 'gs1-128' && item.symbology === 'code128') return data.includes(barcodeData.FNC1) ? null : gs1FileText(PB.gs1.notationFor(data));
     if (to === 'code128' && isGs1(item)) return data.includes('>8') || UNSAFE_DATA.test(data) || data.length > CONTENT_FIELD.maxLength ? null : data;
     return null;
   }
@@ -663,7 +663,7 @@
     if (item && CONTENT_KINDS.includes(item.kind)) {
       const target = typeof text === 'string' ? contentTarget(text, item) : null;
       const value = typeof text === 'string' ? target && (isGs1(item) ? item.data : target.value) : contentOfModel(item);
-      if (typeof value === 'string') fields.push({ ...CONTENT_FIELD, value, ...(isGs1(item) && { note: PB.gs1.NOTATION_HINT }) });
+      if (typeof value === 'string') fields.push({ ...CONTENT_FIELD, value, ...(isGs1(item) && { note: PB.gs1.NOTATION_HINT, editor: 'gs1' }) });
     }
     return { kind, fields };
   }

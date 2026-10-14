@@ -203,9 +203,9 @@
         if (found) value = a ? f.read(a, found.cmd, { item, dpi }) : (isOmittedOptional(f, found.cmd) ? f.optional : undefined);
         else value = f.model ? f.model(item, { dpi }) : undefined;
         if (value === undefined || value === null) continue;
-        const { key, label, type, min, max, step, note } = f;
+        const { key, label, type, min, max, step, note, editor } = f;
         const options = f.optionsFor ? f.optionsFor(value, item, found ? found.cmd : undefined) : f.options;
-        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }), ...(note && { note }) });
+        fields.push({ key, label, type, value, ...(min !== undefined && { min, max, step }), ...(options && { options }), ...(note && { note }), ...(editor && { editor }) });
       }
       return { kind, fields };
     }
