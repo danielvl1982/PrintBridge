@@ -6,7 +6,11 @@
  *     moveItem?(text, item, dx, dy, { dpi }) -> text,
  *     updateItem?(text, item, changes, { dpi }) -> text, describeItem?(item, text?) -> { kind, fields },
  *     componentTemplates?() -> [{ kind, label }], buildComponent?(text, kind, { x, y }, { dpi, viewRotation }) -> text,
+ *     helpAt?(text, offset) -> info | null, helpRange?(text, start, end) -> [info],
  *     emit?(model, { dpi }) -> { text, diagnostics }, fileEncoding?: 'utf-8' | 'latin1', fileExtension?: string }
+ * helpAt / helpRange (optional, both or none): the command help of the Ayuda del comando panel. helpAt gives the command under a caret offset and
+ *   helpRange every command of a selected span, as { id, known, title, description, params: [{ label, description, value, current }], extra }
+ *   (js/languages/zpl-help.js, js/languages/tpcl-help.js).
  * The model returned by parse is the neutral one described above.
  * insertCommand (optional): the text with a command added in the place the language wants (TPCL: before {XS).
  * insertImage (optional, boolean): the language can take the preview image as a command (TPCL SG, written with

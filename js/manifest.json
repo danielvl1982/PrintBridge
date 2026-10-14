@@ -85,6 +85,7 @@
   "js/languages/zpl-edit.js",
   "js/languages/zpl.js",
   "js/languages/zpl-help.js",
+  "js/languages/tpcl-help.js",
   "js/view.js",
   "js/drawing.js",
   "js/palette.js",

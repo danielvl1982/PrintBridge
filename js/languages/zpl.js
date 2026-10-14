@@ -1164,5 +1164,7 @@
     id: 'zpl', name: 'ZPL (Zebra)', detect, parse, emit, fileEncoding: 'utf-8', fileExtension: 'zpl', sizeCommands, applySize, fitSize, sizeLimits: SIZE_LIMITS, sizeLimitsFor,
     insertCommand, insertImage: true, imageCommand, imageSizeProblem, moveItem: EDITING.moveItem, describeItem: EDITING.describeItem, updateItem: EDITING.updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
+    // The command help loads after this file (js/languages/zpl-help.js), so it is reached when called
+    helpAt: (text, offset) => PB.zplHelp.at(text, offset), helpRange: (text, start, end) => PB.zplHelp.range(text, start, end),
   });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

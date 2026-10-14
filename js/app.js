@@ -219,14 +219,15 @@
     }
   }
 
-  /** Explains the command under the caret in the properties panel (ZPL only for now); hidden for another language or outside a command. */
+  /** Explains the command under the caret in the Ayuda del comando panel (the languages with helpAt / helpRange: ZPL and TPCL); hidden for another language or outside a command. */
   function updateCommandHelp(offset, end = offset) {
-    if (!lastModel || lastModel.language !== 'zpl') propertiesPanel.showCommandHelp(null);
+    const language = lastModel && sourceLanguage();
+    if (!language || !language.helpAt) propertiesPanel.showCommandHelp(null);
     else if (offset != null && end > offset) {
       // A span is selected (an object picked in the preview, or text selected by hand): every command in it
-      const all = PB.zplHelp.range(editor.text(), offset, end);
+      const all = language.helpRange(editor.text(), offset, end);
       propertiesPanel.showCommandHelp(all.length ? all : null);
-    } else if (offset != null) propertiesPanel.showCommandHelp(PB.zplHelp.at(editor.text(), offset));
+    } else if (offset != null) propertiesPanel.showCommandHelp(language.helpAt(editor.text(), offset));
   }
 
   /**

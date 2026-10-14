@@ -769,6 +769,9 @@
   PB.languages.register({
     id: 'tpcl',
     name: 'TPCL (Toshiba TEC)',
+    // The command help loads after this file (js/languages/tpcl-help.js), so it is reached when called
+    helpAt: (text, offset) => PB.tpclHelp.at(text, offset),
+    helpRange: (text, start, end) => PB.tpclHelp.range(text, start, end),
     detect: src => /\{[\s\S]*?\|\}/.test(src),
     parse,
     validate: model => model.items.flatMap(item => ALL_RULES.flatMap(rule => rule(item))),
