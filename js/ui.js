@@ -285,7 +285,7 @@
   const EDIT_DELAY_MS = 150;
   const LINE_HEIGHT_PX = 16;
 
-  function createEditor(textarea, { openButton, fileInput }, { onEdit, onOpen }) {
+  function createEditor(textarea, { openButton, fileInput }, { onEdit, onOpen, onCursor }) {
     let timer;
     // Files are read as bytes so that binary payloads (TSPL BITMAP) survive; see PB.ui.decodeFile
     const readFile = file => file.arrayBuffer().then(buffer => onOpen(PB.ui.decodeFile(new Uint8Array(buffer)), file.name));
@@ -293,6 +293,9 @@
     textarea.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(onEdit, EDIT_DELAY_MS); });
     // After pasting, the text is already in the textarea: it is treated as a new label (to choose its size)
     textarea.addEventListener('paste', () => setTimeout(() => { clearTimeout(timer); onOpen(textarea.value); }, 0));
+
+    // The caret moved (click, arrows, typing, focus): reports its offset so the command under it can be explained
+    if (onCursor) for (const type of ['click', 'keyup']) textarea.addEventListener(type, () => onCursor(textarea.selectionStart));
 
     textarea.addEventListener('dragover', e => { e.preventDefault(); textarea.classList.add('drag'); });
     textarea.addEventListener('dragleave', () => textarea.classList.remove('drag'));
@@ -313,6 +316,8 @@
 
     return Object.freeze({
       text: () => textarea.value,
+      /** Caret offset while the editor has the keyboard focus, null otherwise. */
+      caret: () => (document.activeElement === textarea ? textarea.selectionStart : null),
       setText(text) { textarea.value = text; },
       /**
        * Replaces the whole text keeping the browser's undo stack (Ctrl+Z), unlike setText. Returns false if the browser
@@ -329,6 +334,7 @@
       selectRange(start, end) {
         textarea.focus();
         textarea.setSelectionRange(start, end);
+        if (onCursor) onCursor(start);
         const line = textarea.value.slice(0, start).split('\n').length - 1;
         textarea.scrollTop = Math.max(0, line * LINE_HEIGHT_PX - textarea.clientHeight / 2);
       },

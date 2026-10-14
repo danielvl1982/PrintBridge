@@ -53,7 +53,8 @@
   }
 
   /**
-   * els: { empty, title, form, overlay } (the overlay element holds the image controls, which belong to the page).
+   * els: { empty, title, form, overlay, help } (the overlay element holds the image controls, which belong to the page; help is the command help
+   * sub-section, shown by showCommandHelp whatever the selection is).
    *  - onChange(key, value): a field was edited (applied on `change`, not on every keystroke). The caller re-shows the panel.
    *  - onValueChange(name, value): the test value of a variable was edited (on `change`); it is never a field of the language.
    */
@@ -155,6 +156,36 @@
       return section;
     }
 
+    /** Sub-section with the help of the command under the caret (see PB.zplHelp.at): its id and title, the description and its parameters. */
+    function commandHelp(info) {
+      const box = document.createElement('div');
+      box.className = 'props-help-body';
+      const head = document.createElement('div');
+      head.className = 'props-help-head';
+      head.append(Object.assign(document.createElement('strong'), { textContent: info.id }), info.title ? ` ${info.title}` : '');
+      box.append(head);
+      if (!info.known) {
+        box.append(Object.assign(document.createElement('p'), { className: 'props-note', textContent: 'Este comando todavía no tiene ayuda en PrintBridge' }));
+        return box;
+      }
+      box.append(Object.assign(document.createElement('p'), { className: 'props-help-text', textContent: info.description }));
+      if (info.params.length) {
+        const list = document.createElement('ol');
+        list.className = 'props-help-params';
+        for (const param of info.params) {
+          const item = document.createElement('li');
+          item.className = param.current ? 'current' : '';
+          item.append(Object.assign(document.createElement('b'), { textContent: param.label }));
+          if (param.value) item.append(' ', Object.assign(document.createElement('code'), { textContent: param.value }));
+          item.append(Object.assign(document.createElement('small'), { className: 'props-note', textContent: param.description }));
+          list.append(item);
+        }
+        box.append(list);
+      }
+      if (info.extra !== null) box.append(Object.assign(document.createElement('p'), { className: 'props-note', textContent: `Sobran parámetros: ${info.extra}` }));
+      return box;
+    }
+
     function setMode(mode) {
       els.empty.hidden = mode !== 'empty';
       els.form.hidden = mode !== 'form';
@@ -180,6 +211,12 @@
         setMode('form');
         // The edit re-renders the form: the field being edited keeps the keyboard focus
         if (focused) els.form.querySelector(`[data-key="${focused}"]`)?.focus();
+      },
+      /** Shows the help of the command under the caret in the help sub-section (info from PB.zplHelp.at); null hides it. */
+      showCommandHelp(info) {
+        if (!els.help) return;
+        els.help.hidden = !info;
+        els.help.replaceChildren(...(info ? [commandHelp(info)] : []));
       },
       /** Shows the overlay image controls instead of a form. */
       showOverlay() {

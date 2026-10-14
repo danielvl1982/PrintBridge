@@ -1,0 +1,20 @@
+# Command help in Propiedades (cursor in the code -> command and parameters)
+Objective: like labelary.com/viewer.html, when the caret is inside a command of the code editor, show its name, a short description and its parameters (the current one highlighted, with its value) as a sub-section of the Propiedades panel.
+Branch: `feat/command-help`. Delivery: ask-on-risk (one PR per language step). Test runner: `node --test`. Language order: ZPL first (C1), then TPCL (C2), then TSPL (C3); the user tests each step before the next.
+
+## Specs
+- S1: "podemos poner dicha informacion sección de propiedades, como una sub sección del panel" (user, 2026-10-14). The info is the one Labelary shows when the cursor is in a field: the parameters of the object.
+- S2: "Lo vamos a realizar para todos, pero empecemos la pr para ZPL, probamos y seguimos" (user). ZPL first as its own PR; TPCL and TSPL follow with the same mechanism.
+- S3 (assumption): the sub-section shows independently of the selected object (it follows the caret, not the preview selection), is hidden for a language without help yet and when the caret is not inside a command.
+- S4 (assumption): UI texts in Spanish (the UI stays Spanish until the i18n, see memory), code and docs in English.
+- S5 (assumption): descriptions are short summaries written from the ZPL II guides (Volume One 2003 / Two 2005, local PDFs, not committed); a command without an entry shows its name and "no help yet".
+
+## Tasks
+- [x] C1 (S1-S5) ZPL: `js/languages/zpl-help.js` (data + `at(text, offset)`), caret listener in `createEditor`, `showCommandHelp` in the panel, `#propsHelp` in index.html, css, tests/zpl-help.test.js (15 tests), README. Route: inline. Tests: 4669 (4667 pass, 0 fail, 2 skipped). Browser check by the user: pending. Commit: see git log.
+- [ ] C2 TPCL help data (after the user tests C1).
+- [ ] C3 TSPL help data.
+
+## Log
+- L1 (2026-10-14, user): "https://labelary.com/viewer.html cuando nos ponemos en un campo nos da información de los parámetros del objeto, podemos poner dicha informacion sección de propiedades, como una sub sección del panel"
+- L2 (2026-10-14, user): "Lo vamos a realizar para todos, pero empecemos la pr para ZPL, probamos y seguimos"
+- Exploration (2026-10-14): editor is a plain textarea `#src` wrapped by `createEditor` (js/ui.js), no caret listener exists; `PB.zpl.commands(src)` yields commands with absolute offsets; no central ZPL parameter registry (only barcode `COMMANDS`), so a new data module is needed; new scripts go in index.html and js/manifest.json.
