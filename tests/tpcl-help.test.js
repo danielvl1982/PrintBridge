@@ -93,7 +93,7 @@ test('range gives every command of the selection in order, with no current param
   assert.ok(all.every(info => info.params.every(param => !param.current)));
 });
 
-test('the language registry exposes the help of TPCL and of ZPL, and TSPL has none yet', () => {
+test('the language registry exposes the help of TPCL and of ZPL', () => {
   for (const id of ['tpcl', 'zpl']) {
     const language = languages.get(id);
     assert.equal(typeof language.helpAt, 'function', id);
@@ -101,7 +101,6 @@ test('the language registry exposes the help of TPCL and of ZPL, and TSPL has no
   }
   assert.equal(languages.get('tpcl').helpAt('{D0300,0250,0250|}', 3).id, '{D');
   assert.equal(languages.get('zpl').helpAt('^XA^FO10,10^FS^XZ', 5).id, '^FO');
-  assert.equal(languages.get('tspl').helpAt, undefined);
 });
 
 test('every entry has a title, a description and a layout with labelled parameters', () => {

@@ -771,5 +771,7 @@
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize, fitSize, sizeLimits: { gap: [...GAP_LIMITS] },
     insertCommand, insertImage: true, imageCommand, imageSizeProblem, moveItem: EDITING.moveItem, describeItem, updateItem,
-    componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent });
+    componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
+    // The command help loads after this file (js/languages/tspl-help.js), so it is reached when called
+    helpAt: (text, offset) => PB.tsplHelp.at(text, offset), helpRange: (text, start, end) => PB.tsplHelp.range(text, start, end) });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
