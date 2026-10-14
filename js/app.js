@@ -33,7 +33,7 @@
     catalog,
     { onApply: applySize },
   );
-  const editor = ui.createEditor($('src'), { openButton: $('btnOpen'), fileInput: $('file') }, { onEdit: () => refresh(), onOpen: (text, name) => { if (name) state.fileName = name; open(text); } });
+  const editor = ui.createEditor($('src'), { openButton: $('btnOpen'), fileInput: $('file') }, { onEdit: () => refresh(), onCursor: updateCommandHelp, onOpen: (text, name) => { if (name) state.fileName = name; open(text); } });
   const preview = ui.createPreview(
     { container: $('svgwrap'), cursor: $('cursor'), dimensions: $('dims') },
     {
@@ -80,7 +80,7 @@
   ui.initCollapsible(document);
 
   const propertiesPanel = ui.createPropertiesPanel(
-    { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay') },
+    { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay'), help: $('propsHelp') },
     { onChange: changeProperty, onValueChange: changeTestValue },
   );
 
@@ -172,6 +172,7 @@
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
       updateProperties();
+      updateCommandHelp(editor.caret());
       shown = [
         ...notices,
         ...diagnostics,
@@ -216,6 +217,12 @@
       const descriptor = language && language.describeItem ? language.describeItem(item, editor.text()) : null;
       propertiesPanel.show(descriptor, ui.variableFieldsFor(item, lastModel, state.values));
     }
+  }
+
+  /** Explains the command under the caret in the properties panel (ZPL only for now); hidden for another language or outside a command. */
+  function updateCommandHelp(offset) {
+    if (!lastModel || lastModel.language !== 'zpl') propertiesPanel.showCommandHelp(null);
+    else if (offset != null) propertiesPanel.showCommandHelp(PB.zplHelp.at(editor.text(), offset));
   }
 
   /**

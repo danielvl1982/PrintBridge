@@ -141,6 +141,14 @@ textarea.drag { outline: 2px dashed var(--accent); }
 .props input:disabled, .props select:disabled { background: #eef0f3; color: var(--muted); }
 .props-values { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 14px; flex-basis: 100%; padding-top: 6px; border-top: 1px dashed var(--line); }
 .props-values-title { font-weight: 600; color: var(--text); }
+.props-help { margin-top: 8px; padding-top: 6px; border-top: 1px dashed var(--line); }
+.props-help-head { color: var(--text); }
+.props-help-text { margin: 2px 0 4px; color: var(--muted); }
+.props-help-params { margin: 0; padding-left: 20px; display: grid; gap: 2px; }
+.props-help-params li { padding: 1px 4px; color: var(--muted); }
+.props-help-params li.current { background: #fff6d6; color: var(--text); border-radius: 3px; }
+.props-help-params code { margin-left: 4px; }
+.props-help-params small { display: block; }
 .props .props-field { display: flex; gap: 6px; align-items: center; color: var(--muted); }
 .props .props-choices { display: flex; gap: 10px; }
 .props .props-choices label { color: var(--text); }
