@@ -257,6 +257,10 @@
       // A refused GS1-128 notation: the field goes back to the previous content, and the avisos say why
       shown = [diag.warning(PB.gs1.rejectedEditMessage(value)), ...shown];
       messages.show(shown);
+    } else if (key === 'symbology' && value === 'gs1-128' && item.symbology === 'code128') {
+      // Code 128 -> GS1-128 needs the data to be GS1 notation already: say why the type stays
+      shown = [diag.warning(PB.gs1.rejectedSwitchMessage(item.data)), ...shown];
+      messages.show(shown);
     }
     // Also when nothing changed (value out of range or equal): the form goes back to what the code says
     updateProperties();

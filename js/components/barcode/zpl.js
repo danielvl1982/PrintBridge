@@ -751,7 +751,7 @@
       const cmd = gs1DataCmd(field);
       const pair = (from === 'code128' && to === 'gs1-128') || (from === 'gs1-128' && to === 'code128');
       if (!cmd || !pair || typeof item.data !== 'string' || item.data.includes(barcodeData.FNC1)) return null;
-      const code = to === 'gs1-128' ? PB.gs1.toCode128Data(item.data) : item.data;
+      const code = to === 'gs1-128' ? PB.gs1.toCode128Data(PB.gs1.guessNotation(item.data)) : item.data;
       return code === null ? null : dataEdits(cmd, code128Text(code));
     }
 

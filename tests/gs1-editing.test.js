@@ -132,6 +132,16 @@ for (const id of LANGS) {
     assert.equal(down, plain, 'back to the original text');
   });
 
+  test(`${id}: Code 128 holding 14 digits (GTIN) or 18 digits (SSCC) becomes GS1-128 with its (01) / (00) completed`, () => {
+    const put = data => ({ tpcl: tpclText, zpl: zplText, tspl: d => tsplText('128', d) })[id](data);
+    for (const [data, notation] of [['09501101530003', '(01)09501101530003'], ['123456789012345675', '(00)123456789012345675']]) {
+      const up = update(id, put(data), { symbology: 'gs1-128' });
+      assert.equal(barcodeOf(id, up).symbology, 'gs1-128');
+      assert.equal(barcodeOf(id, up).data, notation);
+    }
+    assert.equal(update(id, put('12345678'), { symbology: 'gs1-128' }), put('12345678'), 'any other length stays refused');
+  });
+
   test(`${id}: Code 128 whose data is not a GS1 element string cannot become GS1-128 (refused, text unchanged)`, () => {
     assert.equal(update(id, FILES[id].code128, { symbology: 'gs1-128' }), FILES[id].code128);
   });

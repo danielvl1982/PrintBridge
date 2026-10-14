@@ -590,7 +590,7 @@
   function gs1SwitchText(item, to) {
     const data = typeof item.data === 'string' ? item.data : null;
     if (data === null) return null;
-    if (to === 'gs1-128' && item.symbology === 'code128') return data.includes(barcodeData.FNC1) ? null : gs1FileText(data);
+    if (to === 'gs1-128' && item.symbology === 'code128') return data.includes(barcodeData.FNC1) ? null : gs1FileText(PB.gs1.guessNotation(data));
     if (to === 'code128' && isGs1(item)) return data.includes('>8') || UNSAFE_DATA.test(data) || data.length > CONTENT_FIELD.maxLength ? null : data;
     return null;
   }

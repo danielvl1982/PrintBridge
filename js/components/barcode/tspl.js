@@ -355,7 +355,7 @@
       let type;
       let data;
       if (to === 'gs1-128') {
-        const notation = from === 'gs1-128' ? (Object.hasOwn(changes, 'content') ? changes.content : item.data) : (String(cmd.args[2].value).toUpperCase() === '128' ? item.data : null);
+        const notation = from === 'gs1-128' ? (Object.hasOwn(changes, 'content') ? changes.content : item.data) : (String(cmd.args[2].value).toUpperCase() === '128' ? PB.gs1.guessNotation(item.data) : null);
         const code = typeof notation === 'string' ? PB.gs1.toCode128Data(notation) : null;
         // 128M reads "!nnn" as a control code, so such text in a value cannot be written there
         if (code === null || (code.indexOf(barcodeData.FNC1, 1) >= 0 && code.split(barcodeData.FNC1).some(part => /!\d{3}/.test(part)))) return null;

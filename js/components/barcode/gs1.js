@@ -197,5 +197,19 @@
     return `Contenido GS1-128 rechazado (${cause}): se mantiene el contenido anterior`;
   }
 
-  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage, rejectedEditMessage });
+  /** The notation of plain data when it can only be one element: 18 digits are an SSCC (00), 14 digits a GTIN (01); anything else is returned as is. */
+  function guessNotation(text) {
+    const data = String(text ?? '');
+    return /^\d{18}$/.test(data) ? `(00)${data}` : /^\d{14}$/.test(data) ? `(01)${data}` : data;
+  }
+
+  /** Notice (js/app.js) for a switch of a Code 128 barcode to GS1-128 that the language refused: the data must already be GS1 notation. */
+  function rejectedSwitchMessage(text) {
+    const { structural, diagnostics } = parse(text);
+    const first = structural ? diagnostics.find(d => d.level === 'error') : null;
+    const cause = first ? first.text.replace(/^GS1-128: /, '') : 'el contenido no se puede escribir en este lenguaje';
+    return `No se puede cambiar a GS1-128 (${cause}): escribí primero el contenido en notación GS1, p. ej. (01)09501101530003 (con 14 o 18 dígitos solos se completa el identificador)`;
+  }
+
+  PB.gs1 = Object.freeze({ AIS, MAX_DATA_CHARACTERS, NOTATION_HINT, mod10, parse, toCode128Data, fromCode128Data, readable, readCode128, toCode128Item, unwritableMessage, rejectedEditMessage, rejectedSwitchMessage, guessNotation });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
