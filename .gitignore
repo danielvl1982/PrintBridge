@@ -26,3 +26,6 @@ docs/**/*.pdf
 
 # Local agent settings (copy of agent/config.example.json)
 agent/config.json
+
+# Local .NET sample (not versioned)
+dotnet/
