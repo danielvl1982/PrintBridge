@@ -253,6 +253,11 @@
       if (!editor.replaceText(updated)) editor.setText(updated);
       // The selection is kept by index in the preview; the code box is not re-selected so the form keeps the focus
       refresh();
+      if (key === 'symbology' && value === 'gs1-128' && item.symbology === 'code128' && PB.gs1.notationFor(item.data) !== PB.gs1.guessNotation(item.data)) {
+        // The old data is not an element string: GS1-128 starts from the example, and the aviso says so
+        shown = [diag.info(`Los datos anteriores no eran una cadena GS1: se parte del ejemplo ${PB.gs1.EXAMPLE}. Edita los elementos en Contenido`), ...shown];
+        messages.show(shown);
+      }
     } else if (key === 'content' && item.kind === 'barcode' && item.symbology === 'gs1-128' && typeof value === 'string' && value !== item.data) {
       // A refused GS1-128 notation: the field goes back to the previous content, and the avisos say why
       shown = [diag.warning(PB.gs1.rejectedEditMessage(value)), ...shown];

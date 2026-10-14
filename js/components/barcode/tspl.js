@@ -355,7 +355,7 @@
       let type;
       let data;
       if (to === 'gs1-128') {
-        const notation = from === 'gs1-128' ? (Object.hasOwn(changes, 'content') ? changes.content : item.data) : (String(cmd.args[2].value).toUpperCase() === '128' ? PB.gs1.guessNotation(item.data) : null);
+        const notation = from === 'gs1-128' ? (Object.hasOwn(changes, 'content') ? changes.content : item.data) : (String(cmd.args[2].value).toUpperCase() === '128' ? PB.gs1.notationFor(item.data) : null);
         const code = typeof notation === 'string' ? PB.gs1.toCode128Data(notation) : null;
         // 128M reads "!nnn" as a control code, so such text in a value cannot be written there
         if (code === null || (code.indexOf(barcodeData.FNC1, 1) >= 0 && code.split(barcodeData.FNC1).some(part => /!\d{3}/.test(part)))) return null;
@@ -374,7 +374,7 @@
 
     /** The Contenido of a gs1-128 barcode: the standard notation in the panel, the Code 128 form in the file (written by reemit, with the type). */
     const gs1ContentField = {
-      key: 'content', label: 'Contenido', type: 'text', arg: (cmd => (cmd.args.length >= 10 ? 9 : 8)), reemit: true, note: PB.gs1.NOTATION_HINT,
+      key: 'content', label: 'Contenido', type: 'text', editor: 'gs1', arg: (cmd => (cmd.args.length >= 10 ? 9 : 8)), reemit: true, note: PB.gs1.NOTATION_HINT,
       model: item => (item.native && item.native.counterN === undefined && !COUNTER.test(String(item.data)) ? item.data : undefined),
       read: (a, cmd, { item } = {}) => (plainContent(cmd) ? item.data : undefined),
       write: () => null,

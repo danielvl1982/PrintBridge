@@ -40,6 +40,11 @@ for (const id of LANGS) {
     assert.equal(field(lang(id).describeItem(barcodeOf(id, FILES[id].gs1)), 'symbology').value, 'gs1-128');
   });
 
+  test(`${id}: Contenido of a gs1-128 barcode asks the panel for the element editor; a Code 128 one does not`, () => {
+    assert.equal(field(describe(id, FILES[id].gs1), 'content').editor, 'gs1');
+    assert.equal(field(describe(id, FILES[id].code128), 'content').editor, undefined);
+  });
+
   test(`${id}: Contenido of a gs1-128 barcode shows the parenthesized notation, with a hint`, () => {
     const content = field(describe(id, FILES[id].gs1), 'content');
     assert.equal(content.value, GS1);
@@ -139,11 +144,14 @@ for (const id of LANGS) {
       assert.equal(barcodeOf(id, up).symbology, 'gs1-128');
       assert.equal(barcodeOf(id, up).data, notation);
     }
-    assert.equal(update(id, put('12345678'), { symbology: 'gs1-128' }), put('12345678'), 'any other length stays refused');
+    // Any other data is not an element string: the barcode starts from the example element
+    assert.equal(barcodeOf(id, update(id, put('12345678'), { symbology: 'gs1-128' })).data, PB.gs1.EXAMPLE);
   });
 
-  test(`${id}: Code 128 whose data is not a GS1 element string cannot become GS1-128 (refused, text unchanged)`, () => {
-    assert.equal(update(id, FILES[id].code128, { symbology: 'gs1-128' }), FILES[id].code128);
+  test(`${id}: Code 128 whose data is not a GS1 element string becomes GS1-128 with the example element`, () => {
+    const up = update(id, FILES[id].code128, { symbology: 'gs1-128' });
+    assert.equal(barcodeOf(id, up).symbology, 'gs1-128');
+    assert.equal(barcodeOf(id, up).data, PB.gs1.EXAMPLE);
   });
 
   test(`${id}: a gs1-128 barcode only changes to Code 128 (other types would lose the FNC1 data)`, () => {
