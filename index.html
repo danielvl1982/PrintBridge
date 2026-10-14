@@ -18,6 +18,10 @@
 
 <main>
   <div class="column">
+    <section class="panel cmd-help" id="cmdHelp" data-collapsible="help" hidden>
+      <h2>Ayuda del comando</h2>
+      <div id="propsHelp" class="props-help"></div>
+    </section>
     <section class="panel" data-collapsible="code">
       <div class="panel-head">
         <h2>Código de etiqueta</h2>
@@ -70,7 +74,6 @@
       <h2>Propiedades <span id="propsKind" class="props-kind"></span></h2>
       <p id="propsEmpty" class="empty">Selecciona un objeto</p>
       <div id="propsForm" class="props" hidden></div>
-      <div id="propsHelp" class="props-help" hidden></div>
       <div id="propsOverlay" class="props" hidden>
         <label>Posición X <span class="props-input"><input id="imgX" type="number" step="0.1" value="0" disabled> mm</span></label>
         <label>Posición Y <span class="props-input"><input id="imgY" type="number" step="0.1" value="0" disabled> mm</span></label>

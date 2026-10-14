@@ -80,7 +80,7 @@
   ui.initCollapsible(document);
 
   const propertiesPanel = ui.createPropertiesPanel(
-    { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay'), help: $('propsHelp') },
+    { empty: $('propsEmpty'), title: $('propsKind'), form: $('propsForm'), overlay: $('propsOverlay'), help: $('propsHelp'), helpPanel: $('cmdHelp') },
     { onChange: changeProperty, onValueChange: changeTestValue },
   );
 

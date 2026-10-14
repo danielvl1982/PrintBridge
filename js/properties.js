@@ -53,8 +53,9 @@
   }
 
   /**
-   * els: { empty, title, form, overlay, help } (the overlay element holds the image controls, which belong to the page; help is the command help
-   * sub-section, shown by showCommandHelp whatever the selection is).
+   * els: { empty, title, form, overlay, help, helpPanel } (the overlay element holds the image controls, which belong to the page; help is the
+   * element that holds the command help and helpPanel, optional, the panel around it that is shown or hidden with it; showCommandHelp fills it
+   * whatever the selection is).
    *  - onChange(key, value): a field was edited (applied on `change`, not on every keystroke). The caller re-shows the panel.
    *  - onValueChange(name, value): the test value of a variable was edited (on `change`); it is never a field of the language.
    */
@@ -212,10 +213,10 @@
         // The edit re-renders the form: the field being edited keeps the keyboard focus
         if (focused) els.form.querySelector(`[data-key="${focused}"]`)?.focus();
       },
-      /** Shows the help of the command under the caret in the help sub-section (info from PB.zplHelp.at); null hides it. */
+      /** Shows the help of the command under the caret in the help panel (info from PB.zplHelp.at); null hides it. */
       showCommandHelp(info) {
         if (!els.help) return;
-        els.help.hidden = !info;
+        (els.helpPanel || els.help).hidden = !info;
         els.help.replaceChildren(...(info ? [commandHelp(info)] : []));
       },
       /** Shows the overlay image controls instead of a form. */
