@@ -50,10 +50,10 @@ Nothing here is a feature: it is what is implemented but never checked. Added 20
   the converted `D<pitch>` and that the feed with the derived pitch does not drift); P4 record and fix what P2 shows;
   P5 TSPL `DIRECTION 0` (180-degree flip; needs a TSC printer). P3 (pitch / gap conversion) is implemented, only its printer side is in P2.
 
-### Browser checks never run (ZPL, odd/tasks/zpl-support.md "Browser checks pending")
-- The reverse blend (`^FR`), rotations and `^FT` of barcodes / QR / Data Matrix, shapes, the image insertion with rotation, the counters and
-  variables panels (Propiedades, Variables), and the Convertir a… panel (three targets, `.zpl` download, Formato combo with a ZPL label,
-  the "Origen:" lines).
+### Browser checks (ZPL, odd/tasks/zpl-support.md "Browser checks pending"): DONE 2026-10-14
+- Confirmed by the user in the browser: the reverse blend (`^FR`), rotations and `^FT` of barcodes / QR / Data Matrix, shapes, the image
+  panel (rotation and size before the insertion; a `^GF` has no editable properties by design), the counters and variables panels
+  (Propiedades, Variables), and the Convertir a… panel (three targets, `.zpl` download, Formato combo with a ZPL label, the "Origen:" lines).
 
 ### Implemented but not verified on a printer
 - ZPL `^SF` decimal masks (odd/tasks/zpl-sf-mask.md "Browser and printer checks pending"): nothing was run in a browser or on a Zebra; the carry that skips the `%` positions and the right-aligned increment string are inferences from the manual's examples.
