@@ -213,11 +213,12 @@
         // The edit re-renders the form: the field being edited keeps the keyboard focus
         if (focused) els.form.querySelector(`[data-key="${focused}"]`)?.focus();
       },
-      /** Shows the help of the command under the caret in the help panel (info from PB.zplHelp.at); null hides it. */
+      /** Shows the help of the command under the caret in the help panel (one info from PB.zplHelp.at, or the list from PB.zplHelp.range, one block each); null or an empty list hides it. */
       showCommandHelp(info) {
         if (!els.help) return;
-        (els.helpPanel || els.help).hidden = !info;
-        els.help.replaceChildren(...(info ? [commandHelp(info)] : []));
+        const list = info ? [].concat(info) : [];
+        (els.helpPanel || els.help).hidden = list.length === 0;
+        els.help.replaceChildren(...list.map(commandHelp));
       },
       /** Shows the overlay image controls instead of a form. */
       showOverlay() {

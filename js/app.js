@@ -172,7 +172,7 @@
       updatePalette(used || languages.get('tpcl'));
       const svgEl = preview.show(drawing.svg, area, opts.rotation);
       updateProperties();
-      updateCommandHelp(editor.caret());
+      updateCommandHelp(...(editor.caret() || []));
       shown = [
         ...notices,
         ...diagnostics,
@@ -220,9 +220,13 @@
   }
 
   /** Explains the command under the caret in the properties panel (ZPL only for now); hidden for another language or outside a command. */
-  function updateCommandHelp(offset) {
+  function updateCommandHelp(offset, end = offset) {
     if (!lastModel || lastModel.language !== 'zpl') propertiesPanel.showCommandHelp(null);
-    else if (offset != null) propertiesPanel.showCommandHelp(PB.zplHelp.at(editor.text(), offset));
+    else if (offset != null && end > offset) {
+      // A span is selected (an object picked in the preview, or text selected by hand): every command in it
+      const all = PB.zplHelp.range(editor.text(), offset, end);
+      propertiesPanel.showCommandHelp(all.length ? all : null);
+    } else if (offset != null) propertiesPanel.showCommandHelp(PB.zplHelp.at(editor.text(), offset));
   }
 
   /**

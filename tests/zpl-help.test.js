@@ -124,3 +124,16 @@ test('the help panel is the first of the left column, above Código de etiqueta,
   const props = html.slice(html.indexOf('id="propsPanel"'), html.indexOf('class="panel preview"'));
   assert.ok(!props.includes('propsHelp'), 'Propiedades no longer holds the help');
 });
+
+test('range gives the help of every command of a selected object, with no current parameter and without ^FS', () => {
+  const text = ['^XA', '^FO10,20^A0N,30,40^FDhola^FS', '^XZ'].join('\n');
+  const start = text.indexOf('^FO');
+  const infos = zplHelp.range(text, start, text.indexOf('^FS') + 3);
+  assert.deepEqual(infos.map(info => info.id), ['^FO', '^A', '^FD']);
+  assert.ok(infos.every(info => info.params.every(param => !param.current)));
+  assert.deepEqual(infos[1].params.map(param => param.value), ['0', 'N', '30', '40']);
+});
+
+test('range of a span that touches no command is empty', () => {
+  assert.deepEqual(zplHelp.range('hello', 0, 5), []);
+});

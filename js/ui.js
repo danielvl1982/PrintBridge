@@ -295,7 +295,7 @@
     textarea.addEventListener('paste', () => setTimeout(() => { clearTimeout(timer); onOpen(textarea.value); }, 0));
 
     // The caret moved (click, arrows, typing, focus): reports its offset so the command under it can be explained
-    if (onCursor) for (const type of ['click', 'keyup']) textarea.addEventListener(type, () => onCursor(textarea.selectionStart));
+    if (onCursor) for (const type of ['click', 'keyup']) textarea.addEventListener(type, () => onCursor(textarea.selectionStart, textarea.selectionEnd));
 
     textarea.addEventListener('dragover', e => { e.preventDefault(); textarea.classList.add('drag'); });
     textarea.addEventListener('dragleave', () => textarea.classList.remove('drag'));
@@ -316,8 +316,8 @@
 
     return Object.freeze({
       text: () => textarea.value,
-      /** Caret offset while the editor has the keyboard focus, null otherwise. */
-      caret: () => (document.activeElement === textarea ? textarea.selectionStart : null),
+      /** Selection [start, end] (a caret when equal) while the editor has the keyboard focus, null otherwise. */
+      caret: () => (document.activeElement === textarea ? [textarea.selectionStart, textarea.selectionEnd] : null),
       setText(text) { textarea.value = text; },
       /**
        * Replaces the whole text keeping the browser's undo stack (Ctrl+Z), unlike setText. Returns false if the browser
@@ -334,7 +334,7 @@
       selectRange(start, end) {
         textarea.focus();
         textarea.setSelectionRange(start, end);
-        if (onCursor) onCursor(start);
+        if (onCursor) onCursor(start, end);
         const line = textarea.value.slice(0, start).split('\n').length - 1;
         textarea.scrollTop = Math.max(0, line * LINE_HEIGHT_PX - textarea.clientHeight / 2);
       },

@@ -11,7 +11,7 @@
  *     orientation glued to the name (^A0N,30,30): the first two characters after it are its first two parameters;
  *   - a command with no parameters (^FD data, ^FS, ^FX...) has none current; the data commands show the data as their only parameter;
  *   - an offset past the last parameter of the guide is reported as `extra` (the command was given more parameters than it has).
- * Exposed as PB.zplHelp = { at, TABLE }; the barcode rows are checked against PB.slices.barcode.zplTables by tests/zpl-help.test.js.
+ * `range(text, start, end)` gives the help of every command of a selected span (an object picked in the preview). Exposed as PB.zplHelp = { at, range, TABLE }; the barcode rows are checked against PB.slices.barcode.zplTables by tests/zpl-help.test.js.
  */
 (function (PB) {
   'use strict';
@@ -148,19 +148,13 @@
     return index;
   }
 
-  /** What the caret is on in the ZPL text, or null when it is in no command. offset: caret position in the text. */
-  function at(text, offset) {
-    let found = null;
-    for (const cmd of PB.zpl.commands(text)) {
-      if (cmd.start <= offset && offset < cmd.end) { found = cmd; break; }
-      if (offset === cmd.end && cmd.end === text.length) found = cmd;
-    }
-    if (!found) return null;
+  /** The help of one command of the text; offset: caret position in the text (the current parameter), or null for none current. */
+  function describe(text, found, offset) {
     const entry = TABLE[found.name];
     const info = { id: found.id, known: Boolean(entry), title: entry ? entry.title : '', description: entry ? entry.description : '', params: [], extra: null };
     if (!entry) return info;
     const region = text.slice(found.start + found.id.length, found.end);
-    const caret = Math.max(0, offset - (found.start + found.id.length));
+    const caret = offset === null ? 0 : Math.max(0, offset - (found.start + found.id.length));
     const split = [];
     // The text of each parameter, to show the value next to its label
     if (found.name === 'A') {
@@ -177,11 +171,33 @@
       }
       split.push(part);
     }
-    const current = entry.params.length ? parameterIndex(region, caret, found.name) : -1;
+    const current = entry.params.length && offset !== null ? parameterIndex(region, caret, found.name) : -1;
     info.params = entry.params.map((param, i) => ({ ...param, value: (split[i] ?? '').trim(), current: i === current }));
     if (current >= entry.params.length) info.extra = split.slice(entry.params.length).join(',');
     return info;
   }
 
-  PB.zplHelp = Object.freeze({ at, TABLE });
+  /** What the caret is on in the ZPL text, or null when it is in no command. offset: caret position in the text. */
+  function at(text, offset) {
+    let found = null;
+    for (const cmd of PB.zpl.commands(text)) {
+      if (cmd.start <= offset && offset < cmd.end) { found = cmd; break; }
+      if (offset === cmd.end && cmd.end === text.length) found = cmd;
+    }
+    return found ? describe(text, found, offset) : null;
+  }
+
+  /**
+   * The help of every command that overlaps the span [start, end) of the text (an object selected in the preview: its ^FO, ^A, ^FD...), in order,
+   * with no current parameter; ^FS is left out (it has nothing to explain). Empty when the span touches no command.
+   */
+  function range(text, start, end) {
+    const out = [];
+    for (const cmd of PB.zpl.commands(text)) {
+      if (cmd.end > start && cmd.start < end && cmd.name !== 'FS') out.push(describe(text, cmd, null));
+    }
+    return out;
+  }
+
+  PB.zplHelp = Object.freeze({ at, range, TABLE });
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});
