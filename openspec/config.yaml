@@ -1,0 +1,48 @@
+schema: spec-driven
+project: PrintBridge
+persistence: hybrid   # openspec files + engram (project key: PrintBridge)
+
+context: |
+  Static, no-build vanilla JavaScript web app that draws label files (TPCL, TSPL, ZPL) without printing them, edits them,
+  converts between the three languages and sends them to a printer through a local Node agent.
+  Solution/workspace: index.html (scripts listed in js/manifest.json); no solution or workspace file.
+  Projects/modules:
+    index.html, css/viewer.css, css/label.css   (page structure and styles)
+    js/core/*.js, js/config.js                  (model, units, diagnostics, language registry, validator, sizes, variables, emit, convert)
+    js/languages/*.js                           (TPCL, TSPL, ZPL parsers/emitters, edit helpers, command help)
+    js/components/*                             (item slices: area, barcode, box, datamatrix, ellipse, image, line, qr, text)
+    js/*.js (app, ui, view, drawing, properties, palette, print-panel, convert-panel, render-export, collapse)  (UI layer)
+    js/lib/qrcode-generator.min.js              (vendored QR library)
+    agent/printbridge-agent.js                  (Node HTTP agent on 127.0.0.1:9631 -> Windows print spooler via PowerShell; no npm deps)
+    agent/install.ps1, agent/start.bat          (install / start scripts)
+    dotnet/PrintBridge.Sample                   (.NET 10 console sample client; git-ignored, not versioned)
+    tests/                                      (node:test suites, 123 files)
+    odd/tasks/                                  (feature logbooks of the implementation work)
+    docs/                                       (curated manual index docs/README.md and per-language guides tpcl/ tspl/ zpl/)
+  Conventions: plain scripts sharing a global PB namespace, loaded in manifest order; slice-per-component architecture; pure parse/emit functions; Conventional Commits.
+  Known findings: none of secrets detected; agent allowedOrigins/port come from agent/config.json (copy of agent/config.example.json, git-ignored).
+  Docs language: English. Code, identifiers and test names: English. On-screen UI text: Spanish.
+
+strict_tdd: true   # runnable test command exists
+
+testing:
+  runner:
+    command: node --test
+    framework: node:test (Node 22 or newer; run from the project root, not `node --test tests/`)
+  layers:
+    unit: tests/
+    integration: tests/ (agent HTTP protocol against a fake spooler; no real printer needed)
+    e2e: none
+  coverage:
+    available: false
+    tool: none detected
+    command: none
+  assertions: node:assert/strict
+  mocking: none (hand-written fakes, e.g. fake spooler, fake storage)
+  linter: none detected
+  formatter: none detected
+
+rules:
+  proposal: [no behavior change unless explicitly authorized]
+  tasks: [tests must not hit a real printer or the Windows spooler, UI text stays Spanish, docs and code in English]
+  apply: [RED test first, then implement, run `node --test`]
