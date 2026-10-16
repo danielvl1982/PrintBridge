@@ -1,36 +1,40 @@
-# Printer manuals (local only)
+﻿# PrintBridge documentation
 
-The vendor manuals are **not** in the repository: they are copyrighted and the repo is public.
-`.gitignore` excludes every `*.pdf` under `docs/`. Keep the PDFs here on your machine; only this README is versioned.
+Documentation derived from the current source at commit `0c84339704848a7231d697279b4805f6cc3d04ee`. Code citations use repository-relative paths and line numbers from that commit. Claims not established by the inspected code are identified in [open questions](preguntas-abiertas.md); the machine-readable state is in [.manifest.json](.manifest.json).
 
-## `tpcl/` (Toshiba TEC, TPCL)
+## How to use these docs
 
-| File | Printer / scope | Why it is here |
-|---|---|---|
-| `B-SV4_external-equipment-interface-spec_2004-08.pdf` | B-SV4 series (English, 1st ed. Aug 2004) | Main reference: the printer family we target. `{PC/PV/RV/XB/SG…\|}` formats. |
-| `B-452-R_462-R_software-specification_2012-11.pdf` | B-452-R / B-462-R (English, 3rd ed. Nov 2012) | Most recent edition of the same command set. |
-| `B-452-TS12_guia-de-programacion_es_2001-07.pdf` | B-452-TS12 (Spanish, Jul 2001) | Same commands in Spanish. |
-| `B-x72_guia-de-programacion_es_2001-09.pdf` | B-x72 (Spanish, Sep 2001) | Legacy `[ESC]` form (e.g. `[ESC]XB` for Code39/ITF) that the code also reads. |
+1. Find the affected entry point or output in the [feature catalog](features/README.md).
+2. Open the feature document and its **Where to act** section.
+3. Check its current-behavior specification under `openspec/specs/<slug>/spec.md`.
+4. Check [open questions](preguntas-abiertas.md) before changing behavior.
 
-## `tspl/` (TSC-style TSPL: TSC TTP, TEC B-442/443)
+## Index
 
-| File | Printer / scope | Why it is here |
-|---|---|---|
-| `B-442-443_interface-manual_tspl-command-set.pdf` | TEC B-442 / B-443 (English, 137 pages) | Despite the TEC name it documents the TSPL command set (`SIZE`, `GAP`, `DIRECTION`, `CLS`, `TEXT`, `BARCODE`, `BOX`, `BITMAP`, `PRINT`…). An older subset: no `QRCODE` or `SHIFT`. |
+| Document | Scope |
+|---|---|
+| [Architecture](arquitectura.md) | Browser modules, language and component registries, local agent, flows, security boundaries. |
+| [Configuration](configuracion.md) | Agent settings, browser preferences, defaults, and test overrides. |
+| [Data](datos.md) | Browser state, temporary print files, spooler interactions, and data contracts. |
+| [Local agent API](api.md) | Routes, validation, response bodies, and access checks. |
+| [Operations](operaciones.md) | Requirements, run and test commands, deployment and operational risks. |
+| [Open questions](preguntas-abiertas.md) | Unresolved inferences and inconsistencies. |
+| [Features](features/README.md) | Feature list and entry/output matrices. |
+| [TPCL references](referencia-tpcl/README.md) | Local vendor manuals; source material, not implementation authority. |
+| [TSPL references](referencia-tspl/README.md) | Local vendor manual; source material, not implementation authority. |
+| [ZPL references](referencia-zpl/README.md) | Local vendor manuals; source material, not implementation authority. |
 
-The code follows the *TSC TSPL/TSPL2 Programming Manual v3.0*; if you find it, save it as
-`tspl/TSC_TSPL-TSPL2_programming-manual_v3.0.pdf`.
+## Features
 
-## `zpl/` (Zebra ZPL II)
+| ID | Feature | Ticket | Document | Current-behavior spec |
+|---|---|---|---|---|
+| F1 | Edit and preview printer labels | None (internal development) | [Feature](features/edit-and-preview-label.md) | [Spec](../openspec/specs/edit-and-preview-label/spec.md) |
+| F2 | Convert TPCL, TSPL, and ZPL labels | None (internal development) | [Feature](features/convert-label-language.md) | [Spec](../openspec/specs/convert-label-language/spec.md) |
+| F3 | Print label-language bytes through the local agent | None (internal development) | [Feature](features/print-raw-label.md) | [Spec](../openspec/specs/print-raw-label/spec.md) |
+| F4 | Print the label drawing through the printer driver | None (internal development) | [Feature](features/print-label-image.md) | [Spec](../openspec/specs/print-label-image/spec.md) |
+| F5 | List and select an installed printer | None (internal development) | [Feature](features/select-printer.md) | [Spec](../openspec/specs/select-printer/spec.md) |
+| F6 | Run the interactive .NET sample printing client | None (internal development) | [Feature](features/dotnet-sample-print-client.md) | [Spec](../openspec/specs/dotnet-sample-print-client/spec.md) |
 
-| File | Printer / scope | Why it is here |
-|---|---|---|
-| `Zebra_ZPL-II_programming-guide-vol-1_2003.pdf` | Zebra ZPL II, Programming Guide Volume One (English, 428 pages, 2003) | Reference for the ZPL support: label setup (`^XA`, `^PW`, `^LL`, `^LH`), fields (`^FO`, `^FT`, `^FD`, `^FS`), text (`^A`, `^CF`, `^FW`, `^FH`), barcodes (`^B*`), graphics (`^GB`, `^GC`, `^GD`, `^GE`, `^GF`), reverse (`^FR`, `^LR`), counters (`^SN`) and variable fields (`^FN`). |
-| `Zebra_ZPL-II_programming-guide-vol-2_2005.pdf` | Zebra ZPL II, Programming Guide Volume Two (English, 132 pages, part 45542L-002 Rev. A, 2005) | What Volume One lacks: the **font matrices** per printhead (6 / 8 / 12 / 24 dots per mm, fonts A..H, GS, P..V and 0), the alternative compression for `~DG` / `~DB`, ZB64 (B64 / Z64) encoding and compression, and the bar code overview. |
+The F6 sample source is currently git-ignored and exists only in this local workspace; it is not part of a fresh clone (`.gitignore:30-31`). The `GET /health` endpoint is diagnostic and has no feature ID (`agent/printbridge-agent.js:481-484`).
 
-## Left out on purpose
-
-Owner's manuals (hardware), the older B-SV4D spec (superseded by the 2004 B-SV4 edition) and a duplicate of the B-452 guide.
-
-Several TPCL formats in the code come from the B-SX4T manual and are **not verified on a real printer** (see `README.md`):
-checking them against these manuals is the point of keeping them here.
+Vendor PDFs remain local-only and are ignored by Git. See the reference indexes for their scopes; do not infer their contents from filenames alone.

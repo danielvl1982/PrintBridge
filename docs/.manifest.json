@@ -1,0 +1,159 @@
+{
+    "framework_version":  "1.0",
+    "project":  "PrintBridge",
+    "docs_language":  "en",
+    "documented_commit":  "0c84339704848a7231d697279b4805f6cc3d04ee",
+    "updated_at":  "2026-10-16",
+    "state":  {
+                  "mode":  "baseline",
+                  "codegraph":  "available",
+                  "sdd":  {
+                              "openspec_config":  "openspec/config.yaml",
+                              "odd_logbooks":  [
+                                                   "odd/tasks/docs-baseline.md"
+                                               ],
+                              "other_sdd":  null
+                          },
+                  "gaps":  [
+
+                           ],
+                  "stale":  [
+
+                            ]
+              },
+    "sections":  {
+                     "arquitectura":  {
+                                          "path":  "docs/arquitectura.md",
+                                          "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                                      },
+                     "configuracion":  {
+                                           "path":  "docs/configuracion.md",
+                                           "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                                       },
+                     "datos":  {
+                                   "path":  "docs/datos.md",
+                                   "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                               },
+                     "api":  {
+                                 "path":  "docs/api.md",
+                                 "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                             },
+                     "operaciones":  {
+                                         "path":  "docs/operaciones.md",
+                                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                                     },
+                     "preguntas-abiertas":  {
+                                                "path":  "docs/preguntas-abiertas.md",
+                                                "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                                            }
+                 },
+    "references":  [
+                       "docs/referencia-tpcl/README.md",
+                       "docs/referencia-tspl/README.md",
+                       "docs/referencia-zpl/README.md"
+                   ],
+    "features":  [
+                     {
+                         "id":  "F1",
+                         "slug":  "edit-and-preview-label",
+                         "title":  "Edit and preview printer labels in the browser",
+                         "tickets":  [
+
+                                     ],
+                         "doc":  "docs/features/edit-and-preview-label.md",
+                         "spec":  "openspec/specs/edit-and-preview-label/spec.md",
+                         "entry_points":  [
+                                              "index.html:1",
+                                              "js/ui.js:293",
+                                              "js/ui.js:302",
+                                              "js/ui.js:310",
+                                              "js/ui.js:54",
+                                              "js/ui.js:207",
+                                              "js/palette.js:42",
+                                              "js/ui.js:391",
+                                              "js/properties.js:108",
+                                              "js/ui.js:88",
+                                              "js/components/image/panel.js:23",
+                                              "js/app.js:592",
+                                              "js/ui.js:298"
+                                          ],
+                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                     },
+                     {
+                         "id":  "F2",
+                         "slug":  "convert-label-language",
+                         "title":  "Convert labels between TPCL, TSPL, and ZPL",
+                         "tickets":  [
+
+                                     ],
+                         "doc":  "docs/features/convert-label-language.md",
+                         "spec":  "openspec/specs/convert-label-language/spec.md",
+                         "entry_points":  [
+                                              "js/convert-panel.js:123",
+                                              "js/convert-panel.js:124",
+                                              "js/convert-panel.js:125"
+                                          ],
+                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                     },
+                     {
+                         "id":  "F3",
+                         "slug":  "print-raw-label",
+                         "title":  "Print label-language bytes through the local printer agent",
+                         "tickets":  [
+
+                                     ],
+                         "doc":  "docs/features/print-raw-label.md",
+                         "spec":  "openspec/specs/print-raw-label/spec.md",
+                         "entry_points":  [
+                                              "js/print-panel.js:419",
+                                              "agent/printbridge-agent.js:495"
+                                          ],
+                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                     },
+                     {
+                         "id":  "F4",
+                         "slug":  "print-label-image",
+                         "title":  "Print the label drawing through the printer driver",
+                         "tickets":  [
+
+                                     ],
+                         "doc":  "docs/features/print-label-image.md",
+                         "spec":  "openspec/specs/print-label-image/spec.md",
+                         "entry_points":  [
+                                              "js/print-panel.js:419",
+                                              "agent/printbridge-agent.js:500"
+                                          ],
+                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                     },
+                     {
+                         "id":  "F5",
+                         "slug":  "select-printer",
+                         "title":  "List and select an installed printer",
+                         "tickets":  [
+
+                                     ],
+                         "doc":  "docs/features/select-printer.md",
+                         "spec":  "openspec/specs/select-printer/spec.md",
+                         "entry_points":  [
+                                              "js/print-panel.js:264",
+                                              "js/print-panel.js:413",
+                                              "agent/printbridge-agent.js:486"
+                                          ],
+                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                     },
+                     {
+                         "id":  "F6",
+                         "slug":  "dotnet-sample-print-client",
+                         "title":  "Run the interactive .NET sample printing client",
+                         "tickets":  [
+
+                                     ],
+                         "doc":  "docs/features/dotnet-sample-print-client.md",
+                         "spec":  "openspec/specs/dotnet-sample-print-client/spec.md",
+                         "entry_points":  [
+                                              "dotnet/PrintBridge.Sample/Program.cs:4"
+                                          ],
+                         "commit":  "0c84339704848a7231d697279b4805f6cc3d04ee"
+                     }
+                 ]
+}
