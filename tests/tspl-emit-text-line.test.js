@@ -20,7 +20,7 @@ const model = (items = [], size = {}) => ({
   diagnostics: [],
 });
 // Body lines of an emitted label: without the header (SIZE, DIRECTION, CLS) and the PRINT line
-const body = (items, dpi) => lines(model(items), dpi).filter(l => !/^(SIZE|GAP|DIRECTION|CLS|PRINT)\b/.test(l) && l !== '');
+const body = (items, dpi) => lines(model(items), dpi).filter(l => !/^(SIZE|GAP|DIRECTION|CLS|PRINT|END)\b/.test(l) && l !== '');
 const levels = (diagnostics, ...wanted) => diagnostics.filter(d => wanted.includes(d.level));
 
 /** Mono font drawn by the bitmap font with cell (cellW x cellH) and multipliers, at 203 dpi unless told otherwise. */
@@ -48,7 +48,7 @@ test('the tspl language registers an emit hook', () => {
 
 test('header: SIZE with one decimal, GAP, DIRECTION and CLS, then PRINT, joined with CRLF', () => {
   const out = emit(model([], { width: 991, height: 600, gap: 30 }));
-  assert.equal(out.text, 'SIZE 99.1 mm,60 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nPRINT 1,1\r\n');
+  assert.equal(out.text, 'SIZE 99.1 mm,60 mm\r\nGAP 3 mm,0 mm\r\nDIRECTION 1\r\nCLS\r\nPRINT 1,1\r\nEND\r\n');
   assert.deepEqual(levels(out.diagnostics, 'error', 'warning'), []);
 });
 
@@ -246,7 +246,7 @@ test('PB.languages.emit returns { text, diagnostics }', () => {
   const out = PB.languages.emit('tspl', model([text()]), { dpi: 203 });
   assert.equal(typeof out.text, 'string');
   assert.ok(Array.isArray(out.diagnostics));
-  assert.ok(out.text.startsWith('SIZE ') && out.text.endsWith('PRINT 1,1\r\n'));
+  assert.ok(out.text.startsWith('SIZE ') && out.text.endsWith('PRINT 1,1\r\nEND\r\n'));
 });
 
 for (const dpi of [203, 300]) {

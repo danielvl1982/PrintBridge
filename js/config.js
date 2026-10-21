@@ -69,7 +69,8 @@ GAP 3 mm,0 mm
 DIRECTION 1
 REFERENCE 0,0
 CLS
-PRINT 1,1`,
+PRINT 1,1
+END`,
     },
     {
       id: 'blank-zpl',
@@ -135,7 +136,8 @@ TEXT 40,175,"3",0,1,1,"Cant: #CANTIDAD#"
 BAR 20,215,760,3
 BARCODE 40,240,"128",120,1,0,2,2,"#CODIGO#"
 QRCODE 580,250,L,6,A,0,"https://example.com/#CODIGO#"
-PRINT 1,1`,
+PRINT 1,1
+END`,
     },
     {
       id: 'template-zpl',
@@ -204,7 +206,8 @@ TEXT 40,80,"3",0,1,1,"SSCC (00)"
 BARCODE 40,115,"EAN128",100,1,0,2,2,"00000422730000001131"
 TEXT 40,255,"3",0,1,1,"GTIN (02), cantidad (37), lote (10)"
 BARCODE 40,290,"128M",100,1,0,2,2,"!10202095011015300033724!10210L2026-0412"
-PRINT 1,1`,
+PRINT 1,1
+END`,
     },
     {
       id: 'template-gs1-zpl',
@@ -225,6 +228,55 @@ PRINT 1,1`,
 ^BY2
 ^FO40,290^BCN,100,Y,N,N^FD>802095011015300033724>810L2026-0412^FS
 ^XZ`,
+    },
+    {
+      id: 'template-tspl-right-0',
+      group: 'template',
+      name: 'Alineacion derecha - TSPL (0 grados)',
+      language: 'tspl',
+      values: { GRUESO: '18.5', ANCHO: '1250', LARGO: '2400' },
+      source: `SIZE 100 mm,60 mm
+GAP 3 mm,0 mm
+DIRECTION 1
+CLS
+R=700
+W=16
+G$="<#GRUESO#>"
+A$="<#ANCHO#>"
+L$="<#LARGO#>"
+TEXT 40,40,"0",0,12,12,"Valores alineados a la derecha"
+TEXT 40,130,"0",0,12,12,"Grueso:"
+TEXT R-LEN(G$)*W,130,"0",0,12,12,G$
+TEXT 40,230,"0",0,12,12,"Ancho:"
+TEXT R-LEN(A$)*W,230,"0",0,12,12,A$
+TEXT 40,330,"0",0,12,12,"Largo:"
+TEXT R-LEN(L$)*W,330,"0",0,12,12,L$
+PRINT 1,1
+END`,
+    },
+    {
+      id: 'template-tspl-right-90',
+      group: 'template',
+      name: 'Alineacion derecha - TSPL (90 grados)',
+      language: 'tspl',
+      values: { GRUESO: '18.5', ANCHO: '1250', LARGO: '2400' },
+      source: `SIZE 100 mm,60 mm
+GAP 3 mm,0 mm
+DIRECTION 1
+CLS
+R=380
+W=16
+G$="<#GRUESO#>"
+A$="<#ANCHO#>"
+L$="<#LARGO#>"
+TEXT 700,80,"0",90,12,12,"Grueso:"
+TEXT 700,R-LEN(G$)*W,"0",90,12,12,G$
+TEXT 570,80,"0",90,12,12,"Ancho:"
+TEXT 570,R-LEN(A$)*W,"0",90,12,12,A$
+TEXT 440,80,"0",90,12,12,"Largo:"
+TEXT 440,R-LEN(L$)*W,"0",90,12,12,L$
+PRINT 1,1
+END`,
     },
   ]);
 })(globalThis.PrintBridge = globalThis.PrintBridge || {});

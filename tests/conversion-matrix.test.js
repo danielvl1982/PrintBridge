@@ -557,6 +557,7 @@ const RULES = [
   // The templates (same label in three languages): the title and lines change font family when the language has no equivalent
   [/^example-template-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],
   [/^example-template-tspl$/, [S2T, S2Z], deg(['font'], FONTS)],
+  [/^example-template-tspl-right-(0|90)$/, [S2Z], deg(['font'], FONTS)],
   [/^example-template-zpl$/, [Z2S], deg(['font'], FONTS, ['font.width'])],
   // The GS1-128 samples: same font substitutions as the basic templates; the barcodes convert exactly (Code 128 with FNC1 in all three)
   [/^example-template-gs1-tpcl$/, [T2S, T2Z], deg(['font'], FONTS)],

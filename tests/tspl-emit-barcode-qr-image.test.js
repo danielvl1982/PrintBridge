@@ -17,7 +17,7 @@ const model = (items = [], size = {}) => ({
 });
 // Body lines of an emitted label (header and PRINT removed). Not for BITMAP: its payload may contain CR/LF.
 const body = (items, dpi) => emit(model(items), dpi).text.split('\r\n')
-  .filter(l => !/^(SIZE|GAP|DIRECTION|CLS|PRINT)\b/.test(l) && l !== '');
+  .filter(l => !/^(SIZE|GAP|DIRECTION|CLS|PRINT|END)\b/.test(l) && l !== '');
 const levels = (diagnostics, ...wanted) => diagnostics.filter(d => wanted.includes(d.level));
 
 const barcode = (props = {}) => ({
@@ -208,7 +208,7 @@ test('image becomes BITMAP x,y,widthBytes,height,0, the payload (chars 0..255) a
   const at = out.indexOf(header);
   assert.ok(at >= 0);
   assert.equal(out.slice(at, at + header.length + 4 + 2), header + payloadChars([0x7F, 0xBF, 0xFF, 0xFF]) + '\r\n');
-  assert.ok(out.endsWith('PRINT 1,1\r\n'));
+  assert.ok(out.endsWith('PRINT 1,1\r\nEND\r\n'));
 });
 
 test('image coordinates become dots at the resolution', () => {

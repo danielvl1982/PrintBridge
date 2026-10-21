@@ -24,6 +24,7 @@ The browser editor lets a user load or edit printer-language label text, inspect
 
 - Label text entered, pasted, or read from a file; the app detects the printer language when one is not supplied (`js/ui.js:288-315`, `js/app.js:136-150`).
 - Example source and its language (`js/app.js:580-585`).
+- Example test values come from each entry's `values` in `js/config.js`; selecting an example copies them into the Variables panel. The TSPL 0° and 90° right-alignment examples use illustrative numbers, not data retrieved from a printer.
 - User-entered test values for label variables; each input updates the shared values and requests a refresh (`js/ui.js:72-89`, `js/app.js:159-174`).
 - Label size and format selections; accepted edits are passed to the app as a resolved size (`js/ui.js:189-215`).
 - Palette component selection/drop coordinates and current DPI (`js/palette.js:28-50`, `js/app.js:333-360`).

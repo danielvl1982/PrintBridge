@@ -694,7 +694,7 @@
   }
 
   /**
-   * Neutral model -> { text, diagnostics }: header, the items (slices' emit hooks), then PRINT 1,1. Lines are joined
+   * Neutral model -> { text, diagnostics }: header, the items (slices' emit hooks), then PRINT 1,1 and END. Lines are joined
    * with CRLF (the line ending TSPL printers expect) and the text ends with one, so the last command is executed.
    */
   function emit(model, { dpi = PB.config.resolutions[0] } = {}) {
@@ -702,7 +702,17 @@
     const header = headerLines(model, ctx);
     maskNote(model, ctx);
     const { lines } = PB.emit.run(model, COMPOSED, ctx);
-    return { text: [...header, ...lines, 'PRINT 1,1', ''].join('\r\n'), diagnostics: ctx.diagnostics };
+    return { text: [...header, ...lines, 'PRINT 1,1', 'END', ''].join('\r\n'), diagnostics: ctx.diagnostics };
+  }
+
+  /** Finish a direct RAW label whose last command is PRINT; keep existing END and downloaded programs unchanged. */
+  function prepareForPrint(source) {
+    const text = String(source);
+    let last;
+    for (const cmd of commands(text)) last = cmd;
+    if (!last || last.name !== 'PRINT') return text;
+    const eol = text.includes('\r\n') ? '\r\n' : text.includes('\n') ? '\n' : '\r\n';
+    return `${text}${/[\r\n]$/.test(text) ? '' : eol}END${eol}`;
   }
 
   // ---------------------------------------------------------------------------------------------------------------
@@ -811,7 +821,7 @@
 
   // latin1: a BITMAP payload is raw bytes (one char per byte), so the file must be written byte for byte (PB.convert.toBytes)
   PB.languages.register({ id: 'tspl', name: 'TSPL (TSC TTP)', detect, parse, emit, fileEncoding: 'latin1', fileExtension: 'prn', sizeCommands, applySize, fitSize, sizeLimits: { gap: [...GAP_LIMITS] },
-    insertCommand, insertImage: true, imageCommand, imageSizeProblem, moveItem: EDITING.moveItem, describeItem, updateItem,
+    insertCommand, insertImage: true, imageCommand, imageSizeProblem, prepareForPrint, moveItem: EDITING.moveItem, describeItem, updateItem,
     componentTemplates: () => COMPONENTS.map(c => ({ ...c })), buildComponent,
     // The command help loads after this file (js/languages/tspl-help.js), so it is reached when called
     helpAt: (text, offset) => PB.tsplHelp.at(text, offset), helpRange: (text, start, end) => PB.tsplHelp.range(text, start, end) });

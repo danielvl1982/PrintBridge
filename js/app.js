@@ -439,7 +439,8 @@
     const text = variables.substitute(source, variables.assigned(state.values));
     const language = PB.languages.detect(text);
     if (!language) throw new Error('No se reconoce el lenguaje de impresión de la etiqueta');
-    return PB.convert.toBytes(text, language.id);
+    const prepared = language.prepareForPrint ? language.prepareForPrint(text) : text;
+    return PB.convert.toBytes(prepared, language.id);
   }
 
   /** The label the viewer draws for the Driver (imagen) print: its live <svg> and its size in mm (the viewer's units are 0.1 mm); throws a Spanish Error when there is none. */

@@ -13,6 +13,22 @@ const byGroup = group => PB.examples.filter(e => e.group === group);
 const basicTemplates = () => byGroup('template').filter(e => /^template-(tpcl|tspl|zpl)$/.test(e.id));
 const near100x60 = size => Math.abs(size.width - 1000) <= 2 && Math.abs(size.height - 600) <= 2;
 
+test('TSPL examples finish with END and right-aligned values move left as they grow', () => {
+  for (const e of shippedExamples().filter(example => example.language === 'tspl')) assert.match(e.source, /PRINT 1,1\s+END$/, e.id);
+  for (const rotation of [0, 90]) {
+    const example = PB.examples.find(e => e.id === `template-tspl-right-${rotation}`);
+    assert.ok(example);
+    const source = example.source;
+    for (const name of ['GRUESO', 'ANCHO', 'LARGO']) assert.ok(example.values[name], name);
+    const first = PB.languages.get('tspl').parse(source, { dpi: DPI, values: { ...example.values, GRUESO: '12' } });
+    const longer = PB.languages.get('tspl').parse(source, { dpi: DPI, values: { ...example.values, GRUESO: '123456' } });
+    const value = model => model.items.find(item => item.kind === 'text' && item.data === '<#GRUESO#>');
+    assert.ok(value(first), example.id);
+    assert.ok(value(longer), example.id);
+    assert.equal(rotation === 0 ? value(longer).raw.x < value(first).raw.x : value(longer).raw.y < value(first).raw.y, true, example.id);
+  }
+});
+
 test('every example is detected as its language and parses with no error or warning', () => {
   for (const e of PB.examples) {
     assert.equal(PB.languages.detect(e.source).id, e.language, e.id);
@@ -20,22 +36,22 @@ test('every example is detected as its language and parses with no error or warn
   }
 });
 
-test('the app ships three blank templates, three templates and three GS1-128 templates, and no complete example', () => {
+test('the app ships blank, basic, GS1-128 and right-aligned templates, and no complete example', () => {
   const shipped = [...shippedExamples()]; // spread: the array comes from another vm context
-  assert.deepEqual(shipped.map(e => e.group), ['blank', 'blank', 'blank', 'template', 'template', 'template', 'template', 'template', 'template']);
-  assert.deepEqual(shipped.map(e => e.id), LANGUAGES.map(l => 'blank-' + l).concat(LANGUAGES.map(l => 'template-' + l), LANGUAGES.map(l => 'template-gs1-' + l)));
+  assert.deepEqual(shipped.map(e => e.group), ['blank', 'blank', 'blank', ...Array(8).fill('template')]);
+  assert.deepEqual(shipped.map(e => e.id), LANGUAGES.map(l => 'blank-' + l).concat(LANGUAGES.map(l => 'template-' + l), LANGUAGES.map(l => 'template-gs1-' + l), ['template-tspl-right-0', 'template-tspl-right-90']));
   assert.equal(shipped.some(e => e.group === 'full'), false);
   assert.equal(new Set(shipped.map(e => e.id)).size, shipped.length);
 });
 
 test('the test fixture appends the four complete examples after the shipped ones, with unique ids', () => {
-  assert.deepEqual(PB.examples.slice(9).map(e => e.id), ['spool-99x55', 'barcodes-code39-itf-code128', 'tspl-label-100x60', 'zpl-label-100x60']);
+  assert.deepEqual(PB.examples.slice(shippedExamples().length).map(e => e.id), ['spool-99x55', 'barcodes-code39-itf-code128', 'tspl-label-100x60', 'zpl-label-100x60']);
   assert.equal(new Set(PB.examples.map(e => e.id)).size, PB.examples.length);
 });
 
 test('there is one blank template and one template per language, with the agreed names', () => {
   assert.deepEqual(byGroup('blank').map(e => e.language), LANGUAGES);
-  assert.deepEqual(byGroup('template').map(e => e.language), LANGUAGES.concat(LANGUAGES));
+  assert.deepEqual(byGroup('template').map(e => e.language), LANGUAGES.concat(LANGUAGES, ['tspl', 'tspl']));
   assert.deepEqual(byGroup('blank').map(e => e.name), ['En blanco — TPCL (TEC)', 'En blanco — TSPL (TSC)', 'En blanco — ZPL (Zebra)']);
   assert.deepEqual(basicTemplates().map(e => e.name), ['Plantilla — TPCL (TEC)', 'Plantilla — TSPL (TSC)', 'Plantilla — ZPL (Zebra)']);
 });

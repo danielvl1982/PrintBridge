@@ -13,7 +13,7 @@ The browser sends the current label-language bytes to the local PrintBridge agen
 
 ## Inputs (payload/config)
 
-- Current label bytes returned by the editor's `getBytes` callback; the panel sends these bytes unchanged as the request body with `Content-Type: application/octet-stream` (`js/print-panel.js:329-338`).
+- Current label bytes returned by the editor's `getBytes` callback; the panel sends these bytes unchanged as the request body with `Content-Type: application/octet-stream` (`js/print-panel.js:329-338`). For TSPL source ending in `PRINT`, the callback adds `END` to the sent bytes when absent without changing the editor (`js/app.js`, `js/languages/tspl.js`).
 - Selected printer name and copy count; the panel requires a printer and an integer count from 1 through 99 (`js/print-panel.js:324-328`, `js/print-panel.js:36`). Printer selection is feature [F5](select-printer.md).
 - Agent `maxBytes` configuration bounds the request body; the repeated job is also capped at 100 MiB (`agent/printbridge-agent.js:36-37`, `agent/printbridge-agent.js:71-74`, `agent/printbridge-agent.js:515-522`).
 
@@ -36,7 +36,7 @@ The browser sends the current label-language bytes to the local PrintBridge agen
 
 ## Business rules
 
-- RAW mode sends the editor's bytes as received; it does not render a PNG or convert printer languages (`js/print-panel.js:324-345`).
+- RAW mode does not render a PNG or convert printer languages. The browser adds a final `END` only for TSPL labels whose last command is `PRINT`; existing `END` and BASIC programs ending in `EOP` are preserved (`js/app.js`, `js/languages/tspl.js`). The panel and agent then pass the prepared bytes through unchanged (`js/print-panel.js:324-345`).
 - Copies must be an integer from 1 through 99, and the repeated job may not exceed 100 MiB (`js/print-panel.js:303-306`, `js/print-panel.js:327-328`, `agent/printbridge-agent.js:35-37`, `agent/printbridge-agent.js:511-522`).
 - A printer match is exact first, then case-insensitive; no match returns `printer_not_found` (`agent/printbridge-agent.js:530-532`).
 - The agent accepts printing only from a local Host and an allowed Origin when Origin is present (`agent/printbridge-agent.js:459-465`, `agent/printbridge-agent.js:128-133`).

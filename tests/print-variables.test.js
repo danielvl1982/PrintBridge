@@ -22,5 +22,6 @@ test('printing replaces the variables that have a value and sends the others as 
 test('js/app.js builds the printed bytes from the editor text with the assigned values', () => {
   const app = fs.readFileSync(path.join(__dirname, '..', 'js', 'app.js'), 'utf8');
   assert.match(app, /variables\.substitute\(source, variables\.assigned\(state\.values\)\)/);
-  assert.match(app, /PB\.convert\.toBytes\(text, language\.id\)/);
+  assert.match(app, /language\.prepareForPrint/);
+  assert.match(app, /PB\.convert\.toBytes\(prepared, language\.id\)/);
 });
