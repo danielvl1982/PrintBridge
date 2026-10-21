@@ -453,6 +453,12 @@
         fields: [
           kindField,
           ...(block ? [widthField, linesField, heightField, alignField] : []),
+          ...(!block ? [0, 1].map((arg, axis) => ({
+            key: axis ? 'positionY' : 'positionX', label: axis ? 'Y (TSPL)' : 'X (TSPL)', type: 'text', arg,
+            model: item => String(item.raw[axis ? 'y' : 'x']),
+            read: a => a.raw,
+            write: value => typeof value === 'string' && value.trim() && !/[\r\n,]/.test(value) ? value.trim() : null,
+          })) : []),
           selectField('rotation', 'Rotación', 3 + shift, [0, 90, 180, 270], item => item.rotation),
           numberField('xmul', bitmap ? 'Multiplicador X' : 'Tamaño X (pt)', 4 + shift, 1, max, item => item.native && item.native.xmul),
           numberField('ymul', bitmap ? 'Multiplicador Y' : 'Tamaño Y (pt)', 5 + shift, 1, max, item => item.native && item.native.ymul),
@@ -466,8 +472,11 @@
       };
     };
 
-    const point = (cmd, i) => ({ x: num(cmd.args[i]), y: num(cmd.args[i + 1]) });
-    const validPoint = p => p.x !== null && p.y !== null;
+    const point = (cmd, i, ctx) => ({
+      x: num(cmd.args[i]) ?? (ctx ? ctx.expression(cmd.args[i] && cmd.args[i].raw) : null),
+      y: num(cmd.args[i + 1]) ?? (ctx ? ctx.expression(cmd.args[i + 1] && cmd.args[i + 1].raw) : null),
+    });
+    const validPoint = p => typeof p.x === 'number' && Number.isFinite(p.x) && typeof p.y === 'number' && Number.isFinite(p.y);
 
     return {
       // emit(item, ctx) -> the TEXT command of a text item
@@ -484,7 +493,7 @@
           pattern: /^TEXT\b/i,
           handle(m, cmd, ctx) {
             if (cmd.args.length < 7) { ctx.report(diag.warning(`TEXT incompleto: ${cmd.raw.slice(0, 40)}`)); return; }
-            const p = point(cmd, 0);
+            const p = point(cmd, 0, ctx);
             if (!validPoint(p)) { ctx.report(diag.warning(`TEXT con coordenadas no válidas: ${cmd.raw.slice(0, 40)}`)); return; }
             const hasAlign = cmd.args.length >= 8;
             if (hasAlign) noteAlignment(ctx, 'TEXT', num(cmd.args[6]));
@@ -492,7 +501,8 @@
             checkCounterRefs(ctx, 'TEXT', content);
             // A counter with an assigned start value shows it (the printer increments it per label); else the literal text
             const shown = ctx.counterContent(content);
-            const item = textItem(ctx, 'TEXT', cmd, p, cmd.args.slice(2, 6), shown ? shown.data : contentOf(ctx, 'TEXT', content));
+            const assigned = ctx.variables.get(content.raw);
+            const item = textItem(ctx, 'TEXT', cmd, p, cmd.args.slice(2, 6), shown ? shown.data : typeof assigned === 'string' ? assigned : contentOf(ctx, 'TEXT', content));
             if (shown) {
               item.native.counterN = shown.n;
               if (shown.counter) item.counter = shown.counter;

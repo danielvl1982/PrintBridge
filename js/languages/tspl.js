@@ -151,6 +151,31 @@
   /** Whole number of an argument (null if it is not one). */
   const int = arg => { const v = num(arg); return v !== null && Number.isInteger(v) ? v : null; };
 
+  /** Small, bounded subset of TSPL BASIC arithmetic used by TEXT coordinates. Never evaluates JavaScript. */
+  function expression(source, variables, values) {
+    const tokens = String(source).match(/\s*(?:\d+(?:\.\d*)?|\.\d+|[A-Za-z_][\w]*\$?|"(?:\\.|[^"])*"|[()+\-*/])\s*/g);
+    if (!tokens || tokens.join('').replace(/\s/g, '') !== String(source).replace(/\s/g, '')) return null;
+    const parts = tokens.map(t => t.trim());
+    let at = 0;
+    const primary = () => {
+      const token = parts[at++];
+      if (token === '(') { const value = sum(); if (parts[at++] !== ')') throw Error(); return value; }
+      if (token === '+' || token === '-') { const value = primary(); return token === '-' ? -value : +value; }
+      if (token && /^\d|^\.\d/.test(token)) return Number(token);
+      if (token && /^"/.test(token)) return unquote(token);
+      if (token && token.toUpperCase() === 'LEN' && parts[at++] === '(') {
+        const value = sum();
+        if (parts[at++] !== ')') throw Error();
+        return String(PB.variables.substitute(String(value), values)).length;
+      }
+      if (variables.has(token)) return variables.get(token);
+      throw Error();
+    };
+    const product = () => { let value = primary(); while (parts[at] === '*' || parts[at] === '/') { const op = parts[at++]; const right = primary(); value = op === '*' ? value * right : value / right; } return value; };
+    const sum = () => { let value = product(); while (parts[at] === '+' || parts[at] === '-') { const op = parts[at++]; const right = product(); value = op === '+' ? value + right : value - right; } return value; };
+    try { const result = sum(); return at === parts.length && (typeof result === 'string' || Number.isFinite(result)) ? result : null; } catch { return null; }
+  }
+
   /**
    * Length written the SIZE/GAP way -> 0.1 mm: inches by default, "100 mm", "800 dot" (space before the unit).
    * null if it is not a length.
@@ -478,7 +503,7 @@
   // Parse driver
 
   /** Context of a parse: the model under construction and the coordinate conversion. */
-  function createContext(model, dpi) {
+  function createContext(model, dpi, values = {}) {
     return {
       model,
       dot: units.dotSize(dpi),
@@ -490,6 +515,9 @@
       /** Declared counters (SET COUNTER) and assigned start values (@n="..."), by number, as the commands appear. */
       counters: new Map(),
       values: new Map(),
+      variables: new Map(),
+      testValues: PB.variables.assigned(values),
+      expression(text) { return expression(text, this.variables, this.testValues); },
       report: d => model.diagnostics.push(d),
       /**
        * A content argument that is exactly "@n" with n assigned a start value: { n, data (the start value), counter? } where
@@ -519,15 +547,24 @@
   }
 
   /** Parses and returns { model, ctx } (the ctx as left by the last command). */
-  function run(src, { dpi = PB.config.resolutions[0] } = {}) {
+  function run(src, { dpi = PB.config.resolutions[0], values = {} } = {}) {
     const model = {
       language: 'tspl',
       size: { width: null, height: null, pitch: null, gap: null, native: { sizeRaw: null, gapRaw: null, blineRaw: null, direction: null, mirror: null } },
       items: [],
       diagnostics: [],
     };
-    const ctx = createContext(model, dpi);
+    const ctx = createContext(model, dpi, values);
     for (const cmd of commands(src)) {
+      const assignment = /^([A-Za-z_][\w]*\$?)\s*=\s*(.+)$/.exec(cmd.raw);
+      if (assignment) {
+        const value = ctx.expression(assignment[2]);
+        if (value !== null && (assignment[1].endsWith('$') ? typeof value === 'string' : typeof value === 'number')) {
+          ctx.variables.set(assignment[1], value);
+          if (typeof value === 'string') model.variableNames = [...new Set([...(model.variableNames || []), ...PB.variables.namesIn(value)])];
+        } else ctx.report(diag.warning(`Asignación TSPL no válida: ${cmd.raw.slice(0, 40)}`));
+        continue;
+      }
       const handler = ALL_HANDLERS.find(h => h.pattern.test(cmd.raw));
       if (handler) handler.handle(cmd.raw.match(handler.pattern), cmd, ctx);
       else ctx.report(diag.warning(`Comando no soportado por el visor: ${cmd.raw.slice(0, 40)}`));
@@ -574,6 +611,10 @@
   }
 
   function updateItem(text, item, changes, opts) {
+    if (changes && (Object.hasOwn(changes, 'positionX') || Object.hasOwn(changes, 'positionY'))) {
+      const candidate = EDITING.updateItem(text, item, changes, opts);
+      return run(candidate, opts).model.items.length < run(text, opts).model.items.length ? text : candidate;
+    }
     if (!isCounterItem(item) || !changes || !Object.hasOwn(changes, 'counter')) return EDITING.updateItem(text, item, changes, opts);
     const rest = { ...changes };
     delete rest.counter;

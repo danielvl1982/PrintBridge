@@ -13,6 +13,36 @@ const one = (src, opts) => {
 };
 const DOT = 254 / 203;
 
+test('TEXT evaluates assigned LEN coordinates at 90 degrees using test values', () => {
+  const src = 'R=1200\nW=17\nG$="<#GRUESO#>"\nTEXT 800,R-LEN(G$)*W,"0",90,12,12,G$';
+  const item = one(src, { values: { GRUESO: '12345' } });
+  near(item.raw.y, 1115);
+  near(item.y, 1115 * DOT);
+  assert.equal(item.data, '<#GRUESO#>');
+  assert.deepEqual(PB.variables.namesInModel(parse(src)), ['GRUESO']);
+  near(one(src, { values: { GRUESO: '12' } }).raw.y, 1166);
+});
+
+test('TEXT formula fields remain editable without flattening the expression', () => {
+  const src = 'R=1200\nW=17\nG$="<#GRUESO#>"\nTEXT 800,R-LEN(G$)*W,"0",90,12,12,G$';
+  const item = one(src);
+  const fields = tspl.describeItem(item, src).fields;
+  assert.equal(fields.find(f => f.key === 'positionY').value, 'R-LEN(G$)*W');
+  assert.equal(tspl.updateItem(src, item, { positionY: 'R-LEN(G$)*20' }).split('\n')[3], 'TEXT 800,R-LEN(G$)*20,"0",90,12,12,G$');
+  const moved = tspl.moveItem(src, item, 0, 10 * DOT, { dpi: 203 });
+  assert.equal(moved.split('\n')[3], 'TEXT 800,(R-LEN(G$)*W)+10,"0",90,12,12,G$');
+  near(one(moved, { values: { GRUESO: '12345' } }).raw.y, 1125);
+  assert.equal(tspl.updateItem(src, item, { positionY: 'UNKNOWN' }), src);
+});
+
+test('TEXT expressions reject unknown names and executable syntax without evaluating them', () => {
+  for (const coordinate of ['UNKNOWN', 'R.constructor', 'LEN(G$);PRINT 1']) {
+    const model = parse(`R=1200\nTEXT 800,${coordinate},"0",90,12,12,"x"`);
+    assert.equal(model.items.length, 0);
+    assert.match(model.diagnostics.at(-1).text, /coordenadas no válidas/);
+  }
+});
+
 test('text registers a TSPL hook factory next to the TPCL one', () => {
   assert.equal(typeof PB.components.get('text').languages.tspl, 'function');
   assert.equal(typeof PB.components.get('text').languages.tpcl, 'function');

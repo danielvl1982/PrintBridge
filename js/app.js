@@ -144,7 +144,7 @@
         diagnostics: text.trim() ? [diag.error('No se reconoce el lenguaje de la etiqueta')] : [],
       };
     }
-    const parsed = detected.parse(text, { dpi: Number($('dpi').value) });
+    const parsed = detected.parse(text, { dpi: Number($('dpi').value), values: state.values });
     // The overlay image joins the items after parsing and before validation, drawing and layout analysis
     const model = withImage(parsed);
     return { language: detected, model, area: sizes.view(model), diagnostics: [...model.diagnostics, ...validator.validate(model, detected)] };

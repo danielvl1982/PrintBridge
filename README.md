@@ -132,6 +132,12 @@ Overlays a picture on the preview to check where it would go. Until you insert i
   type a test value. This shows how it looks with long or short data. The values can also be typed in Propiedades
   for the selected object ("Valores de prueba (solo vista previa)", with a note when the variable is used by more
   than one object); both places share the same values and neither changes the label code.
+- **TSPL calculated text positions:** numeric and string assignments before `TEXT` may be used in its X/Y arguments.
+  For example, `R=1200`, `W=17`, `G$="<#GRUESO#>"` and `TEXT 800,R-LEN(G$)*W,"0",90,12,12,G$`
+  place a 90-degree text by its approximate character width. The preview recalculates `LEN` when a test value changes;
+  the original expression remains in the label. Select the text to edit its **X (TSPL)** or **Y (TSPL)** expression
+  in Properties. Dragging adds an offset to the formula rather than replacing it. Supported calculations are
+  parentheses, `+`, `-`, `*`, `/`, variables and `LEN(...)`; this is a character-count estimate, not glyph measurement.
 - **Avisos:**
   - <span style="color:#c4320a">Red</span>: errors (overlaps, items outside the label, wrong required size).
   - <span style="color:#b54708">Orange</span>: warnings (coordinates without 4 digits, commands the viewer does not know...).

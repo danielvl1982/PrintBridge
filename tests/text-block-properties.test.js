@@ -26,7 +26,7 @@ const tline = text => text.split('\r\n').find(l => /^(TEXT|BLOCK) /.test(l));
 
 test('TSPL TEXT: Tipo is the first field, "line", with the two options in order', () => {
   const d = tdescribe(tdoc('TEXT 100,200,"3",0,1,1,"Hello"'));
-  assert.deepEqual(keys(d).slice(0, 2), ['kind', 'rotation']);
+  assert.deepEqual(keys(d).slice(0, 4), ['kind', 'positionX', 'positionY', 'rotation']);
   const kind = byKey(d, 'kind');
   assert.deepEqual([kind.label, kind.type, kind.value], ['Tipo', 'select', 'line']);
   assert.deepEqual(kind.options, [{ value: 'line', label: 'Línea de texto' }, { value: 'block', label: 'Bloque de texto' }]);

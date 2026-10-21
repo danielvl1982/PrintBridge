@@ -27,7 +27,7 @@ test('the TSPL slices provide editable definitions for text, barcode, qr and lin
 test('describeItem: TEXT lists rotation and both multipliers with the values of the command', () => {
   const d = describe(doc('TEXT 100,200,"3",90,2,3,"Hello, world"'));
   assert.equal(d.kind, 'text');
-  assert.deepEqual(pairs(d), [['kind', 'line'], ['rotation', 90], ['xmul', 2], ['ymul', 3], ['font', '3'], ['content', 'Hello, world']]);
+  assert.deepEqual(pairs(d), [['kind', 'line'], ['positionX', '100'], ['positionY', '200'], ['rotation', 90], ['xmul', 2], ['ymul', 3], ['font', '3'], ['content', 'Hello, world']]);
   assert.equal(byKey(d, 'rotation').type, 'select');
   assert.deepEqual(byKey(d, 'rotation').options.map(o => o.value), [0, 90, 180, 270]);
   assert.equal(byKey(d, 'xmul').type, 'number');
@@ -36,12 +36,12 @@ test('describeItem: TEXT lists rotation and both multipliers with the values of 
 });
 
 test('describeItem: TEXT with an alignment argument is described the same way', () => {
-  assert.deepEqual(pairs(describe(doc('TEXT 100,200,"3",180,1,2,2,"Hi"'))), [['kind', 'line'], ['rotation', 180], ['xmul', 1], ['ymul', 2], ['font', '3'], ['content', 'Hi']]);
+  assert.deepEqual(pairs(describe(doc('TEXT 100,200,"3",180,1,2,2,"Hi"'))), [['kind', 'line'], ['positionX', '100'], ['positionY', '200'], ['rotation', 180], ['xmul', 1], ['ymul', 2], ['font', '3'], ['content', 'Hi']]);
 });
 
 test('describeItem: a scalable font (point sizes) allows multipliers above 10', () => {
   const d = describe(doc('TEXT 100,200,"0",0,24,30,"Hi"'));
-  assert.deepEqual(pairs(d), [['kind', 'line'], ['rotation', 0], ['xmul', 24], ['ymul', 30], ['font', '0'], ['content', 'Hi']]);
+  assert.deepEqual(pairs(d), [['kind', 'line'], ['positionX', '100'], ['positionY', '200'], ['rotation', 0], ['xmul', 24], ['ymul', 30], ['font', '0'], ['content', 'Hi']]);
   assert.ok(byKey(d, 'ymul').max > 10);
 });
 
@@ -262,7 +262,7 @@ test('updateItem only touches the item it was given, in a multi-item document wi
 
 test('describeItem without text falls back to the item model (kind decides the fields)', () => {
   const model = tspl.parse(doc('TEXT 1,2,"3",90,2,3,"Hi"', 'BAR 1,2,30,4'), { dpi: 203 });
-  assert.deepEqual(pairs(tspl.describeItem(model.items[0], undefined, { dpi: 203 })), [['kind', 'line'], ['rotation', 90], ['xmul', 2], ['ymul', 3], ['font', '3'], ['content', 'Hi']]);
+  assert.deepEqual(pairs(tspl.describeItem(model.items[0], undefined, { dpi: 203 })), [['kind', 'line'], ['positionX', '1'], ['positionY', '2'], ['rotation', 90], ['xmul', 2], ['ymul', 3], ['font', '3'], ['content', 'Hi']]);
   assert.deepEqual(pairs(tspl.describeItem(model.items[1], undefined, { dpi: 203 })), [['width', 30], ['height', 4]]);
 });
 

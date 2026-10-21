@@ -14,7 +14,7 @@
 
     /** Variable names of all the items of the model. */
     namesInModel(model) {
-      return [...new Set(model.items.flatMap(it => PB.variables.namesIn(it.data)))];
+      return [...new Set([...model.items.flatMap(it => PB.variables.namesIn(it.data)), ...(model.variableNames || [])])];
     },
 
     /**

@@ -176,7 +176,15 @@
       const edits = [];
       for (const { arg, axis } of entry.fields) {
         const a = found.cmd.args[arg];
-        if (!a || !DECIMAL.test(a.raw)) continue;
+        if (!a) continue;
+        if (!DECIMAL.test(a.raw)) {
+          // A TEXT formula remains live after dragging: shift the formula rather than replacing it with its preview value.
+          if (item.kind === 'text' && found.cmd.name === 'TEXT' && Number.isFinite(item.raw && Number(item.raw[axis]))) {
+            const step = roundDots(delta[axis] / dot);
+            if (step) edits.push({ start: a.start, end: a.end, value: `(${a.raw})${step < 0 ? '' : '+'}${step}` });
+          }
+          continue;
+        }
         const offset = found.offset[axis];
         const target = (Number(a.raw) + offset) * dot + delta[axis]; // 0.1 mm, where the item should land
         const dots = Math.max(0, roundDots(target / dot - offset));
