@@ -112,15 +112,15 @@ test('every entry has a title, a description and labelled parameters', () => {
   }
 });
 
-// The help lives in its own panel at the top of the left column, above the code box (not inside Propiedades)
-test('the help panel is the first of the left column, above Código de etiqueta, and starts hidden', () => {
+// The help lives in its own panel in the left column, right below the code box (not inside Propiedades)
+test('the help panel sits right below Código de etiqueta in the left column and starts hidden', () => {
   const fs = require('node:fs');
   const html = fs.readFileSync(require('node:path').join(__dirname, '..', 'index.html'), 'utf8');
   const column = html.slice(html.indexOf('<div class="column">'), html.indexOf('<div class="stage">'));
   const help = column.indexOf('id="cmdHelp"');
-  assert.ok(help > 0 && help < column.indexOf('<h2>Código de etiqueta</h2>'), 'cmdHelp comes before Código');
+  assert.ok(help > column.indexOf('id="src"'), 'cmdHelp comes after Código');
   assert.match(column.slice(column.lastIndexOf('<section', help), column.indexOf('>', help)), /data-collapsible="help"[^>]*hidden/);
-  assert.ok(column.indexOf('id="propsHelp"') > help && column.indexOf('id="propsHelp"') < column.indexOf('id="src"'), 'the content sits inside the panel, above #src');
+  assert.ok(column.indexOf('id="propsHelp"') > help && column.indexOf('id="propsHelp"') < column.indexOf('id="convert"'), 'the content sits inside the panel, before Convertir');
   const props = html.slice(html.indexOf('id="propsPanel"'), html.indexOf('class="panel preview"'));
   assert.ok(!props.includes('propsHelp'), 'Propiedades no longer holds the help');
 });
