@@ -7,12 +7,13 @@
  *  - onRotation(): the user picked a "Rotación" (0/90/180/270, clockwise on the label, like text items).
  *  - onRemove(): "Quitar imagen" was pressed.
  *  - onInsert(): "Insertar en el código" was pressed.
+ *  - onSave(): "Guardar imagen" was pressed (optional, like the `save` button).
  */
 (function (PB) {
   'use strict';
 
-  /** els: { fileInput, x, y, width, rotation (select), threshold, thresholdValue, insert, remove } */
-  function createImagePanel(els, { onFile, onChange, onThreshold, onRotation, onRemove, onInsert }) {
+  /** els: { fileInput, x, y, width, rotation (select), threshold, thresholdValue, insert, remove, save? } */
+  function createImagePanel(els, { onFile, onChange, onThreshold, onRotation, onRemove, onInsert, onSave }) {
     const inputs = [els.x, els.y, els.width, els.rotation, els.threshold];
     const QUARTER_TURNS = [0, 90, 180, 270];
     const showThreshold = () => { els.thresholdValue.textContent = `${els.threshold.value} %`; };
@@ -30,6 +31,7 @@
     els.rotation.addEventListener('input', onRotation);
     els.remove.addEventListener('click', onRemove);
     els.insert.addEventListener('click', onInsert);
+    if (els.save && onSave) els.save.addEventListener('click', onSave);
     showThreshold();
 
     return Object.freeze({
@@ -56,6 +58,7 @@
         inputs.forEach(i => { i.disabled = !active; });
         els.remove.disabled = !active;
         els.insert.disabled = !active;
+        if (els.save) els.save.disabled = !active;
       },
     });
   }

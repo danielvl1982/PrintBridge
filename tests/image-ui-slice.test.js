@@ -121,3 +121,18 @@ test('the picker warns instead of opening the file input when a drop has no user
     if (saved) Object.defineProperty(globalThis, 'navigator', saved); else delete globalThis.navigator;
   }
 });
+
+test('the image panel notifies the save button and enables it only with an image', () => {
+  const els = {
+    fileInput: fakeEl(), x: fakeEl(), y: fakeEl(), width: fakeEl(), threshold: fakeEl({ value: '50' }), thresholdValue: fakeEl(),
+    insert: fakeEl(), remove: fakeEl(), save: fakeEl({ disabled: true }), rotation: fakeEl({ value: '0' }),
+  };
+  const calls = [];
+  const panel = PB.ui.createImagePanel(els, { onFile() {}, onChange() {}, onThreshold() {}, onRotation() {}, onRemove() {}, onInsert() {}, onSave: () => calls.push('save') });
+  els.save.fire('click');
+  assert.deepEqual(calls, ['save']);
+  panel.setActive(true);
+  assert.equal(els.save.disabled, false);
+  panel.setActive(false);
+  assert.equal(els.save.disabled, true);
+});

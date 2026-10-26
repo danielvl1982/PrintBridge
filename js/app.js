@@ -56,7 +56,7 @@
   const imagePanel = ui.createImagePanel(
     {
       fileInput: $('imageFile'), x: $('imgX'), y: $('imgY'), width: $('imgW'),
-      rotation: $('imgRotation'), threshold: $('imgThreshold'), thresholdValue: $('imgThresholdValue'), insert: $('btnImageInsert'), remove: $('btnImageRemove'),
+      rotation: $('imgRotation'), threshold: $('imgThreshold'), thresholdValue: $('imgThresholdValue'), insert: $('btnImageInsert'), remove: $('btnImageRemove'), save: $('btnImageSave'),
     },
     {
       onFile: loadImage,
@@ -66,6 +66,7 @@
       onRotation: () => { if (state.image) state.image.rotationPicked = true; refresh(); },
       onRemove: removeImage,
       onInsert: insertImage,
+      onSave: saveImage,
     },
   );
 
@@ -379,7 +380,7 @@
         const probe = new Image();
         probe.onerror = () => reject(new Error('el archivo no es una imagen válida'));
         probe.onload = () => (probe.naturalWidth > 0 && probe.naturalHeight > 0
-          ? resolve({ href, naturalW: probe.naturalWidth, naturalH: probe.naturalHeight })
+          ? resolve({ href, name: file.name, naturalW: probe.naturalWidth, naturalH: probe.naturalHeight })
           : reject(new Error('la imagen no tiene un tamaño en píxeles')));
         probe.src = href;
       };
@@ -408,6 +409,34 @@
         refresh({ notices: [diag.error(`No se pudo añadir la imagen: ${error.message}`)] });
       },
     );
+  }
+
+  /**
+   * Saves the picture as the printer takes it: the image command of the label's language (SG, BITMAP or ^GF) for the converted, rotated
+   * dots at the position typed, in its own .ter file (bytes as Descargar writes them), so no editor can reformat it inside a template.
+   */
+  function saveImage() {
+    const image = state.image;
+    if (!image) return;
+    const language = imageLanguage();
+    if (!language.imageCommand) {
+      refresh({ notices: [diag.warning(`El lenguaje de la etiqueta (${language.name}) no tiene un comando de imagen que guardar`)] });
+      return;
+    }
+    convertImage()
+      .then(bitmap => {
+        const { w, h, data } = images.rotateBitmap(bitmap, imagePanel.rotation());
+        const placement = imagePanel.placement();
+        const text = language.imageCommand({ ...placement, w, h, data, dpi: Number($('dpi').value) });
+        const blob = new Blob([PB.convert.toBytes(text, language.id)], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const link = Object.assign(document.createElement('a'), { href: url, download: PB.convert.fileName(language.id, image.name).replace(/\.[^.]+$/, '.ter') });
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setTimeout(() => URL.revokeObjectURL(url), 0);
+      })
+      .catch(error => refresh({ notices: [diag.error(`No se pudo guardar la imagen: ${error.message}`)] }));
   }
 
   function removeImage() {
