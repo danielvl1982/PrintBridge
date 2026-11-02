@@ -29,3 +29,6 @@ agent/config.json
 
 # Local .NET sample (not versioned)
 dotnet/
+
+# Demo video generation output (the published copy is video/printbridge-demo.webm)
+video/out/

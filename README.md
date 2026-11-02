@@ -5,6 +5,8 @@ modified. It warns about overlapping texts, items that go outside the label and 
 
 **Live app: <https://danielvl1982.github.io/PrintBridge/>**
 
+**Demo video (about 2 minutes, Spanish subtitles): [`video/printbridge-demo.webm`](video/printbridge-demo.webm)**
+
 (Formerly "Visor etiquetas bobinas TEC".) The code and technical docs are in English; the on-screen text is in Spanish, so the
 UI labels below are quoted exactly as they appear.
 
@@ -46,6 +48,7 @@ from scratch with the TPCL template label.
 | `agent/` | The Windows print agent (`printbridge-agent.js`, no dependencies), its `config.example.json`, the `install.ps1` / `start.bat` scripts and its own [README](agent/README.md) |
 | `js/app.js` | Startup: connects the panels with the logic |
 | `js/lib/` | External QR library (qrcode-generator, MIT license) |
+| `video/` | The demo video (`printbridge-demo.webm`) and the Playwright script that records it (`record.mjs`; run `npm install`, `npx playwright install chromium` and `npm run record` inside `video/`; the print agent is simulated) |
 | `tests/` | Automated tests (`node --test` from the project root), including the TPCL / TSPL / ZPL conversion matrix (`tests/conversion-matrix.test.js`) |
 | `odd/tasks/` | Feature plans and progress of the development |
 | `docs/` | Local printer manuals: **git-ignored** (copyrighted), only `docs/README.md` is versioned; see it for which manual goes where |
